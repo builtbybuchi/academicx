@@ -21,12 +21,12 @@ const { Client, Databases, Storage, ID, Permission, Role } = require('node-appwr
 const { DATABASE_ID, BUCKET_ID, COLLECTIONS } = require('./database/schema.js');
 
 // ── Config ────────────────────────────────────────────────
-const ENDPOINT = process.env.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1';
-const PROJECT_ID = process.env.APPWRITE_PROJECT_ID || 'fullacademicx';
-const API_KEY = process.env.APPWRITE_API_KEY || 'standard_d62e7a0852600700eb9b3010c954e10b4f69c9d210ad28ef5769dcacf9188adc1c6f9ac9a300be0e47dacc4c26dc64582b08f7683bc600fb9af97aeb84d0923322ddb50b969877b305b444f0e49162d2bce4a34820cc08ccdae7a02d357290bb85bbfabb9cf21bf07d40d3ea8209e52f269dad03da4e6d3c8974416ef260cb85';
+const ENDPOINT = process.env.APPWRITE_ENDPOINT;
+const PROJECT_ID = process.env.APPWRITE_PROJECT_ID;
+const API_KEY = process.env.APPWRITE_API_KEY;
 
-if (!PROJECT_ID || !API_KEY) {
-    console.error('❌ Missing APPWRITE_PROJECT_ID or APPWRITE_API_KEY in environment.');
+if (!ENDPOINT || !PROJECT_ID || !API_KEY) {
+    console.error('❌ Missing APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, or APPWRITE_API_KEY in environment.');
     console.error('   Create a .env file in backend/ with those values.');
     process.exit(1);
 }

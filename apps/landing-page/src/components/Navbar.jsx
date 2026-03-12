@@ -42,7 +42,6 @@ export default function Navbar() {
                 <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
                     <Link to="/" style={{ color: pathname === '/' ? 'var(--color-primary)' : 'var(--color-gray-600)', fontWeight: pathname === '/' ? 600 : 500, fontSize: 15 }}>Home</Link>
                     <Link to="/about" style={{ color: pathname === '/about' ? 'var(--color-primary)' : 'var(--color-gray-600)', fontWeight: pathname === '/about' ? 600 : 500, fontSize: 15 }}>About</Link>
-                    <Link to="/how-it-works" style={{ color: pathname === '/how-it-works' ? 'var(--color-primary)' : 'var(--color-gray-600)', fontWeight: pathname === '/how-it-works' ? 600 : 500, fontSize: 15 }}>How It Works</Link>
                     <Link to="/pricing" style={{ color: pathname === '/pricing' ? 'var(--color-primary)' : 'var(--color-gray-600)', fontWeight: pathname === '/pricing' ? 600 : 500, fontSize: 15 }}>Pricing</Link>
                     <Link to="/contact" style={{ color: pathname === '/contact' ? 'var(--color-primary)' : 'var(--color-gray-600)', fontWeight: pathname === '/contact' ? 600 : 500, fontSize: 15 }}>Contact</Link>
                 </div>
@@ -52,7 +51,7 @@ export default function Navbar() {
                         border: '1px solid var(--color-gray-200)',
                         background: '#fff', color: 'var(--color-gray-900)'
                     }}>Log In</button>
-                    <button className="btn btn-primary">Start Free Trial</button>
+                    <button className="btn btn-primary">Sign in free</button>
                 </div>
             </div>
         </nav>
