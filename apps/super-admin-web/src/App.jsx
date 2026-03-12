@@ -24,7 +24,7 @@ const menuGroups = [
 export default function App() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
+    const { profile } = useAuth();
 
     return (
         <div className="app-layout">
@@ -33,7 +33,7 @@ export default function App() {
                 activeId={location.pathname}
                 onNavigate={(id) => navigate(id)}
                 appName="Super Admin"
-                userName={user ? `${user.firstName} ${user.lastName}` : 'Super Admin'}
+                userName={profile ? `${profile.firstName} ${profile.lastName}` : 'Super Admin'}
                 userRole="Platform Admin"
             />
             <main className="app-main">

@@ -1,17 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Mail, Send, Users, Filter, Loader, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-
-// Mock classes — in production, loaded from API
-const mockClasses = ['JSS1A', 'JSS1B', 'JSS2A', 'JSS2B', 'JSS3A', 'SS1A', 'SS1B', 'SS2A', 'SS2B', 'SS3A'];
+import { useToast } from '../../../../shared/components/Toast.jsx';
+import { useAuth } from '../../../../shared/utils/auth.jsx';
+import { listClasses, sendBulkEmailToParents, sendSchoolAnnouncement } from '../../../../shared/utils/api.js';
 
 export default function Communication() {
+    const { schoolId } = useAuth();
+    const toast = useToast();
     const [recipientType, setRecipientType] = useState('all_parents');
     const [selectedClass, setSelectedClass] = useState('');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState(null);
+    const [classes, setClasses] = useState([]);
+
+    useEffect(() => {
+        if (!schoolId) return;
+        listClasses(schoolId).then((response) => setClasses(response.documents)).catch(() => setClasses([]));
+    }, [schoolId]);
 
     const handleSend = async () => {
         if (!subject.trim() || !message.trim()) return;
@@ -20,19 +28,24 @@ export default function Communication() {
         setSending(true);
         setResult(null);
 
-        // TODO: Wire to real API — sendBulkEmailToParents
-        // In production: call the backend notifications endpoint
-        await new Promise(r => setTimeout(r, 2000));
-
-        setResult({ sent: recipientType === 'all_parents' ? 47 : 12, failed: 1 });
-        setSending(false);
+        try {
+            const response = recipientType === 'all_parents'
+                ? await sendSchoolAnnouncement({ schoolId, subject, messageHtml: message })
+                : await sendBulkEmailToParents({ schoolId, className: selectedClass, subject, messageHtml: message });
+            setResult(response);
+            toast({ type: 'success', title: 'Email dispatched', message: `${response.sent || response.totalRecipients || 0} recipient(s) processed.` });
+        } catch (error) {
+            toast({ type: 'error', title: 'Send failed', message: error.message });
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
         <div>
             <div className="page-header">
                 <h1 className="page-title">Communication</h1>
-                <p className="page-subtitle">Send emails to parents. Emails are loaded from student profiles.</p>
+                <p className="page-subtitle">Send emails to parents using the single deployed backend function URL.</p>
             </div>
 
             <div className="grid grid-2" style={{ gap: 24 }}>
@@ -82,7 +95,7 @@ export default function Communication() {
                                     }}
                                 >
                                     <option value="">Choose a class...</option>
-                                    {mockClasses.map(c => <option key={c} value={c}>{c}</option>)}
+                                    {classes.map(c => <option key={c.$id} value={c.name}>{c.name}</option>)}
                                 </select>
                                 <ChevronDown size={16} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-gray-400)', pointerEvents: 'none' }} />
                             </div>
@@ -153,7 +166,7 @@ export default function Communication() {
                             <AlertCircle size={20} style={{ color: 'var(--color-primary)' }} /> How it works
                         </h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14, color: 'var(--color-gray-600)', lineHeight: 1.7 }}>
-                            <p>Emails are sent to parents using the email addresses stored in each student's profile. Make sure parent emails are up to date.</p>
+                            <p>Class options are loaded from the database, and emails are sent through the consolidated backend function using parent emails stored on student profiles.</p>
                             <p>You can use template variables in your message:</p>
                             <ul style={{ paddingLeft: 20, margin: 0 }}>
                                 <li><code style={{ background: 'var(--color-gray-100)', padding: '2px 6px', borderRadius: 4 }}>{'{{studentName}}'}</code> — Student's full name</li>
@@ -163,20 +176,10 @@ export default function Communication() {
                     </LiquidGlassPanel>
 
                     <LiquidGlassPanel hover={false} style={{ padding: 32 }}>
-                        <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--color-gray-900)' }}>Recent Emails</h3>
-                        {[
-                            { subject: 'End of Term Notice', to: 'All Parents', date: 'Mar 10' },
-                            { subject: 'PTA Meeting Reminder', to: 'SS2 Parents', date: 'Mar 8' },
-                            { subject: 'Fees Payment Deadline', to: 'All Parents', date: 'Mar 5' },
-                        ].map((e, i) => (
-                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-gray-100)' }}>
-                                <div>
-                                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-gray-900)' }}>{e.subject}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--color-gray-500)' }}>To: {e.to}</div>
-                                </div>
-                                <span style={{ fontSize: 12, color: 'var(--color-gray-400)' }}>{e.date}</span>
-                            </div>
-                        ))}
+                        <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--color-gray-900)' }}>Communication Log</h3>
+                        <div style={{ fontSize: 13, color: 'var(--color-gray-600)', lineHeight: 1.7 }}>
+                            No dedicated communication log collection is configured yet. Once you add one, this panel can read recent email history from the database instead of storing UI-only history.
+                        </div>
                     </LiquidGlassPanel>
                 </div>
             </div>

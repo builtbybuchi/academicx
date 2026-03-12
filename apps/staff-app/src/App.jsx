@@ -28,7 +28,7 @@ const menuGroups = [
 export default function App() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user } = useAuth();
+    const { profile } = useAuth();
 
     return (
         <div className="app-layout">
@@ -37,8 +37,8 @@ export default function App() {
                 activeId={location.pathname}
                 onNavigate={(id) => navigate(id)}
                 appName="Staff Portal"
-                userName={user ? `${user.firstName} ${user.lastName}` : 'Staff'}
-                userRole="Teacher"
+                userName={profile ? `${profile.firstName} ${profile.lastName}` : 'Staff'}
+                userRole={profile?.department || 'Teacher'}
             />
             <main className="app-main">
                 <Routes>

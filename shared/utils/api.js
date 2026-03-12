@@ -14,6 +14,8 @@ export const account = new Account(client);
 export const databases = new Databases(client);
 export const storage = new Storage(client);
 
+const FUNCTION_URL = import.meta.env.VITE_APPWRITE_FUNCTION_URL || '';
+
 export const DATABASE_ID = 'academicx_db';
 export const BUCKET_ID = 'school_media';
 
@@ -55,6 +57,54 @@ export async function getUserProfile(authId) {
         Query.limit(1),
     ]);
     return res.documents[0] || null;
+}
+
+export async function listUsers(schoolId, roles = []) {
+    const queries = [Query.limit(500)];
+    if (schoolId) queries.push(Query.equal('schoolId', schoolId));
+    if (roles.length > 0) queries.push(Query.equal('role', roles));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.USERS, queries);
+}
+
+export async function getStudentByUserId(userId) {
+    const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS, [
+        Query.equal('userId', userId),
+        Query.limit(1),
+    ]);
+    return res.documents[0] || null;
+}
+
+export async function getStaffByUserId(userId) {
+    const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.STAFF, [
+        Query.equal('userId', userId),
+        Query.limit(1),
+    ]);
+    return res.documents[0] || null;
+}
+
+export async function invokeBackendFunction(action, payload = {}) {
+    if (!FUNCTION_URL) {
+        throw new Error('VITE_APPWRITE_FUNCTION_URL is not configured.');
+    }
+
+    const currentUser = await account.get().catch(() => null);
+    const response = await fetch(FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(currentUser?.$id ? { 'X-AcademicX-Auth-Id': currentUser.$id } : {}),
+        },
+        body: JSON.stringify({ action, payload }),
+    });
+
+    const text = await response.text();
+    const result = text ? JSON.parse(text) : {};
+
+    if (!response.ok || result.success === false) {
+        throw new Error(result.error || 'Backend function request failed.');
+    }
+
+    return result.data ?? result;
 }
 
 // ── School ────────────────────────────────────────────────
@@ -109,12 +159,39 @@ export async function listClasses(schoolId) {
     ]);
 }
 
+export async function createClass(data) {
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.CLASSES, ID.unique(), data);
+}
+
 // ── Subjects ──────────────────────────────────────────────
 
 export async function listSubjects(schoolId, className) {
     const q = [Query.equal('schoolId', schoolId), Query.limit(50)];
     if (className) q.push(Query.equal('className', className));
     return databases.listDocuments(DATABASE_ID, COLLECTIONS.SUBJECTS, q);
+}
+
+export async function createSubject(data) {
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.SUBJECTS, ID.unique(), data);
+}
+
+export async function listGradingSchemes(schoolId) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, [
+        Query.equal('schoolId', schoolId),
+        Query.limit(20),
+    ]);
+}
+
+export async function getGradingScheme(schoolId) {
+    const res = await listGradingSchemes(schoolId);
+    return res.documents[0] || null;
+}
+
+export async function saveGradingScheme(schoolId, data, documentId) {
+    if (documentId) {
+        return databases.updateDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, documentId, data);
+    }
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, ID.unique(), { schoolId, ...data });
 }
 
 // ── Results ───────────────────────────────────────────────
@@ -129,56 +206,77 @@ export async function listResults(schoolId, filters = {}) {
 }
 
 export async function getStudentResults(studentId, term, session) {
-    return databases.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS, [
-        Query.equal('studentId', studentId),
-        Query.equal('term', term),
-        Query.equal('session', session),
-        Query.limit(50),
-    ]);
+    const queries = [Query.equal('studentId', studentId), Query.limit(200)];
+    if (term) queries.push(Query.equal('term', term));
+    if (session) queries.push(Query.equal('session', session));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS, queries);
 }
 
 // ── Attendance ────────────────────────────────────────────
 
 export async function listStudentAttendance(schoolId, className, date) {
+    const queries = [Query.limit(200)];
+    if (schoolId) queries.push(Query.equal('schoolId', schoolId));
+    if (className) queries.push(Query.equal('className', className));
+    if (date) queries.push(Query.equal('date', date));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.STUDENT_ATTENDANCE, queries);
+}
+
+export async function getStudentAttendanceRange(studentId, startDate, endDate) {
     return databases.listDocuments(DATABASE_ID, COLLECTIONS.STUDENT_ATTENDANCE, [
-        Query.equal('schoolId', schoolId),
-        Query.equal('className', className),
-        Query.equal('date', date),
-        Query.limit(100),
+        Query.equal('studentId', studentId),
+        Query.greaterThanEqual('date', startDate),
+        Query.lessThanEqual('date', endDate),
+        Query.orderAsc('date'),
+        Query.limit(200),
+    ]);
+}
+
+export async function listStaffAttendance(schoolId, date) {
+    const queries = [Query.limit(200)];
+    if (schoolId) queries.push(Query.equal('schoolId', schoolId));
+    if (date) queries.push(Query.equal('date', date));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE, queries);
+}
+
+export async function getStaffAttendanceRange(staffDocId, startDate, endDate) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE, [
+        Query.equal('staffDocId', staffDocId),
+        Query.greaterThanEqual('date', startDate),
+        Query.lessThanEqual('date', endDate),
+        Query.orderAsc('date'),
+        Query.limit(200),
     ]);
 }
 
 export async function staffCheckIn(schoolId, staffDocId) {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0];
-    return databases.createDocument(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE, ID.unique(), {
-        schoolId, staffDocId, date: today, checkIn: now, status: 'present', markedBy: staffDocId,
-    });
+    return invokeBackendFunction('staffCheckIn', { schoolId, staffDocId, markedBy: staffDocId });
 }
 
 export async function staffCheckOut(staffDocId) {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toTimeString().split(' ')[0];
-    const existing = await databases.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE, [
-        Query.equal('staffDocId', staffDocId), Query.equal('date', today), Query.limit(1),
-    ]);
-    if (existing.total === 0) throw new Error('No check-in found for today.');
-    return databases.updateDocument(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE, existing.documents[0].$id, { checkOut: now });
+    return invokeBackendFunction('staffCheckOut', { staffDocId });
+}
+
+export async function markStudentAttendance(payload) {
+    return invokeBackendFunction('markStudentAttendance', payload);
+}
+
+export async function submitResult(payload) {
+    return invokeBackendFunction('submitResult', payload);
+}
+
+export async function approveResults(payload) {
+    return invokeBackendFunction('approveResults', payload);
+}
+
+export async function generateBroadsheet(payload) {
+    return invokeBackendFunction('generateBroadsheet', payload);
 }
 
 // ── PINs ──────────────────────────────────────────────────
 
 export async function verifyPin(code, studentId) {
-    const pins = await databases.listDocuments(DATABASE_ID, COLLECTIONS.PINS, [
-        Query.equal('code', code), Query.limit(1),
-    ]);
-    if (pins.total === 0) throw new Error('Invalid PIN code.');
-    const pin = pins.documents[0];
-    if (pin.used && pin.studentId !== studentId) throw new Error('PIN already used by another student.');
-    if (!pin.used) {
-        await databases.updateDocument(DATABASE_ID, COLLECTIONS.PINS, pin.$id, { used: true, studentId });
-    }
-    return pin;
+    return invokeBackendFunction('verifyPin', { code, studentId });
 }
 
 export async function checkPinAccess(studentId, term, session) {
@@ -187,6 +285,21 @@ export async function checkPinAccess(studentId, term, session) {
         Query.equal('session', session), Query.equal('used', true), Query.limit(1),
     ]);
     return pins.total > 0;
+}
+
+export async function listPins(schoolId, term, session) {
+    const queries = [Query.equal('schoolId', schoolId), Query.limit(500)];
+    if (term) queries.push(Query.equal('term', term));
+    if (session) queries.push(Query.equal('session', session));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.PINS, queries);
+}
+
+export async function generateSchoolPins(payload) {
+    return invokeBackendFunction('generateSchoolPins', payload);
+}
+
+export async function purchaseStudentPin(payload) {
+    return invokeBackendFunction('purchaseStudentPin', payload);
 }
 
 // ── Chat ──────────────────────────────────────────────────
@@ -223,6 +336,36 @@ export function subscribeToChatMessages(schoolId, channel, callback) {
 
 export async function updateUserProfile(userDocId, data) {
     return databases.updateDocument(DATABASE_ID, COLLECTIONS.USERS, userDocId, data);
+}
+
+export async function registerSchool(payload) {
+    return invokeBackendFunction('registerSchool', payload);
+}
+
+export async function enrollStudent(payload) {
+    return invokeBackendFunction('enrollStudent', payload);
+}
+
+export async function addStaff(payload) {
+    return invokeBackendFunction('addStaff', payload);
+}
+
+export async function sendBulkEmailToParents(payload) {
+    return invokeBackendFunction('sendBulkEmailToParents', payload);
+}
+
+export async function sendSchoolAnnouncement(payload) {
+    return invokeBackendFunction('sendSchoolAnnouncement', payload);
+}
+
+export async function listSchools() {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOLS, [Query.limit(200)]);
+}
+
+export async function listPayments(schoolId) {
+    const queries = [Query.limit(500)];
+    if (schoolId) queries.push(Query.equal('schoolId', schoolId));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS, queries);
 }
 
 // ── Image Upload ──────────────────────────────────────────
