@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
-  "main": "index.js",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "dotenv": "^17.3.1",
     "node-appwrite": "^22.1.3"
