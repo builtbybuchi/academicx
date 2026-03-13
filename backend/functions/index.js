@@ -1,7 +1,21 @@
 require('dotenv').config();
 const { Client, Databases, Users, ID, Query } = require('node-appwrite');
-const { DATABASE_ID, COLLECTIONS } = require('../database/schema.js');
-const { requireRole, requireSchool, getUserByAuthId } = require('../auth/middleware.js');
+
+const DATABASE_ID = 'academicx_db';
+const COLLECTIONS = {
+    SCHOOLS: { id: 'schools' },
+    USERS: { id: 'users' },
+    STUDENTS: { id: 'students' },
+    STAFF: { id: 'staff' },
+    CLASSES: { id: 'classes' },
+    SUBJECTS: { id: 'subjects' },
+    RESULTS: { id: 'results' },
+    STUDENT_ATTENDANCE: { id: 'student_attendance' },
+    STAFF_ATTENDANCE: { id: 'staff_attendance' },
+    PINS: { id: 'pins' },
+    PAYMENTS: { id: 'payments' },
+    CHAT_MESSAGES: { id: 'chat_messages' },
+};
 
 function getClient() {
     const client = new Client();
@@ -73,6 +87,69 @@ function parseJsonArray(raw, fallback = []) {
     } catch {
         return fallback;
     }
+}
+
+function extractRoleFromTags(authUser) {
+    const roleKeys = ['super_admin', 'admin', 'staff', 'student'];
+    const labels = Array.isArray(authUser?.labels) ? authUser.labels : [];
+    const prefTags = Array.isArray(authUser?.prefs?.tags) ? authUser.prefs.tags : [];
+    const tags = [...labels, ...prefTags].map((item) => String(item).toLowerCase());
+    return roleKeys.find((role) => tags.includes(role) || tags.includes(`role:${role}`)) || null;
+}
+
+async function getUserByAuthId(authId) {
+    const db = getDb();
+    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.USERS.id, [
+        Query.equal('authId', authId),
+        Query.limit(1),
+    ]);
+    return res.documents[0] || null;
+}
+
+async function getTaggedRole(authId) {
+    try {
+        const users = getUsersApi();
+        const authUser = await users.get(authId);
+        return extractRoleFromTags(authUser);
+    } catch {
+        return null;
+    }
+}
+
+async function requireRole(authId, allowedRoles) {
+    const profile = await getUserByAuthId(authId);
+    const taggedRole = await getTaggedRole(authId);
+    const effectiveRole = taggedRole || profile?.role;
+
+    if (!effectiveRole) {
+        return { authorized: false, error: 'User profile not found.', user: null };
+    }
+
+    if (!allowedRoles.includes(effectiveRole)) {
+        return { authorized: false, error: `Requires role: ${allowedRoles.join(' or ')}. You are: ${effectiveRole}`, user: profile || null };
+    }
+
+    return { authorized: true, user: { ...(profile || {}), role: effectiveRole } };
+}
+
+async function requireSchool(authId, schoolId) {
+    const profile = await getUserByAuthId(authId);
+    const taggedRole = await getTaggedRole(authId);
+    const effectiveRole = taggedRole || profile?.role;
+
+    if (!profile && effectiveRole !== 'super_admin') {
+        return { authorized: false, error: 'User not found.', user: null };
+    }
+
+    if (effectiveRole === 'super_admin') {
+        return { authorized: true, user: { ...(profile || {}), role: effectiveRole } };
+    }
+
+    if (profile?.schoolId !== schoolId) {
+        return { authorized: false, error: 'You do not belong to this school.', user: profile || null };
+    }
+
+    return { authorized: true, user: { ...(profile || {}), role: effectiveRole } };
 }
 
 async function ensureAuth(definition, authId, payload) {

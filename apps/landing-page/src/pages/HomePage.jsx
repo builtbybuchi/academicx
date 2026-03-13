@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
 
 import { GraduationCap, BarChart2, ClipboardCheck, Lock, MessageSquare, CreditCard } from 'lucide-react';
 
@@ -28,15 +27,7 @@ export default function HomePage() {
                 <div style={{ position: 'absolute', bottom: '10%', right: '15%', width: 300, height: 300, background: 'var(--color-info)', opacity: 0.1, filter: 'blur(80px)', borderRadius: '50%' }}></div>
 
                 <div style={{ position: 'relative', zIndex: 10, maxWidth: 900 }}>
-                    <LiquidGlassPanel liquidGL={true} style={{
-                        position: 'absolute', inset: 0,
-                        borderRadius: 40, border: '1px solid rgba(0,0,0,0.05)',
-                        boxShadow: '0 24px 60px rgba(0,0,0,0.04)',
-                        background: 'rgba(255,255,255,0.7)', backdropFilter: 'blur(20px)',
-                        zIndex: 0
-                    }} />
-
-                    <div style={{ position: 'relative', zIndex: 1, padding: '40px 60px' }}>
+                    <div style={{ position: 'relative', zIndex: 1, padding: '40px 60px', borderRadius: 40, border: '1px solid rgba(0,0,0,0.05)', boxShadow: '0 20px 45px rgba(29, 78, 216, 0.08)', background: 'rgba(255,255,255,0.88)' }}>
                         <span style={{ display: 'inline-block', background: 'var(--color-primary-50)', color: 'var(--color-primary)', padding: '6px 16px', borderRadius: 20, fontSize: 14, fontWeight: 700, marginBottom: 24 }}>✨ The future of school management</span>
                         <h1 style={{ fontSize: 64, letterSpacing: '-0.03em', marginBottom: 24, color: 'var(--color-gray-900)' }}>
                             Manage Your School <br />

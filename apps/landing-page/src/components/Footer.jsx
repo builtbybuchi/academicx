@@ -8,13 +8,12 @@ export default function Footer() {
 
                 {/* Brand */}
                 <div>
-                    <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 16 }}>
-                        <div style={{
-                            width: 36, height: 36, borderRadius: 10,
-                            background: 'var(--color-primary)',
-                            color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 18, fontWeight: 800
-                        }}>A</div>
+                    <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 16, justifyContent: 'flex-start' }}>
+                        <img
+                            src="/logo.png"
+                            alt="AcademicX"
+                            style={{ width: 36, height: 36, objectFit: 'contain', display: 'block' }}
+                        />
                         <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--color-gray-900)', fontFamily: 'var(--font-heading)' }}>AcademicX</span>
                     </Link>
                     <p style={{ color: 'var(--color-gray-600)', fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>

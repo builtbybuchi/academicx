@@ -30,12 +30,11 @@ export default function Navbar() {
             <div style={{ maxWidth: 1200, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
 
                 <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none' }}>
-                    <div style={{
-                        width: 40, height: 40, borderRadius: 12,
-                        background: 'var(--color-primary)',
-                        color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 20, fontWeight: 800
-                    }}>A</div>
+                    <img
+                        src="/logo.png"
+                        alt="AcademicX"
+                        style={{ width: 40, height: 40, objectFit: 'contain', display: 'block' }}
+                    />
                     <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-gray-900)', fontFamily: 'var(--font-heading)' }}>AcademicX</span>
                 </Link>
 
