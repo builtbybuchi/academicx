@@ -987,11 +987,43 @@ const actions = {
     },
 };
 
-module.exports = async ({ req, res, error }) => {
+function normalizeContext(arg1, arg2, arg3) {
+    if (arg1 && typeof arg1 === 'object' && arg1.req && arg1.res) {
+        return { req: arg1.req, res: arg1.res, error: arg1.error };
+    }
+    return { req: arg1, res: arg2, error: arg3 };
+}
+
+function respondJson(res, payload, status, headers) {
+    if (res && typeof res.json === 'function') {
+        return res.json(payload, status, headers);
+    }
+    if (res && typeof res.send === 'function') {
+        return res.send(JSON.stringify(payload), status, { 'Content-Type': 'application/json', ...(headers || {}) });
+    }
+    return payload;
+}
+
+function respondText(res, text, status, headers) {
+    if (res && typeof res.text === 'function') {
+        return res.text(text, status, headers);
+    }
+    if (res && typeof res.send === 'function') {
+        return res.send(text, status, headers);
+    }
+    return text;
+}
+
+module.exports = async (arg1, arg2, arg3) => {
+    const { req, res, error } = normalizeContext(arg1, arg2, arg3);
     const corsHeaders = getCorsHeaders();
 
+    if (!req || !res) {
+        return { success: false, error: 'Invalid function context.' };
+    }
+
     if (req.method === 'OPTIONS') {
-        return res.text('', 204, corsHeaders);
+        return respondText(res, '', 204, corsHeaders);
     }
 
     try {
@@ -1002,22 +1034,24 @@ module.exports = async ({ req, res, error }) => {
         const authId = req.headers['x-academicx-auth-id'] || payload.authId || '';
 
         if (!action || !actions[action]) {
-            return res.json({ success: false, error: 'Unknown action.' }, 400, corsHeaders);
+            return respondJson(res, { success: false, error: 'Unknown action.' }, 400, corsHeaders);
         }
 
         const definition = actions[action];
         const authResult = await ensureAuth(definition, authId, payload);
 
         if (!authResult.authorized) {
-            return res.json({ success: false, error: authResult.error }, 403, corsHeaders);
+            return respondJson(res, { success: false, error: authResult.error }, 403, corsHeaders);
         }
 
         const result = await definition.handler({ payload, authId, user: authResult.user || null });
         const bodyResult = result && Object.prototype.hasOwnProperty.call(result, 'success') ? result : { success: true, data: result };
 
-        return res.json(bodyResult, bodyResult.success === false ? 400 : 200, corsHeaders);
+        return respondJson(res, bodyResult, bodyResult.success === false ? 400 : 200, corsHeaders);
     } catch (err) {
-        error(err.message);
-        return res.json({ success: false, error: err.message || 'Function execution failed.' }, 500, corsHeaders);
+        if (typeof error === 'function') {
+            error(err.message);
+        }
+        return respondJson(res, { success: false, error: err.message || 'Function execution failed.' }, 500, corsHeaders);
     }
 };
