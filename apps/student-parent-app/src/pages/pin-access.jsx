@@ -1,17 +1,47 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
 import FormField from '../../../../shared/components/FormField.jsx';
+import { getStudentPortalData, verifyPin, listSubjects } from '../../../../shared/utils/api.js';
 
 export default function PinAccess() {
     const [pin, setPin] = useState('');
     const [verified, setVerified] = useState(false);
     const [error, setError] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [data, setData] = useState(null);
+    const [subjectsById, setSubjectsById] = useState({});
 
-    const handleVerify = () => {
+    useEffect(() => {
+        let active = true;
+        async function load() {
+            const response = await getStudentPortalData();
+            if (!active) return;
+            setData(response);
+            setVerified(response.hasVerifiedPin);
+            const subjectRes = await listSubjects(response.school?.$id, response.student?.className);
+            if (!active) return;
+            setSubjectsById(subjectRes.documents.reduce((acc, item) => ({ ...acc, [item.$id]: item.name }), {}));
+        }
+        load();
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const handleVerify = async () => {
         if (pin.length < 8) { setError('PIN must be at least 8 characters'); return; }
-        // Stub: accept any PIN for demo
-        setError('');
-        setVerified(true);
+        setBusy(true);
+        try {
+            await verifyPin(pin, data?.student?.$id);
+            setError('');
+            setVerified(true);
+            const refreshed = await getStudentPortalData();
+            setData(refreshed);
+        } catch (err) {
+            setError(err.message || 'Failed to verify PIN');
+        } finally {
+            setBusy(false);
+        }
     };
 
     return (
@@ -27,8 +57,8 @@ export default function PinAccess() {
                             Enter the unique PIN code provided by your school to view your results.
                         </p>
                         <FormField label="PIN Code" placeholder="e.g. AX7K9M2NP4" value={pin} onChange={setPin} error={error} />
-                        <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 8 }} onClick={handleVerify}>
-                            Verify PIN
+                        <button className="btn btn-primary btn-lg" style={{ width: '100%', marginTop: 8 }} onClick={handleVerify} disabled={busy}>
+                            {busy ? 'Verifying...' : 'Verify PIN'}
                         </button>
                         <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', marginTop: 16 }}>
                             PINs are time-bound. Contact your school admin if your PIN has expired.
@@ -48,16 +78,14 @@ export default function PinAccess() {
                     <LiquidGlassPanel hover={false} style={{ padding: 0, overflow: 'hidden' }}>
                         <div className="table-container">
                             <table className="table">
-                                <thead><tr><th>Subject</th><th>CAT</th><th>Mock</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead>
+                                <thead><tr><th>Subject</th><th>CAT</th><th>Exam</th><th>Total</th><th>Grade</th></tr></thead>
                                 <tbody>
-                                    {[
-                                        { s: 'Mathematics', c: 18, m: 16, e: 52, t: 86, g: 'A' },
-                                        { s: 'English', c: 15, m: 14, e: 45, t: 74, g: 'A' },
-                                        { s: 'Physics', c: 12, m: 10, e: 38, t: 60, g: 'B' },
-                                        { s: 'Biology', c: 14, m: 12, e: 30, t: 56, g: 'C' },
-                                    ].map((r, i) => (
-                                        <tr key={i}><td>{r.s}</td><td>{r.c}</td><td>{r.m}</td><td>{r.e}</td><td style={{ fontWeight: 700, color: '#fff' }}>{r.t}</td><td><span className="badge badge-primary">{r.g}</span></td></tr>
+                                    {(data?.results || []).map((r) => (
+                                        <tr key={r.$id}><td>{subjectsById[r.subjectId] || r.subjectId}</td><td>{r.catScore}</td><td>{r.examScore}</td><td style={{ fontWeight: 700, color: '#fff' }}>{r.totalScore}</td><td><span className="badge badge-primary">{r.grade || '-'}</span></td></tr>
                                     ))}
+                                    {(data?.results || []).length === 0 && (
+                                        <tr><td colSpan={5} style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>No result records found.</td></tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>

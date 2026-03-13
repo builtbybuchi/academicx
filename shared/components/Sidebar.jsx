@@ -29,7 +29,19 @@ export default function Sidebar({
             {/* Desktop Sidebar (Hidden on Mobile) */}
             <aside className="desktop-sidebar">
                 <div className="sidebar-logo">
-                    <div className="sidebar-logo-icon">A</div>
+                    <div className="sidebar-logo-icon">
+                        <img
+                            src="/logo.png"
+                            alt={appName}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }}
+                            onError={(event) => {
+                                event.currentTarget.style.display = 'none';
+                                const fallback = event.currentTarget.nextSibling;
+                                if (fallback) fallback.style.display = 'flex';
+                            }}
+                        />
+                        <span className="sidebar-logo-fallback">A</span>
+                    </div>
                     <span className="sidebar-logo-text">{appName}</span>
                 </div>
 
@@ -98,6 +110,15 @@ export default function Sidebar({
                     background: var(--color-primary);
                     display: flex; align-items: center; justify-content: center;
                     font-size: 18px; font-weight: 800; color: #fff; flex-shrink: 0;
+                    position: relative;
+                    overflow: hidden;
+                }
+                .sidebar-logo-fallback {
+                    display: none;
+                    position: absolute;
+                    inset: 0;
+                    align-items: center;
+                    justify-content: center;
                 }
                 .sidebar-logo-text { font-family: var(--font-heading); font-size: 18px; font-weight: 800; color: var(--color-gray-900); }
                 

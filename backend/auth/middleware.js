@@ -27,6 +27,24 @@ async function getUserByAuthId(authId) {
     return res.documents[0] || null;
 }
 
+function extractRoleFromTags(authUser) {
+    const roleKeys = ['super_admin', 'admin', 'staff', 'student'];
+    const labels = Array.isArray(authUser?.labels) ? authUser.labels : [];
+    const prefTags = Array.isArray(authUser?.prefs?.tags) ? authUser.prefs.tags : [];
+    const tags = [...labels, ...prefTags].map((item) => String(item).toLowerCase());
+    return roleKeys.find((role) => tags.includes(role) || tags.includes(`role:${role}`)) || null;
+}
+
+async function getTaggedRole(authId) {
+    try {
+        const users = new Users(getClient());
+        const authUser = await users.get(authId);
+        return extractRoleFromTags(authUser);
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Verify that a user has the required role for an operation.
  * @param {string} authId - Appwrite Auth user ID (from JWT)
@@ -34,16 +52,18 @@ async function getUserByAuthId(authId) {
  */
 async function requireRole(authId, allowedRoles) {
     const profile = await getUserByAuthId(authId);
+    const taggedRole = await getTaggedRole(authId);
+    const effectiveRole = taggedRole || profile?.role;
 
-    if (!profile) {
+    if (!profile && !effectiveRole) {
         return { authorized: false, error: 'User profile not found.', user: null };
     }
 
-    if (!allowedRoles.includes(profile.role)) {
-        return { authorized: false, error: `Requires role: ${allowedRoles.join(' or ')}. You are: ${profile.role}`, user: profile };
+    if (!allowedRoles.includes(effectiveRole)) {
+        return { authorized: false, error: `Requires role: ${allowedRoles.join(' or ')}. You are: ${effectiveRole || 'unknown'}`, user: profile };
     }
 
-    return { authorized: true, user: profile };
+    return { authorized: true, user: { ...(profile || {}), role: effectiveRole } };
 }
 
 /**

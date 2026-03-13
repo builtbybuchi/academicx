@@ -305,19 +305,18 @@ export async function purchaseStudentPin(payload) {
 // ── Chat ──────────────────────────────────────────────────
 
 export async function sendChatMessage(schoolId, senderId, senderName, senderRole, message, channel = 'general') {
-    return databases.createDocument(DATABASE_ID, COLLECTIONS.CHAT_MESSAGES, ID.unique(), {
-        schoolId, senderId, senderName, senderRole, message, channel,
-        createdAt: new Date().toISOString(),
+    return invokeBackendFunction('sendChatMessage', {
+        schoolId,
+        senderId,
+        senderName,
+        senderRole,
+        message,
+        channel,
     });
 }
 
 export async function listChatMessages(schoolId, channel = 'general', limit = 50) {
-    return databases.listDocuments(DATABASE_ID, COLLECTIONS.CHAT_MESSAGES, [
-        Query.equal('schoolId', schoolId),
-        Query.equal('channel', channel),
-        Query.orderDesc('createdAt'),
-        Query.limit(limit),
-    ]);
+    return invokeBackendFunction('listChatMessages', { schoolId, channel, limit });
 }
 
 /**
@@ -336,6 +335,10 @@ export function subscribeToChatMessages(schoolId, channel, callback) {
 
 export async function updateUserProfile(userDocId, data) {
     return databases.updateDocument(DATABASE_ID, COLLECTIONS.USERS, userDocId, data);
+}
+
+export async function updateProfile(payload) {
+    return invokeBackendFunction('updateProfile', payload);
 }
 
 export async function registerSchool(payload) {
@@ -366,6 +369,22 @@ export async function listPayments(schoolId) {
     const queries = [Query.limit(500)];
     if (schoolId) queries.push(Query.equal('schoolId', schoolId));
     return databases.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS, queries);
+}
+
+export async function getStaffPortalData() {
+    return invokeBackendFunction('getStaffPortalData', {});
+}
+
+export async function getStudentPortalData() {
+    return invokeBackendFunction('getStudentPortalData', {});
+}
+
+export async function getSuperAdminPortalData() {
+    return invokeBackendFunction('getSuperAdminPortalData', {});
+}
+
+export async function createSchoolAdmin(payload) {
+    return invokeBackendFunction('createSchoolAdmin', payload);
 }
 
 // ── Image Upload ──────────────────────────────────────────

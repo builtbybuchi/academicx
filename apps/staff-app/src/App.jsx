@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
+import AuthPage from '../../../shared/components/AuthPage.jsx';
 import Dashboard from './pages/dashboard.jsx';
 import ResultsEntry from './pages/results-entry.jsx';
 import Attendance from './pages/attendance.jsx';
@@ -28,7 +29,40 @@ const menuGroups = [
 export default function App() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { profile } = useAuth();
+    const { user, profile, effectiveRole, loading, login, logout } = useAuth();
+
+    if (loading) {
+        return <div style={{ padding: 24 }}>Loading...</div>;
+    }
+
+    if (!user) {
+        return (
+            <AuthPage
+                brand="AcademicX"
+                title="Spark your teaching flow"
+                subtitle="Manage attendance, class results, and school communication from one portal."
+                allowSignup={true}
+                disableSignup={true}
+                disableSignupMessage="Staff accounts are provisioned by school admins. Contact your administrator to get invited."
+                highlights={[
+                    'Enter CAT and exam scores with backend validation',
+                    'Take attendance by class in minutes',
+                    'Collaborate with admins and teachers in chat',
+                ]}
+                onLogin={({ email, password }) => login(email, password)}
+            />
+        );
+    }
+
+    if (effectiveRole !== 'staff' && effectiveRole !== 'admin' && effectiveRole !== 'super_admin') {
+        return (
+            <div style={{ padding: 24, maxWidth: 520, margin: '40px auto' }}>
+                <h2 style={{ marginBottom: 8 }}>Access Restricted</h2>
+                <p style={{ marginBottom: 16 }}>This account does not have staff portal permission.</p>
+                <button className="btn btn-primary" onClick={logout}>Sign Out</button>
+            </div>
+        );
+    }
 
     return (
         <div className="app-layout">

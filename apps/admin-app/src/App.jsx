@@ -3,6 +3,8 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, KeySquare, MessageSquare } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
+import AuthPage from '../../../shared/components/AuthPage.jsx';
+import { registerSchool } from '../../../shared/utils/api.js';
 import Dashboard from './pages/dashboard.jsx';
 import Enrollment from './pages/enrollment.jsx';
 import Academics from './pages/academics.jsx';
@@ -39,7 +41,50 @@ const menuGroups = [
 export default function App() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { profile } = useAuth();
+    const { user, profile, effectiveRole, loading, login, logout } = useAuth();
+
+    if (loading) {
+        return <div style={{ padding: 24 }}>Loading...</div>;
+    }
+
+    if (!user) {
+        return (
+            <AuthPage
+                brand="AcademicX"
+                title="Spark your school operations"
+                subtitle="Manage enrollment, academics, results, and communication from one admin control center."
+                allowSignup={true}
+                highlights={[
+                    'Create and manage school staff and students',
+                    'Approve and publish term results',
+                    'Generate and manage secure result PINs',
+                ]}
+                onLogin={({ email, password }) => login(email, password)}
+                onSignup={async ({ firstName, lastName, email, password, organization, schoolCode }) => {
+                    await registerSchool({
+                        firstName,
+                        lastName,
+                        adminEmail: email,
+                        adminPassword: password,
+                        schoolName: organization || 'My School',
+                        schoolCode,
+                        schoolEmail: email,
+                    });
+                    await login(email, password);
+                }}
+            />
+        );
+    }
+
+    if (effectiveRole !== 'admin' && effectiveRole !== 'super_admin') {
+        return (
+            <div style={{ padding: 24, maxWidth: 520, margin: '40px auto' }}>
+                <h2 style={{ marginBottom: 8 }}>Access Restricted</h2>
+                <p style={{ marginBottom: 16 }}>This account does not have admin portal permission.</p>
+                <button className="btn btn-primary" onClick={logout}>Sign Out</button>
+            </div>
+        );
+    }
 
     return (
         <div className="app-layout">

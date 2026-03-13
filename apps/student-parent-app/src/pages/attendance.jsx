@@ -1,21 +1,33 @@
-import React from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-
-const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-const weeks = [
-    { week: 'Week 1 (Mar 2-6)', data: ['present', 'present', 'present', 'late', 'present'] },
-    { week: 'Week 2 (Mar 9-13)', data: ['present', 'absent', 'present', 'present', 'present'] },
-    { week: 'Week 3 (Mar 16-20)', data: ['present', 'present', 'excused', 'present', 'present'] },
-    { week: 'Week 4 (Mar 23-27)', data: ['present', 'present', 'present', 'present', 'present'] },
-];
+import { getStudentPortalData } from '../../../../shared/utils/api.js';
 
 const statusEmoji = { present: '✅', absent: '❌', late: '⏰', excused: '📝' };
 const statusColors = { present: '#10B981', absent: '#EF4444', late: '#F59E0B', excused: '#3B82F6' };
 
 export default function AttendanceView() {
-    const total = weeks.length * 5;
-    const presentCount = weeks.flatMap(w => w.data).filter(d => d === 'present').length;
+    const [rows, setRows] = useState([]);
+
+    useEffect(() => {
+        getStudentPortalData().then((response) => {
+            setRows(response.attendance || []);
+        });
+    }, []);
+
+    const total = rows.length || 1;
+    const presentCount = rows.filter((item) => item.status === 'present').length;
     const pct = ((presentCount / total) * 100).toFixed(1);
+
+    const groupedWeeks = useMemo(() => {
+        const byWeek = {};
+        rows.forEach((item) => {
+            const date = new Date(item.date);
+            const weekKey = `${date.getFullYear()}-W${Math.ceil(date.getDate() / 7)}`;
+            if (!byWeek[weekKey]) byWeek[weekKey] = [];
+            byWeek[weekKey].push(item);
+        });
+        return Object.entries(byWeek).map(([week, items]) => ({ week, items }));
+    }, [rows]);
 
     return (
         <div>
@@ -23,7 +35,7 @@ export default function AttendanceView() {
 
             <div className="grid grid-4" style={{ marginBottom: 24 }}>
                 {['present', 'absent', 'late', 'excused'].map(s => {
-                    const count = weeks.flatMap(w => w.data).filter(d => d === s).length;
+                    const count = rows.filter((item) => item.status === s).length;
                     return (
                         <LiquidGlassPanel key={s} hover={false} style={{ padding: '14px 18px', textAlign: 'center' }}>
                             <div style={{ fontSize: 28, fontWeight: 900, color: statusColors[s] }}>{count}</div>
@@ -46,16 +58,25 @@ export default function AttendanceView() {
             <LiquidGlassPanel hover={false} style={{ padding: 0, overflow: 'hidden' }}>
                 <div className="table-container">
                     <table className="table">
-                        <thead><tr><th>Week</th>{days.map(d => <th key={d}>{d}</th>)}</tr></thead>
+                        <thead><tr><th>Week</th><th>Records</th></tr></thead>
                         <tbody>
-                            {weeks.map((w, i) => (
+                            {groupedWeeks.map((w, i) => (
                                 <tr key={i}>
                                     <td style={{ fontSize: 13, fontWeight: 500, color: '#fff' }}>{w.week}</td>
-                                    {w.data.map((d, j) => (
-                                        <td key={j} style={{ textAlign: 'center', fontSize: 18 }} title={d}>{statusEmoji[d]}</td>
-                                    ))}
+                                    <td>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                            {w.items.map((item) => (
+                                                <span key={item.$id} title={`${item.date} - ${item.status}`} style={{ fontSize: 18 }}>
+                                                    {statusEmoji[item.status] || '•'}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </td>
                                 </tr>
                             ))}
+                            {groupedWeeks.length === 0 && (
+                                <tr><td colSpan={2} style={{ textAlign: 'center', color: 'rgba(255,255,255,0.55)' }}>No attendance records available yet.</td></tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

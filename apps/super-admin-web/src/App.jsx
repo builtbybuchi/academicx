@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart, Building2, CreditCard, TrendingUp, Settings } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
+import AuthPage from '../../../shared/components/AuthPage.jsx';
 import Dashboard from './pages/dashboard.jsx';
 import Schools from './pages/schools.jsx';
 import Payments from './pages/payments.jsx';
@@ -24,7 +25,38 @@ const menuGroups = [
 export default function App() {
     const navigate = useNavigate();
     const location = useLocation();
-    const { profile } = useAuth();
+    const { user, profile, effectiveRole, loading, login, logout } = useAuth();
+
+    if (loading) {
+        return <div style={{ padding: 24 }}>Loading...</div>;
+    }
+
+    if (!user) {
+        return (
+            <AuthPage
+                brand="AcademicX"
+                title="Spark your platform control"
+                subtitle="Monitor schools, payments, and system health from one super-admin command center."
+                allowSignup={false}
+                highlights={[
+                    'Full-school oversight and control',
+                    'Platform-wide payment visibility',
+                    'Cross-tenant governance tools',
+                ]}
+                onLogin={({ email, password }) => login(email, password)}
+            />
+        );
+    }
+
+    if (effectiveRole !== 'super_admin') {
+        return (
+            <div style={{ padding: 24, maxWidth: 520, margin: '40px auto' }}>
+                <h2 style={{ marginBottom: 8 }}>Access Restricted</h2>
+                <p style={{ marginBottom: 16 }}>Only super-admin accounts can open this portal.</p>
+                <button className="btn btn-primary" onClick={logout}>Sign Out</button>
+            </div>
+        );
+    }
 
     return (
         <div className="app-layout">

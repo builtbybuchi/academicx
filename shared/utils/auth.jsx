@@ -7,6 +7,21 @@ import { account, getUserProfile } from './api.js';
 
 const AuthContext = createContext(null);
 
+function getRoleFromAuthUser(authUser) {
+    const roleKeys = ['super_admin', 'admin', 'staff', 'student'];
+    const labels = Array.isArray(authUser?.labels) ? authUser.labels : [];
+    const prefTags = Array.isArray(authUser?.prefs?.tags) ? authUser.prefs.tags : [];
+    const tags = [...labels, ...prefTags].map((item) => String(item).toLowerCase());
+
+    for (const role of roleKeys) {
+        if (tags.includes(role) || tags.includes(`role:${role}`)) {
+            return role;
+        }
+    }
+
+    return null;
+}
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
@@ -43,17 +58,22 @@ export function AuthProvider({ children }) {
         setProfile(null);
     }
 
+    const taggedRole = getRoleFromAuthUser(user);
+    const effectiveRole = taggedRole || profile?.role || null;
+
     const value = {
         user,
         profile,
+        effectiveRole,
+        taggedRole,
         loading,
         login,
         logout,
         checkAuth,
-        isAdmin: profile?.role === 'admin',
-        isStaff: profile?.role === 'staff',
-        isStudent: profile?.role === 'student',
-        isSuperAdmin: profile?.role === 'super_admin',
+        isAdmin: effectiveRole === 'admin',
+        isStaff: effectiveRole === 'staff',
+        isStudent: effectiveRole === 'student',
+        isSuperAdmin: effectiveRole === 'super_admin',
         schoolId: profile?.schoolId,
         schoolCode: profile?.schoolCode,
     };
