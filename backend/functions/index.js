@@ -113,6 +113,32 @@ function phoneMatches(inputPhone, storedPhone) {
     return left10 && right10 && left10 === right10;
 }
 
+function isDuplicateAuthUserError(err) {
+    const message = String(err?.message || '').toLowerCase();
+    return Boolean(err?.code === 409 || message.includes('same id, email, or phone'));
+}
+
+async function generateUniqueAdmissionNumber(db, schoolId, schoolCode) {
+    const year = new Date().getFullYear();
+
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+        const randomTail = `${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 10)}`.slice(-6);
+        const admissionNumber = `${schoolCode}/${year}/${randomTail}`;
+
+        const existing = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+            Query.equal('schoolId', schoolId),
+            Query.equal('admissionNumber', admissionNumber),
+            Query.limit(1),
+        ]);
+
+        if (existing.total === 0) {
+            return { admissionNumber, year };
+        }
+    }
+
+    throw new Error('Unable to generate a unique student ID. Please try again.');
+}
+
 async function setAuthUserTags(usersApi, authUserId, role, schoolId) {
     const labels = [role, `role:${role}`];
     if (schoolId) labels.push(`school:${schoolId}`);
@@ -422,21 +448,36 @@ const actions = {
             }
 
             const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, payload.schoolId);
-            const year = new Date().getFullYear();
-            const seq = Date.now().toString().slice(-4);
-            const admissionNumber = `${school.schoolCode}/${year}/${seq}`;
-
-            // Student auth identity is always bound to student ID, not parent email.
-            const studentEmail = `${admissionNumber.replace(/\//g, '.').toLowerCase()}@students.academicx.local`;
+            let admissionNumber = '';
+            let year = new Date().getFullYear();
+            let studentEmail = '';
             const password = payload.password || parentPhone || parentEmail || randomPassword();
 
-            const authUser = await usersApi.create(
-                ID.unique(),
-                studentEmail,
-                undefined,
-                password,
-                `${payload.firstName} ${payload.lastName}`
-            );
+            let authUser = null;
+            for (let attempt = 0; attempt < 8; attempt += 1) {
+                const generated = await generateUniqueAdmissionNumber(db, payload.schoolId, school.schoolCode);
+                admissionNumber = generated.admissionNumber;
+                year = generated.year;
+                // Student auth identity is always bound to student ID, not parent email.
+                studentEmail = `${admissionNumber.replace(/\//g, '.').toLowerCase()}@students.academicx.local`;
+
+                try {
+                    authUser = await usersApi.create(
+                        ID.unique(),
+                        studentEmail,
+                        undefined,
+                        password,
+                        `${payload.firstName} ${payload.lastName}`
+                    );
+                    break;
+                } catch (error) {
+                    if (!isDuplicateAuthUserError(error)) throw error;
+                }
+            }
+
+            if (!authUser) {
+                return { success: false, error: 'Unable to create a unique student account. Please try again.' };
+            }
 
             const userDoc = await db.createDocument(DATABASE_ID, COLLECTIONS.USERS.id, ID.unique(), {
                 schoolId: payload.schoolId,
