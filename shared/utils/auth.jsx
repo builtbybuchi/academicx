@@ -3,7 +3,7 @@
  * Provides authentication state across all frontend apps using Appwrite.
  */
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { account, getUserProfile } from './api.js';
+import { account, getUserProfile, resolveStudentLogin } from './api.js';
 
 const AuthContext = createContext(null);
 
@@ -22,7 +22,12 @@ function getRoleFromAuthUser(authUser) {
     return null;
 }
 
-export function AuthProvider({ children }) {
+function prettyRole(role) {
+    if (!role) return 'this';
+    return role.replace('_', ' ');
+}
+
+export function AuthProvider({ children, defaultRole = null }) {
     const [user, setUser] = useState(null);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -34,22 +39,61 @@ export function AuthProvider({ children }) {
     async function checkAuth() {
         try {
             const authUser = await account.get();
+            const taggedRole = getRoleFromAuthUser(authUser);
+
+            if (defaultRole && taggedRole && taggedRole !== defaultRole) {
+                await account.deleteSession('current').catch(() => { });
+                setUser(null);
+                setProfile(null);
+                return {
+                    ok: false,
+                    error: `This portal is for ${prettyRole(defaultRole)} accounts only.`,
+                };
+            }
+
             setUser(authUser);
 
             // Load profile from users collection
             const profileDoc = await getUserProfile(authUser.$id);
+
+            if (defaultRole && profileDoc?.role && profileDoc.role !== defaultRole) {
+                await account.deleteSession('current').catch(() => { });
+                setUser(null);
+                setProfile(null);
+                return {
+                    ok: false,
+                    error: `This portal is for ${prettyRole(defaultRole)} accounts only.`,
+                };
+            }
+
             setProfile(profileDoc);
+            return { ok: true, user: authUser, profile: profileDoc };
         } catch {
             setUser(null);
             setProfile(null);
+            return { ok: false, error: 'No active session.' };
         } finally {
             setLoading(false);
         }
     }
 
-    async function login(email, password) {
-        await account.createEmailPasswordSession(email, password);
-        await checkAuth();
+    async function login(identifier, password) {
+        let loginEmail = identifier;
+        let loginPassword = password;
+
+        if (defaultRole === 'student') {
+            const studentId = String(identifier || '').trim();
+            const parentCredential = String(password || '').trim();
+            const resolved = await resolveStudentLogin({ studentId, parentCredential });
+            loginEmail = resolved.loginEmail;
+            loginPassword = resolved.loginPassword || parentCredential;
+        }
+
+        await account.createEmailPasswordSession(loginEmail, loginPassword);
+        const status = await checkAuth();
+        if (!status?.ok) {
+            throw new Error(status?.error || 'Unable to sign in to this portal with this account.');
+        }
     }
 
     async function logout() {

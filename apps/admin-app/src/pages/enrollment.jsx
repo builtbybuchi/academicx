@@ -63,9 +63,22 @@ export default function Enrollment() {
         try {
             setSaving(true);
             if (tab === 'students') {
-                await enrollStudent({ schoolId, schoolCode: profile.schoolCode, ...studentForm });
+                if (!studentForm.className) {
+                    throw new Error('Class is required. Add/select a class before saving.');
+                }
+                if (!studentForm.parentEmail && !studentForm.parentPhone) {
+                    throw new Error('Parent email or parent phone is required for student sign-in.');
+                }
+
+                const result = await enrollStudent({ schoolId, schoolCode: profile.schoolCode, ...studentForm });
                 setStudentForm({ firstName: '', lastName: '', className: '', section: 'A', gender: '', parentName: '', parentEmail: '', parentPhone: '' });
-                toast({ type: 'success', title: 'Student enrolled', message: 'Student record and login were created successfully.' });
+                const studentId = result?.studentId || result?.student?.admissionNumber;
+                const credential = studentForm.parentPhone || studentForm.parentEmail;
+                toast({
+                    type: 'success',
+                    title: 'Student enrolled',
+                    message: `Student created. Login uses Student ID ${studentId || '-'} and parent phone/email (${credential || '-'})`,
+                });
             } else {
                 await addStaff({ schoolId, schoolCode: profile.schoolCode, ...staffForm });
                 setStaffForm({ firstName: '', lastName: '', email: '', password: '', department: '', staffType: 'academic', gender: '' });
@@ -109,12 +122,15 @@ export default function Enrollment() {
                     <>
                         <FormField label="First Name" required placeholder="Enter first name" value={studentForm.firstName} onChange={(value) => setStudentForm((current) => ({ ...current, firstName: value }))} />
                         <FormField label="Last Name" required placeholder="Enter last name" value={studentForm.lastName} onChange={(value) => setStudentForm((current) => ({ ...current, lastName: value }))} />
-                        <FormField label="Class" type="select" options={classOptions} value={studentForm.className} onChange={(value) => setStudentForm((current) => ({ ...current, className: value }))} />
+                        <FormField label="Class" required type="select" options={classOptions} placeholder="Select class" value={studentForm.className} onChange={(value) => setStudentForm((current) => ({ ...current, className: value }))} />
                         <FormField label="Section" type="select" options={[{ value: 'A', label: 'A' }, { value: 'B', label: 'B' }, { value: 'C', label: 'C' }]} value={studentForm.section} onChange={(value) => setStudentForm((current) => ({ ...current, section: value }))} />
                         <FormField label="Gender" type="select" options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} value={studentForm.gender} onChange={(value) => setStudentForm((current) => ({ ...current, gender: value }))} />
                         <FormField label="Parent Name" placeholder="Parent or guardian name" value={studentForm.parentName} onChange={(value) => setStudentForm((current) => ({ ...current, parentName: value }))} />
                         <FormField label="Parent Email" type="email" placeholder="parent@example.com" value={studentForm.parentEmail} onChange={(value) => setStudentForm((current) => ({ ...current, parentEmail: value }))} />
                         <FormField label="Parent Phone" placeholder="+234..." value={studentForm.parentPhone} onChange={(value) => setStudentForm((current) => ({ ...current, parentPhone: value }))} />
+                        <div style={{ fontSize: 12, color: 'var(--color-gray-400)', marginTop: -2 }}>
+                            Student sign-in uses Student ID plus parent phone or parent email.
+                        </div>
                     </>
                 ) : (
                     <>

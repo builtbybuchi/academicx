@@ -97,6 +97,47 @@ function extractRoleFromTags(authUser) {
     return roleKeys.find((role) => tags.includes(role) || tags.includes(`role:${role}`)) || null;
 }
 
+function normalizePhone(value) {
+    return String(value || '').replace(/\D+/g, '');
+}
+
+function phoneMatches(inputPhone, storedPhone) {
+    const left = normalizePhone(inputPhone);
+    const right = normalizePhone(storedPhone);
+    if (!left || !right) return false;
+    if (left === right) return true;
+
+    // Accept local/international variants by matching the trailing 10 digits.
+    const left10 = left.slice(-10);
+    const right10 = right.slice(-10);
+    return left10 && right10 && left10 === right10;
+}
+
+async function setAuthUserTags(usersApi, authUserId, role, schoolId) {
+    const labels = [role, `role:${role}`];
+    if (schoolId) labels.push(`school:${schoolId}`);
+
+    if (typeof usersApi.updateLabels === 'function') {
+        try {
+            await usersApi.updateLabels(authUserId, labels);
+        } catch {
+            // Best-effort only. Profile role remains source of truth fallback.
+        }
+    }
+
+    if (typeof usersApi.updatePrefs === 'function') {
+        try {
+            await usersApi.updatePrefs(authUserId, {
+                tags: labels,
+                role,
+                schoolId: schoolId || '',
+            });
+        } catch {
+            // Best-effort only.
+        }
+    }
+}
+
 async function getUserByAuthId(authId) {
     const db = getDb();
     const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.USERS.id, [
@@ -253,6 +294,8 @@ const actions = {
                 createdAt: nowIso(),
             });
 
+            await setAuthUserTags(usersApi, authUser.$id, 'admin', schoolDoc.$id);
+
             return { success: true, data: { school: schoolDoc, admin: userDoc } };
         },
     },
@@ -290,6 +333,8 @@ const actions = {
                 status: 'active',
                 createdAt: nowIso(),
             });
+
+            await setAuthUserTags(usersApi, authUser.$id, 'admin', school.$id);
 
             return { success: true, data: userDoc };
         },
@@ -330,6 +375,8 @@ const actions = {
                 createdAt: nowIso(),
             });
 
+            await setAuthUserTags(usersApi, authUser.$id, 'staff', payload.schoolId);
+
             const year = new Date().getFullYear();
             const seq = Date.now().toString().slice(-4);
             const staffId = `${school.schoolCode}/${year}/${seq}`;
@@ -362,8 +409,16 @@ const actions = {
             const db = getDb();
             const usersApi = getUsersApi();
 
-            if (!payload.schoolId || !payload.firstName || !payload.lastName || !payload.className) {
+            const className = String(payload.className || payload.class || payload.classLevel || '').trim();
+            const parentEmail = String(payload.parentEmail || '').trim();
+            const parentPhone = String(payload.parentPhone || '').trim();
+
+            if (!payload.schoolId || !payload.firstName || !payload.lastName || !className) {
                 return { success: false, error: 'schoolId, firstName, lastName and className are required.' };
+            }
+
+            if (!parentEmail && !parentPhone) {
+                return { success: false, error: 'parentEmail or parentPhone is required for student sign-in.' };
             }
 
             const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, payload.schoolId);
@@ -371,8 +426,9 @@ const actions = {
             const seq = Date.now().toString().slice(-4);
             const admissionNumber = `${school.schoolCode}/${year}/${seq}`;
 
-            const studentEmail = payload.email || payload.parentEmail || `${admissionNumber.replace(/\//g, '.').toLowerCase()}@student.local`;
-            const password = payload.password || randomPassword();
+            // Student auth identity is always bound to student ID, not parent email.
+            const studentEmail = `${admissionNumber.replace(/\//g, '.').toLowerCase()}@students.academicx.local`;
+            const password = payload.password || parentPhone || parentEmail || randomPassword();
 
             const authUser = await usersApi.create(
                 ID.unique(),
@@ -396,6 +452,8 @@ const actions = {
                 createdAt: nowIso(),
             });
 
+            await setAuthUserTags(usersApi, authUser.$id, 'student', payload.schoolId);
+
             const studentDoc = await db.createDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, ID.unique(), {
                 schoolId: payload.schoolId,
                 userId: userDoc.$id,
@@ -405,12 +463,12 @@ const actions = {
                 lastName: payload.lastName,
                 gender: payload.gender || 'male',
                 dateOfBirth: payload.dateOfBirth || '',
-                className: payload.className,
+                className,
                 section: payload.section || 'A',
                 profileImage: '',
                 parentName: payload.parentName || '',
-                parentEmail: payload.parentEmail || '',
-                parentPhone: payload.parentPhone || '',
+                parentEmail,
+                parentPhone,
                 status: 'active',
             });
 
@@ -419,8 +477,72 @@ const actions = {
                 data: {
                     user: userDoc,
                     student: studentDoc,
+                    studentId: admissionNumber,
                     loginEmail: studentEmail,
                     generatedPassword: payload.password ? null : password,
+                },
+            };
+        },
+    },
+
+    resolveStudentLogin: {
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const usersApi = getUsersApi();
+
+            const studentId = String(payload.studentId || '').trim();
+            const parentCredential = String(payload.parentCredential || '').trim();
+
+            if (!studentId || !parentCredential) {
+                return { success: false, error: 'studentId and parentCredential are required.' };
+            }
+
+            const attemptIds = [...new Set([studentId, studentId.toUpperCase()])];
+            let student = null;
+            for (const id of attemptIds) {
+                const rows = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                    Query.equal('admissionNumber', id),
+                    Query.equal('status', 'active'),
+                    Query.limit(1),
+                ]);
+                if (rows.total > 0) {
+                    student = rows.documents[0];
+                    break;
+                }
+            }
+
+            if (!student) {
+                return { success: false, error: 'Invalid student credentials.' };
+            }
+
+            const credentialLower = parentCredential.toLowerCase();
+            const emailMatch = student.parentEmail && student.parentEmail.toLowerCase() === credentialLower;
+            const phoneMatch = phoneMatches(parentCredential, student.parentPhone);
+
+            if (!emailMatch && !phoneMatch) {
+                return { success: false, error: 'Invalid student credentials.' };
+            }
+
+            const userDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, student.userId);
+            if (!userDoc?.email) {
+                return { success: false, error: 'Student login record is incomplete.' };
+            }
+
+            // Backward compatibility: keep student auth secret aligned with parent credential.
+            if (userDoc?.authId && typeof usersApi.updatePassword === 'function') {
+                try {
+                    await usersApi.updatePassword(userDoc.authId, parentCredential);
+                } catch {
+                    // Best-effort only.
+                }
+            }
+
+            return {
+                success: true,
+                data: {
+                    loginEmail: userDoc.email,
+                    loginPassword: parentCredential,
+                    studentId: student.admissionNumber,
                 },
             };
         },

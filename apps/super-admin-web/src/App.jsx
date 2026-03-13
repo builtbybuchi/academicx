@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { BarChart, Building2, CreditCard, TrendingUp, Settings } from 'lucide-react';
+import { BarChart, Building2, CreditCard, TrendingUp, Settings, LogOut } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
 import AuthPage from '../../../shared/components/AuthPage.jsx';
@@ -60,6 +60,13 @@ export default function App() {
 
     return (
         <div className="app-layout">
+            <button
+                className="btn btn-danger btn-sm"
+                onClick={logout}
+                style={{ position: 'fixed', right: 12, top: 10, zIndex: 1200, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+                <LogOut size={14} /> Sign Out
+            </button>
             <Sidebar
                 menuGroups={menuGroups}
                 activeId={location.pathname}

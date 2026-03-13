@@ -159,6 +159,17 @@ export async function listClasses(schoolId) {
     ]);
 }
 
+export async function listAcademicSessions(schoolId) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, [
+        Query.equal('schoolId', schoolId),
+        Query.limit(500),
+    ]);
+}
+
+export async function createAcademicSession(data) {
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, ID.unique(), data);
+}
+
 export async function createClass(data) {
     return databases.createDocument(DATABASE_ID, COLLECTIONS.CLASSES, ID.unique(), data);
 }
@@ -173,6 +184,49 @@ export async function listSubjects(schoolId, className) {
 
 export async function createSubject(data) {
     return databases.createDocument(DATABASE_ID, COLLECTIONS.SUBJECTS, ID.unique(), data);
+}
+
+export async function upsertClassNames(schoolId, classNames = []) {
+    const existing = await listClasses(schoolId);
+    const existingNames = new Set(existing.documents.map((item) => item.name));
+    const created = [];
+
+    for (const className of classNames) {
+        if (!className || existingNames.has(className)) continue;
+        const doc = await createClass({ schoolId, name: className, level: className.replace(/[A-Z]$/i, ''), studentCount: 0, formTeacherId: '' });
+        created.push(doc);
+        existingNames.add(className);
+    }
+
+    return { created, existing: existing.documents };
+}
+
+export async function upsertSubjects(schoolId, subjectRows = []) {
+    const existing = await listSubjects(schoolId);
+    const existingKeys = new Set(existing.documents.map((item) => `${item.className}::${item.code}`));
+    const created = [];
+
+    for (const row of subjectRows) {
+        const className = String(row.className || '').trim();
+        const name = String(row.name || '').trim();
+        const code = String(row.code || '').trim().toUpperCase();
+        if (!className || !name || !code) continue;
+
+        const key = `${className}::${code}`;
+        if (existingKeys.has(key)) continue;
+
+        const doc = await createSubject({
+            schoolId,
+            name,
+            code,
+            className,
+            staffId: row.staffId || '',
+        });
+        created.push(doc);
+        existingKeys.add(key);
+    }
+
+    return { created, existing: existing.documents };
 }
 
 export async function listGradingSchemes(schoolId) {
@@ -385,6 +439,10 @@ export async function getSuperAdminPortalData() {
 
 export async function createSchoolAdmin(payload) {
     return invokeBackendFunction('createSchoolAdmin', payload);
+}
+
+export async function resolveStudentLogin(payload) {
+    return invokeBackendFunction('resolveStudentLogin', payload);
 }
 
 // ── Image Upload ──────────────────────────────────────────

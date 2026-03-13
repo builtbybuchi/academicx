@@ -34,21 +34,24 @@ export default function App() {
             <AuthPage
                 brand="AcademicX"
                 title="Spark your learning journey"
-                subtitle="Check results, attendance, and secure PIN access with a clean student-first experience."
-                allowSignup={true}
-                disableSignup={true}
-                disableSignupMessage="Student accounts are created by the school admin. Please request your credentials from school."
+                subtitle="Sign in with your Student ID and your parent phone number or parent email. Student accounts are created by school admins."
+                allowSignup={false}
                 highlights={[
                     'View your approved term results instantly',
                     'Track attendance trends week by week',
                     'Verify result PINs securely from your portal',
                 ]}
-                onLogin={({ email, password }) => login(email, password)}
+                loginFields={[
+                    { name: 'studentId', type: 'text', label: 'Student ID', placeholder: 'e.g. SCH/2026/0042', autoComplete: 'username' },
+                    { name: 'password', type: 'text', label: 'Parent Phone or Parent Email', placeholder: 'Parent phone number or parent email', autoComplete: 'current-password' },
+                ]}
+                loginButtonText="Sign in to Student Portal"
+                onLogin={({ studentId, password }) => login(studentId, password)}
             />
         );
     }
 
-    if (effectiveRole !== 'student' && effectiveRole !== 'admin' && effectiveRole !== 'super_admin') {
+    if (effectiveRole !== 'student') {
         return (
             <div style={{ padding: 24, maxWidth: 520, margin: '40px auto' }}>
                 <h2 style={{ marginBottom: 8 }}>Access Restricted</h2>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, KeySquare, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, KeySquare, MessageSquare, LogOut } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
 import AuthPage from '../../../shared/components/AuthPage.jsx';
@@ -12,6 +12,7 @@ import Grading from './pages/grading.jsx';
 import Results from './pages/results.jsx';
 import Pins from './pages/pins.jsx';
 import Communication from './pages/communication.jsx';
+import Chat from './pages/chat.jsx';
 
 const menuGroups = [
     {
@@ -34,6 +35,7 @@ const menuGroups = [
             { id: '/results', label: 'Results', icon: <ClipboardList size={20} /> },
             { id: '/pins', label: 'PIN Codes', icon: <KeySquare size={20} /> },
             { id: '/communication', label: 'Communication', icon: <MessageSquare size={20} /> },
+            { id: '/chat', label: 'Chat', icon: <MessageSquare size={20} /> },
         ],
     },
 ];
@@ -76,7 +78,7 @@ export default function App() {
         );
     }
 
-    if (effectiveRole !== 'admin' && effectiveRole !== 'super_admin') {
+    if (effectiveRole !== 'admin') {
         return (
             <div style={{ padding: 24, maxWidth: 520, margin: '40px auto' }}>
                 <h2 style={{ marginBottom: 8 }}>Access Restricted</h2>
@@ -88,6 +90,13 @@ export default function App() {
 
     return (
         <div className="app-layout">
+            <button
+                className="btn btn-danger btn-sm"
+                onClick={logout}
+                style={{ position: 'fixed', right: 12, top: 10, zIndex: 1200, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+                <LogOut size={14} /> Sign Out
+            </button>
             <Sidebar
                 menuGroups={menuGroups}
                 activeId={location.pathname}
@@ -105,6 +114,7 @@ export default function App() {
                     <Route path="/results" element={<Results />} />
                     <Route path="/pins" element={<Pins />} />
                     <Route path="/communication" element={<Communication />} />
+                    <Route path="/chat" element={<Chat />} />
                 </Routes>
             </main>
         </div>

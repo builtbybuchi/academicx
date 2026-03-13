@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock } from 'lucide-react';
+import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock, LogOut } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
 import AuthPage from '../../../shared/components/AuthPage.jsx';
@@ -41,9 +41,7 @@ export default function App() {
                 brand="AcademicX"
                 title="Spark your teaching flow"
                 subtitle="Manage attendance, class results, and school communication from one portal."
-                allowSignup={true}
-                disableSignup={true}
-                disableSignupMessage="Staff accounts are provisioned by school admins. Contact your administrator to get invited."
+                allowSignup={false}
                 highlights={[
                     'Enter CAT and exam scores with backend validation',
                     'Take attendance by class in minutes',
@@ -54,7 +52,7 @@ export default function App() {
         );
     }
 
-    if (effectiveRole !== 'staff' && effectiveRole !== 'admin' && effectiveRole !== 'super_admin') {
+    if (effectiveRole !== 'staff') {
         return (
             <div style={{ padding: 24, maxWidth: 520, margin: '40px auto' }}>
                 <h2 style={{ marginBottom: 8 }}>Access Restricted</h2>
@@ -66,6 +64,13 @@ export default function App() {
 
     return (
         <div className="app-layout">
+            <button
+                className="btn btn-danger btn-sm"
+                onClick={logout}
+                style={{ position: 'fixed', right: 12, top: 10, zIndex: 1200, display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+                <LogOut size={14} /> Sign Out
+            </button>
             <Sidebar
                 menuGroups={menuGroups}
                 activeId={location.pathname}

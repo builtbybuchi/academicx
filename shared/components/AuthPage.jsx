@@ -7,6 +7,8 @@ export default function AuthPage({
     logoSrc = '/logo.png',
     fallbackLogoText = 'AcademicX',
     highlights = [],
+    loginFields,
+    loginButtonText = 'Continue with email',
     allowSignup = true,
     disableSignup = false,
     disableSignupMessage = 'Account signup is disabled for this portal. Contact your administrator.',
@@ -16,7 +18,18 @@ export default function AuthPage({
 }) {
     const [tab, setTab] = useState('login');
     const [error, setError] = useState('');
-    const [loginData, setLoginData] = useState({ email: '', password: '' });
+    const normalizedLoginFields = useMemo(() => (
+        loginFields && loginFields.length > 0
+            ? loginFields
+            : [
+                { name: 'email', type: 'email', placeholder: 'name@yourcompany.com', autoComplete: 'email' },
+                { name: 'password', type: 'password', placeholder: 'Password', autoComplete: 'current-password' },
+            ]
+    ), [loginFields]);
+
+    const [loginData, setLoginData] = useState(() => (
+        normalizedLoginFields.reduce((acc, field) => ({ ...acc, [field.name]: '' }), {})
+    ));
     const [signupData, setSignupData] = useState({ firstName: '', lastName: '', email: '', password: '', organization: '', schoolCode: '' });
     const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 980 : false);
 
@@ -25,6 +38,10 @@ export default function AuthPage({
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
     }, []);
+
+    useEffect(() => {
+        setLoginData(normalizedLoginFields.reduce((acc, field) => ({ ...acc, [field.name]: '' }), {}));
+    }, [normalizedLoginFields]);
 
     const previewItems = useMemo(() => {
         if (highlights.length > 0) return highlights;
@@ -64,7 +81,8 @@ export default function AuthPage({
             <div style={styles.layer} />
             <div style={{ ...styles.grid, gridTemplateColumns: isDesktop ? 'minmax(420px, 1fr) minmax(360px, 1fr)' : '1fr' }}>
                 <section style={{ ...styles.left, padding: isDesktop ? 34 : 24 }}>
-                    <div style={styles.brandRow}>
+                    <div style={styles.brandWrap}>
+                        <div style={styles.brandRow}>
                         <img
                             src={logoSrc}
                             alt={brand}
@@ -77,6 +95,7 @@ export default function AuthPage({
                         />
                         <span style={{ ...styles.logoFallback, display: 'none' }}>{fallbackLogoText}</span>
                         <span style={styles.brandText}>{brand}</span>
+                        </div>
                     </div>
 
                     <h1 style={styles.title}>{title}</h1>
@@ -104,24 +123,22 @@ export default function AuthPage({
 
                         {tab === 'login' && (
                             <form onSubmit={submitLogin} style={styles.form}>
-                                <input
-                                    style={styles.input}
-                                    type="email"
-                                    placeholder="name@yourcompany.com"
-                                    value={loginData.email}
-                                    onChange={(event) => setLoginData((current) => ({ ...current, email: event.target.value }))}
-                                    required
-                                />
-                                <input
-                                    style={styles.input}
-                                    type="password"
-                                    placeholder="Password"
-                                    value={loginData.password}
-                                    onChange={(event) => setLoginData((current) => ({ ...current, password: event.target.value }))}
-                                    required
-                                />
+                                {normalizedLoginFields.map((field) => (
+                                    <div key={field.name} style={styles.loginFieldWrap}>
+                                        {field.label && <label style={styles.loginFieldLabel}>{field.label}</label>}
+                                        <input
+                                            style={styles.input}
+                                            type={field.type || 'text'}
+                                            placeholder={field.placeholder || ''}
+                                            autoComplete={field.autoComplete || 'off'}
+                                            value={loginData[field.name] || ''}
+                                            onChange={(event) => setLoginData((current) => ({ ...current, [field.name]: event.target.value }))}
+                                            required={field.required !== false}
+                                        />
+                                    </div>
+                                ))}
                                 <button disabled={loading} type="submit" style={styles.primaryBtn}>
-                                    {loading ? 'Loading...' : 'Continue with email'}
+                                    {loading ? 'Loading...' : loginButtonText}
                                 </button>
                             </form>
                         )}
@@ -216,7 +233,7 @@ const styles = {
         background: 'linear-gradient(145deg, #f4f8ff 0%, #eef5ff 48%, #f6faff 100%)',
         position: 'relative',
         overflow: 'hidden',
-        padding: '20px 16px',
+        padding: '32px 20px',
     },
     layer: {
         position: 'absolute',
@@ -229,27 +246,35 @@ const styles = {
         margin: '0 auto',
         position: 'relative',
         display: 'grid',
-        gap: 20,
+        gap: 28,
         gridTemplateColumns: '1fr',
     },
     left: {
         borderRadius: 28,
         background: 'rgba(255,255,255,0.78)',
         backdropFilter: 'blur(8px)',
-        padding: 24,
+        padding: 30,
         border: '1px solid rgba(29,78,216,0.12)',
     },
     right: {
         borderRadius: 28,
         background: 'rgba(239,246,255,0.88)',
-        padding: 20,
+        padding: 26,
         border: '1px solid rgba(29,78,216,0.1)',
     },
     brandRow: {
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: 10,
         marginBottom: 18,
+    },
+    brandWrap: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        textAlign: 'center',
     },
     logo: {
         width: 34,
@@ -271,6 +296,7 @@ const styles = {
         fontWeight: 700,
         fontFamily: 'Georgia, Cambria, Times New Roman, serif',
         color: '#111827',
+        lineHeight: 1,
     },
     title: {
         margin: 0,
@@ -279,27 +305,29 @@ const styles = {
         fontWeight: 500,
         fontFamily: 'Georgia, Cambria, Times New Roman, serif',
         color: '#1f2937',
+        marginBottom: 14,
     },
     subtitle: {
-        marginTop: 12,
-        marginBottom: 24,
+        marginTop: 0,
+        marginBottom: 30,
         color: '#4b5563',
         fontSize: 15,
+        lineHeight: 1.6,
     },
     card: {
         borderRadius: 24,
         border: '1px solid rgba(29,78,216,0.12)',
         background: '#f8fbff',
-        padding: 16,
+        padding: 20,
     },
     tabs: {
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
         background: '#eaf2ff',
         borderRadius: 12,
-        padding: 4,
+        padding: 5,
         gap: 4,
-        marginBottom: 14,
+        marginBottom: 20,
     },
     tabBtn: {
         border: 'none',
@@ -318,33 +346,44 @@ const styles = {
     },
     form: {
         display: 'grid',
-        gap: 10,
+        gap: 14,
     },
     row: {
         display: 'grid',
-        gap: 10,
+        gap: 12,
         gridTemplateColumns: '1fr',
     },
     input: {
         width: '100%',
         border: '1px solid rgba(29,78,216,0.18)',
         borderRadius: 12,
-        padding: '12px 14px',
+        padding: '14px 16px',
         outline: 'none',
         fontSize: 14,
         background: '#fff',
         color: '#1f2937',
     },
+    loginFieldWrap: {
+        display: 'grid',
+        gap: 6,
+    },
+    loginFieldLabel: {
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#334155',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
     primaryBtn: {
         border: 'none',
         borderRadius: 12,
-        padding: '12px 14px',
+        padding: '14px 16px',
         fontSize: 18,
         fontWeight: 700,
         color: '#fff',
         background: '#1d4ed8',
         cursor: 'pointer',
-        marginTop: 4,
+        marginTop: 8,
     },
     note: {
         fontSize: 12,
@@ -361,7 +400,7 @@ const styles = {
         borderRadius: 20,
         background: '#eff6ff',
         border: '1px solid rgba(29,78,216,0.12)',
-        padding: 16,
+        padding: 22,
         minHeight: 260,
     },
     previewChip: {
@@ -378,15 +417,15 @@ const styles = {
     previewItem: {
         color: '#374151',
         fontSize: 14,
-        marginBottom: 8,
+        marginBottom: 12,
         lineHeight: 1.45,
     },
     previewPanel: {
-        marginTop: 16,
+        marginTop: 20,
         borderRadius: 16,
         background: '#fff',
         border: '1px solid rgba(29,78,216,0.12)',
-        padding: 14,
+        padding: 16,
     },
     fakeLineLong: {
         height: 8,
