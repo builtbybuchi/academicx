@@ -31,7 +31,10 @@ function extractRoleFromTags(authUser) {
     const roleKeys = ['super_admin', 'admin', 'staff', 'student'];
     const labels = Array.isArray(authUser?.labels) ? authUser.labels : [];
     const prefTags = Array.isArray(authUser?.prefs?.tags) ? authUser.prefs.tags : [];
-    const tags = [...labels, ...prefTags].map((item) => String(item).toLowerCase());
+    const tags = [...labels, ...prefTags]
+        .map((item) => String(item).toLowerCase())
+        .map((item) => (item === 'superadmin' ? 'super_admin' : item))
+        .map((item) => (item === 'role:superadmin' ? 'role:super_admin' : item));
     return roleKeys.find((role) => tags.includes(role) || tags.includes(`role:${role}`)) || null;
 }
 

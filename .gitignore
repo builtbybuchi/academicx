@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 build/
+installers/
 .output/
 
 # Environment files
@@ -14,6 +15,15 @@ build/
 
 # Tauri build output
 src-tauri/target/
+apps/**/src-tauri/target/
+apps/**/src-tauri/.tauri/
+
+# Generated local assets for build scripts
+.tmp/
+
+# Keystore files - NEVER commit these
+academicx-release.jks
+keystore-b64.txt
 
 # IDE / Editor
 .vscode/
@@ -43,4 +53,3 @@ coverage/
 
 # Misc
 *.tgz
-.tmp/

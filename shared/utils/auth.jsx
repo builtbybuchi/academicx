@@ -11,7 +11,10 @@ function getRoleFromAuthUser(authUser) {
     const roleKeys = ['super_admin', 'admin', 'staff', 'student'];
     const labels = Array.isArray(authUser?.labels) ? authUser.labels : [];
     const prefTags = Array.isArray(authUser?.prefs?.tags) ? authUser.prefs.tags : [];
-    const tags = [...labels, ...prefTags].map((item) => String(item).toLowerCase());
+    const tags = [...labels, ...prefTags]
+        .map((item) => String(item).toLowerCase())
+        .map((item) => (item === 'superadmin' ? 'super_admin' : item))
+        .map((item) => (item === 'role:superadmin' ? 'role:super_admin' : item));
 
     for (const role of roleKeys) {
         if (tags.includes(role) || tags.includes(`role:${role}`)) {

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 
 export default function AuthPage({
-    brand = 'AcademicX',
+    brand = 'academicX',
     title = 'Spark your productivity',
     subtitle = 'Access your workspace with secure email authentication.',
     logoSrc = '/logo.png',
-    fallbackLogoText = 'AcademicX',
+    fallbackLogoText = 'academicX',
     highlights = [],
     loginFields,
     loginButtonText = 'Continue with email',

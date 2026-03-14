@@ -46,14 +46,14 @@ export default function App() {
     const { user, profile, effectiveRole, loading, login, logout } = useAuth();
 
     if (loading) {
-        return <div style={{ padding: 24 }}>Loading...</div>;
+        return <div style={{ padding: 24 }}>academicX . . . </div>;
     }
 
     if (!user) {
         return (
             <AuthPage
-                brand="AcademicX"
-                title="Spark your school operations"
+                brand="academicX"
+                title="Manage your school operations"
                 subtitle="Manage enrollment, academics, results, and communication from one admin control center."
                 allowSignup={true}
                 highlights={[
