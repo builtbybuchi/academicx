@@ -193,7 +193,7 @@ jobs:
           path: installers/darwin/
           retention-days: 30
 
-  # ─── ANDROID APK BUILD ────────────────────────────────────────────────────
+ # ─── ANDROID APK BUILD ────────────────────────────────────────────────────
 
   build-android:
     if: inputs.build_android
@@ -246,51 +246,65 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
-      - name: Install root dependencies
-        run: npm install
-
       - name: Decode keystore from secret
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > academicx-release.jks
+          echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > ${{ github.workspace }}/academicx-release.jks
 
       - name: Build and sign Android APKs
         env:
           NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
-          JAVA_HOME: ${{ env.JAVA_HOME }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
-          LOGO_ARG=""
-          if [ -n "${{ inputs.logo_url }}" ]; then
-            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
-          fi
-
           for APP in admin-app staff-app student-parent-app; do
             echo "=== Building Android APK for $APP ==="
-            cd apps/$APP
+            cd ${{ github.workspace }}/apps/$APP
             npm install
 
+            # Write signing config into local.properties
             cat >> src-tauri/gen/android/local.properties << EOF
-          storeFile=../../../../academicx-release.jks
+          storeFile=${{ github.workspace }}/academicx-release.jks
           storePassword=${ANDROID_STORE_PASSWORD}
           keyAlias=${ANDROID_KEY_ALIAS}
           keyPassword=${ANDROID_KEY_PASSWORD}
           EOF
 
-            cd ../..
-          done
+            # Download logo if provided
+            LOGO_ARG=""
+            if [ -n "${{ inputs.logo_url }}" ]; then
+              LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+            fi
 
-          node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $LOGO_ARG
+            # Build the frontend first
+            npm run build
+
+            # Build Android APK
+            npm exec -- tauri android build -- --apk
+
+            cd ${{ github.workspace }}
+          done
 
       - name: Collect Android APKs
         run: |
-          mkdir -p installers/android
+          mkdir -p ${{ github.workspace }}/installers/android
           for APP in admin-app staff-app student-parent-app; do
-            mkdir -p installers/android/$APP
-            find apps/$APP/src-tauri/gen/android -name "*.apk" \
-              -exec cp {} installers/android/$APP/ \;
+            mkdir -p ${{ github.workspace }}/installers/android/$APP
+            find ${{ github.workspace }}/apps/$APP/src-tauri/gen/android \
+              -name "*.apk" \
+              -exec cp {} ${{ github.workspace }}/installers/android/$APP/ \;
           done
+
+      - name: Verify APKs were created
+        run: |
+          echo "=== APK files found ==="
+          find ${{ github.workspace }}/installers/android -name "*.apk" -ls
+          APK_COUNT=$(find ${{ github.workspace }}/installers/android -name "*.apk" | wc -l)
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "ERROR: No APK files were generated!"
+            exit 1
+          fi
+          echo "Total APKs: $APK_COUNT"
 
       - name: Upload Android APKs
         uses: actions/upload-artifact@v4
