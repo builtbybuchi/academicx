@@ -1,19 +1,101 @@
 name: Build Desktop and Mobile Apps
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows installers'
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build Linux installers'
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build macOS installers'
+        type: boolean
+        default: true
+      build_android:
+        description: 'Build Android APKs'
+        type: boolean
+        default: true
+      school_code:
+        description: 'School code (e.g. SHMCE)'
+        type: string
+        default: 'ACADEMICX'
+      logo_url:
+        description: 'School logo URL (leave blank to use default AcademicX logo)'
+        type: string
+        default: ''
 
 jobs:
-  # ─── DESKTOP BUILDS (Windows, Linux, macOS) ───────────────────────────────
+  # ─── WINDOWS BUILD ────────────────────────────────────────────────────────
 
-  build-desktop:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+  build-windows:
+    if: inputs.build_windows
+    runs-on: windows-latest
 
-    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/admin-app/src-tauri
+            apps/staff-app/src-tauri
+            apps/student-parent-app/src-tauri
+
+      - name: Activate MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Remove Git linker conflict from PATH
+        shell: powershell
+        run: |
+          $paths = $env:PATH -split ';' | Where-Object {
+            $_ -notmatch '\\Git\\usr\\bin' -and
+            $_ -notmatch '\\Git\\bin' -and
+            $_ -notmatch '\\mingw64\\bin' -and
+            $_ -notmatch '\\mingw32\\bin'
+          }
+          echo "PATH=$($paths -join ';')" >> $env:GITHUB_ENV
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Build Windows apps
+        shell: powershell
+        run: |
+          $logoArg = ""
+          if ("${{ inputs.logo_url }}" -ne "") {
+            $logoArg = "--logo-url ${{ inputs.logo_url }}"
+          }
+          Invoke-Expression "node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $logoArg"
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: installers/win32/
+          retention-days: 30
+
+  # ─── LINUX BUILD ──────────────────────────────────────────────────────────
+
+  build-linux:
+    if: inputs.build_linux
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -37,7 +119,6 @@ jobs:
             apps/student-parent-app/src-tauri
 
       - name: Install Linux system dependencies
-        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -49,36 +130,63 @@ jobs:
             libsoup-3.0-dev \
             libjavascriptcoregtk-4.1-dev
 
-      - name: Activate MSVC environment (Windows only)
-        if: matrix.os == 'windows-latest'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
       - name: Install root dependencies
         run: npm install
 
-      - name: Build all desktop apps
-        run: node scripts/build-tauri-apps.mjs --school-code ACADEMICX
-
-      - name: Upload Windows installers
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installers
-          path: installers/win32/
-          retention-days: 30
+      - name: Build Linux apps
+        run: |
+          LOGO_ARG=""
+          if [ -n "${{ inputs.logo_url }}" ]; then
+            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+          fi
+          node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $LOGO_ARG
 
       - name: Upload Linux installers
-        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: linux-installers
           path: installers/linux/
           retention-days: 30
 
+  # ─── MACOS BUILD ──────────────────────────────────────────────────────────
+
+  build-macos:
+    if: inputs.build_macos
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/admin-app/src-tauri
+            apps/staff-app/src-tauri
+            apps/student-parent-app/src-tauri
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Build macOS apps
+        run: |
+          LOGO_ARG=""
+          if [ -n "${{ inputs.logo_url }}" ]; then
+            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+          fi
+          node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $LOGO_ARG
+
       - name: Upload macOS installers
-        if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
           name: macos-installers
@@ -88,6 +196,7 @@ jobs:
   # ─── ANDROID APK BUILD ────────────────────────────────────────────────────
 
   build-android:
+    if: inputs.build_android
     runs-on: ubuntu-latest
 
     steps:
@@ -152,6 +261,11 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
+          LOGO_ARG=""
+          if [ -n "${{ inputs.logo_url }}" ]; then
+            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+          fi
+
           for APP in admin-app staff-app student-parent-app; do
             echo "=== Building Android APK for $APP ==="
             cd apps/$APP
@@ -164,9 +278,10 @@ jobs:
           keyPassword=${ANDROID_KEY_PASSWORD}
           EOF
 
-            npm exec -- tauri android build -- --apk
             cd ../..
           done
+
+          node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $LOGO_ARG
 
       - name: Collect Android APKs
         run: |
@@ -234,6 +349,10 @@ jobs:
 
       - name: Build iOS IPAs
         run: |
+          LOGO_ARG=""
+          if [ -n "${{ inputs.logo_url }}" ]; then
+            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+          fi
           for APP in admin-app staff-app student-parent-app; do
             echo "=== Building iOS IPA for $APP ==="
             cd apps/$APP
