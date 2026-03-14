@@ -193,7 +193,7 @@ jobs:
           path: installers/darwin/
           retention-days: 30
 
- # ─── ANDROID APK BUILD ────────────────────────────────────────────────────
+  # ─── ANDROID APK BUILD ────────────────────────────────────────────────────
 
   build-android:
     if: inputs.build_android
@@ -232,7 +232,12 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android NDK
-        run: sdkmanager "ndk;27.0.11902837"
+        run: sdkmanager "ndk;26.1.10909125"
+
+      - name: Set NDK environment
+        run: |
+          echo "ANDROID_NDK_HOME=/usr/local/lib/android/sdk/ndk/26.1.10909125" >> $GITHUB_ENV
+          echo "NDK_HOME=/usr/local/lib/android/sdk/ndk/26.1.10909125" >> $GITHUB_ENV
 
       - name: Install Linux system dependencies
         run: |
@@ -250,9 +255,22 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > ${{ github.workspace }}/academicx-release.jks
 
+      - name: Add tauri script to each app package.json
+        run: |
+          for APP in admin-app staff-app student-parent-app; do
+            cd ${{ github.workspace }}/apps/$APP
+            node -e "
+              const fs = require('fs');
+              const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+              pkg.scripts = pkg.scripts || {};
+              pkg.scripts.tauri = 'tauri';
+              fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+            "
+            cd ${{ github.workspace }}
+          done
+
       - name: Build and sign Android APKs
         env:
-          NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -262,7 +280,6 @@ jobs:
             cd ${{ github.workspace }}/apps/$APP
             npm install
 
-            # Write signing config into local.properties
             cat >> src-tauri/gen/android/local.properties << EOF
           storeFile=${{ github.workspace }}/academicx-release.jks
           storePassword=${ANDROID_STORE_PASSWORD}
@@ -270,16 +287,7 @@ jobs:
           keyPassword=${ANDROID_KEY_PASSWORD}
           EOF
 
-            # Download logo if provided
-            LOGO_ARG=""
-            if [ -n "${{ inputs.logo_url }}" ]; then
-              LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
-            fi
-
-            # Build the frontend first
             npm run build
-
-            # Build Android APK
             npm exec -- tauri android build --apk
 
             cd ${{ github.workspace }}
