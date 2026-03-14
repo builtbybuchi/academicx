@@ -280,7 +280,7 @@ jobs:
             npm run build
 
             # Build Android APK
-            npm exec -- tauri android build -- --apk
+            npm exec -- tauri android build --apk
 
             cd ${{ github.workspace }}
           done
