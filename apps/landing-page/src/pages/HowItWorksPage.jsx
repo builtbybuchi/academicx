@@ -1,12 +1,15 @@
 import React from 'react';
 
 const steps = [
-    { number: '01', title: 'Sign Up', desc: 'Register your school in minutes. No credit card required.', img: 'signup' },
-    { number: '02', title: 'Login & Access Dashboard', desc: 'Securely authenticate and access your centralized admin overview.', img: 'dashboard' },
-    { number: '03', title: 'School Settings', desc: 'Configure basics: academic terms, general info, and session timings.', img: 'settings' },
-    { number: '04', title: 'Create Academic Sessions', desc: 'Initialize term calendars so records align chronologically.', img: 'calendar' },
-    { number: '05', title: 'Create Classes & Subjects', desc: 'Build the foundational infrastructure of your curriculum.', img: 'class' },
-    { number: '06', title: 'Set Limits & Grading', desc: 'Customize grade thresholds, CATs vs Exam weightings, and remarks.', img: 'grade' },
+    { number: '01', title: 'Sign Up', desc: 'Register your school in minutes. No credit card required.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '02', title: 'Login & Access Dashboard', desc: 'Securely authenticate and access your centralized admin overview.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '03', title: 'School Settings', desc: 'Configure basics: academic terms, general info, and session timings.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '04', title: 'Create Academic Sessions', desc: 'Initialize term calendars so records align chronologically.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '05', title: 'Create Classes & Subjects', desc: 'Build the foundational infrastructure of your curriculum.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '06', title: 'Set Limits & Grading', desc: 'Customize grade thresholds, CATs vs Exam weightings, and remarks.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '07', title: 'Enroll staffs & Students', desc: '', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+    { number: '08', title: 'Enjoy the intuitive dashboard', desc: 'Facilitate seamless communication between admins, teachers, and parents.', img: 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp' },
+
 ];
 
 export default function HowItWorksPage() {
@@ -19,7 +22,7 @@ export default function HowItWorksPage() {
 
             <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
                 {steps.map((step, idx) => (
-                    <div key={idx} style={{
+                    <div key={idx} className="step-card" style={{
                         display: 'flex',
                         gap: 40,
                         alignItems: 'center',
@@ -34,12 +37,26 @@ export default function HowItWorksPage() {
                             <h3 style={{ fontSize: 28, marginBottom: 16, color: 'var(--color-gray-900)' }}>{step.title}</h3>
                             <p style={{ fontSize: 18, color: 'var(--color-gray-600)', lineHeight: 1.6 }}>{step.desc}</p>
                         </div>
-                        <div style={{ flex: 1 }}>
-                            <img src="https://diviengine.com/wp-content/uploads/2025/08/naughtyduk-liquid-glass-1024x611.webp" alt={step.title} style={{ width: '100%', borderRadius: 24, boxShadow: '0 12px 32px rgba(0,0,0,0.05)' }} />
+                        <div className="step-image-container" style={{ flex: 1 }}>
+                            {step.img ? (
+                                <img src={step.img.startsWith('http') ? step.img : "https://diviengine.com/wp-content/uploads/2025/08/naughtyduk-liquid-glass-1024x611.webp"} alt={step.title} style={{ width: '100%', borderRadius: 24, boxShadow: '0 12px 32px rgba(0,0,0,0.05)' }} />
+                            ) : null}
                         </div>
                     </div>
                 ))}
             </div>
+
+            <style>{`
+                @media (max-width: 768px) {
+                    .step-card {
+                        flex-direction: column !important;
+                        padding: 24px !important;
+                    }
+                    .step-image-container {
+                        display: none !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }

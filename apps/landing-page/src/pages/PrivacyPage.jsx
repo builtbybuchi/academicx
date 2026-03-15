@@ -10,7 +10,7 @@ export default function PrivacyPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 32, fontSize: 16, color: 'var(--color-gray-600)', lineHeight: 1.8 }}>
                     <section>
                         <h2 style={{ fontSize: 24, color: 'var(--color-gray-900)', marginBottom: 16 }}>1. Introduction</h2>
-                        <p>Welcome to AcademicX. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you as to how we look after your personal data when you visit our website and tell you about your privacy rights and how the law protects you.</p>
+                        <p>Welcome to academicX. We respect your privacy and are committed to protecting your personal data. This privacy policy will inform you as to how we look after your personal data when you visit our website and tell you about your privacy rights and how the law protects you.</p>
                     </section>
 
                     <section>

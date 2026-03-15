@@ -11,6 +11,9 @@ import HowItWorksPage from './pages/HowItWorksPage';
 import ContactPage from './pages/ContactPage';
 import PrivacyPage from './pages/PrivacyPage';
 import TermsPage from './pages/TermsPage';
+import DownloadsPage from './pages/DownloadsPage';
+import ThankYouPage from './pages/ThankYouPage';
+import InstallationGuidePage from './pages/InstallationGuidePage';
 
 // Scroll to top helper
 function ScrollToTop() {
@@ -36,6 +39,9 @@ export default function App() {
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/privacy" element={<PrivacyPage />} />
                         <Route path="/terms" element={<TermsPage />} />
+                        <Route path="/downloads" element={<DownloadsPage />} />
+                        <Route path="/downloads/thank-you" element={<ThankYouPage />} />
+                        <Route path="/downloads/installation-guide" element={<InstallationGuidePage />} />
                     </Routes>
                 </main>
                 <Footer />

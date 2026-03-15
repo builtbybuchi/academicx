@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, KeySquare, MessageSquare, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, KeySquare, MessageSquare, LogOut, Download } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
 import AuthPage from '../../../shared/components/AuthPage.jsx';
@@ -13,6 +13,7 @@ import Results from './pages/results.jsx';
 import Pins from './pages/pins.jsx';
 import Communication from './pages/communication.jsx';
 import Chat from './pages/chat.jsx';
+import Downloads from './pages/downloads.jsx';
 
 const menuGroups = [
     {
@@ -36,6 +37,12 @@ const menuGroups = [
             { id: '/pins', label: 'PIN Codes', icon: <KeySquare size={20} /> },
             { id: '/communication', label: 'Communication', icon: <MessageSquare size={20} /> },
             { id: '/chat', label: 'Chat', icon: <MessageSquare size={20} /> },
+        ],
+    },
+    {
+        section: 'Configuration',
+        items: [
+            { id: '/downloads', label: 'Downloads', icon: <Download size={20} /> },
         ],
     },
 ];
@@ -115,6 +122,7 @@ export default function App() {
                     <Route path="/pins" element={<Pins />} />
                     <Route path="/communication" element={<Communication />} />
                     <Route path="/chat" element={<Chat />} />
+                    <Route path="/downloads" element={<Downloads />} />
                 </Routes>
             </main>
         </div>

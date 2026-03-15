@@ -8,7 +8,7 @@ export default function PricingPage() {
                 <div style={{ textAlign: 'center', marginBottom: 60 }}>
                     <h1 style={{ fontSize: 48, marginBottom: 16, color: 'var(--color-gray-900)' }}>Simple, Transparent Pricing</h1>
                     <p style={{ fontSize: 20, color: 'var(--color-gray-600)', maxWidth: 700, margin: '0 auto' }}>
-                        AcademicX is <strong>completely free</strong> to use. You only pay when you publish results at the end of each term.
+                        academicX is <strong>completely free</strong> to use. You only pay when you publish results at the end of each term.
                     </p>
                 </div>
 
@@ -34,7 +34,7 @@ export default function PricingPage() {
                             'Mobile-optimized dashboards',
                         ].map((f, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 15, color: 'var(--color-gray-700)' }}>
-                                <Check size={18} style={{ color: 'var(--color-success)', flexShrink: 0 }} /> {f}
+                                <Check size={18} style={{ color: 'var(--color-primary)', flexShrink: 0 }} /> {f}
                             </div>
                         ))}
                     </div>
@@ -113,7 +113,7 @@ export default function PricingPage() {
                 <div style={{ maxWidth: 700, margin: '60px auto 0', textAlign: 'center' }}>
                     <h3 style={{ fontSize: 22, marginBottom: 24, color: 'var(--color-gray-900)' }}>Common Questions</h3>
                     {[
-                        { q: 'Is there really no subscription fee?', a: 'Yes! AcademicX is completely free to use. You only pay when you publish results at the end of a term.' },
+                        { q: 'Is there really no subscription fee?', a: 'Yes! academicX is completely free to use. You only pay when you publish results at the end of a term.' },
                         { q: 'What happens after a PIN is used?', a: "Once a student uses a PIN to view their results, they can access those results forever — no need to re-enter the PIN." },
                         { q: 'Can the school earn money?', a: 'Yes! If you choose the "Student Pays" model, you can set a custom markup above the ₦600 base fee. The additional revenue goes to your school\'s withdrawable balance.' },
                         { q: 'How do I withdraw my school balance?', a: 'Admin users can request withdrawals directly from the Admin dashboard. Funds are transferred to your bank account.' },
