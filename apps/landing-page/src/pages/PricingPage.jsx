@@ -62,7 +62,7 @@ export default function PricingPage() {
                             <h3 style={{ fontSize: 22, color: 'var(--color-gray-900)' }}>School Pays</h3>
                         </div>
                         <div style={{ fontSize: 48, fontWeight: 800, marginBottom: 8, color: 'var(--color-primary-700)' }}>
-                            <span style={{ fontSize: 24, verticalAlign: 'top', color: 'var(--color-gray-400)' }}>₦</span>500
+                            <span style={{ fontSize: 24, verticalAlign: 'top', color: 'var(--color-gray-400)' }}>₦</span>400
                             <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-gray-500)' }}> /student</span>
                         </div>
                         <p style={{ fontSize: 14, color: 'var(--color-gray-500)', marginBottom: 24 }}>Per term · One-time fee when results are published</p>
@@ -91,7 +91,7 @@ export default function PricingPage() {
                             <h3 style={{ fontSize: 22, color: 'var(--color-gray-900)' }}>Student Pays</h3>
                         </div>
                         <div style={{ fontSize: 48, fontWeight: 800, marginBottom: 8, color: 'var(--color-gray-800)' }}>
-                            <span style={{ fontSize: 24, verticalAlign: 'top', color: 'var(--color-gray-400)' }}>₦</span>600<span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-gray-500)' }}> + markup</span>
+                            <span style={{ fontSize: 24, verticalAlign: 'top', color: 'var(--color-gray-400)' }}>₦</span>500<span style={{ fontSize: 16, fontWeight: 500, color: 'var(--color-gray-500)' }}> + markup</span>
                         </div>
                         <p style={{ fontSize: 14, color: 'var(--color-gray-500)', marginBottom: 24 }}>Base price per student · Schools can add custom markup</p>
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>

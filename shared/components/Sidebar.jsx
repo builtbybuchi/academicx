@@ -9,6 +9,7 @@ export default function Sidebar({
     menuGroups = [],
     activeId,
     onNavigate,
+    onUserClick,
     appName = 'AcademicX',
     userName = 'User',
     userRole = '',
@@ -64,7 +65,11 @@ export default function Sidebar({
                 </nav>
 
                 <div className="sidebar-footer">
-                    <div className="sidebar-user-info">
+                    <div
+                        className="sidebar-user-info"
+                        style={{ cursor: onUserClick ? 'pointer' : 'default' }}
+                        onClick={() => onUserClick && onUserClick()}
+                    >
                         <div className="sidebar-avatar">{initials}</div>
                         <div>
                             <div className="sidebar-username">{userName}</div>

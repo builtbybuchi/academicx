@@ -100,7 +100,8 @@ export default function Results() {
         try {
             setWorking(true);
             const data = await generateBroadsheet({ schoolId, className: classFilter, term: school?.currentTerm || filtered[0]?.term, session: school?.currentSession || filtered[0]?.session });
-            toast({ type: 'success', title: 'Broadsheet ready', message: `${data.students.length} student rows generated for ${classFilter}.` });
+            const rowCount = Array.isArray(data) ? data.length : (Array.isArray(data?.students) ? data.students.length : 0);
+            toast({ type: 'success', title: 'Broadsheet ready', message: `${rowCount} student rows generated for ${classFilter}.` });
         } catch (error) {
             toast({ type: 'error', title: 'Generation failed', message: error.message });
         } finally {
@@ -143,7 +144,7 @@ export default function Results() {
                     session: item.session,
                     total: 0,
                     approved: 0,
-                    published: item.published || false,
+                    published: Boolean(item.published || item.isPublished),
                 };
             }
             groups[key].total++;

@@ -30,7 +30,7 @@ export default function App() {
         {
             section: 'Management',
             items: [
-                { id: '/enrollment', label: 'Enrollment', icon: <Users size={20} /> },
+                { id: '/profile', label: 'Profile', icon: <Users size={20} /> },
                 { id: '/academics', label: 'Academics', icon: <BookOpen size={20} /> },
                 { id: '/grading', label: 'Grading Schemes', icon: <Settings size={20} /> },
             ],
@@ -70,7 +70,7 @@ export default function App() {
                 highlights={[
                     'Create and manage school staff and students',
                     'Approve and publish term results',
-                    'Generate and manage secure result PINs',
+                    'Send school-wide communication to parents',
                 ]}
                 onLogin={({ email, password }) => login(email, password)}
                 onSignup={async ({ firstName, lastName, email, password, organization, schoolCode }) => {
@@ -119,6 +119,7 @@ export default function App() {
             <main className="app-main">
                 <Routes>
                     <Route path="/" element={<Dashboard />} />
+                    <Route path="/profile" element={<Enrollment />} />
                     <Route path="/enrollment" element={<Enrollment />} />
                     <Route path="/academics" element={<Academics />} />
                     <Route path="/grading" element={<Grading />} />

@@ -52,6 +52,7 @@ const COLLECTIONS = {
             { key: 'email', type: 'string', size: 255, required: true },
             { key: 'firstName', type: 'string', size: 100, required: true },
             { key: 'lastName', type: 'string', size: 100, required: true },
+            { key: 'dateOfBirth', type: 'string', size: 10 },
             { key: 'phone', type: 'string', size: 20 },
             { key: 'profileImage', type: 'string', size: 500 },                 // file ID
             { key: 'role', type: 'enum', elements: ['super_admin', 'admin', 'staff', 'student'], required: true },
@@ -84,6 +85,7 @@ const COLLECTIONS = {
             { key: 'parentName', type: 'string', size: 200 },
             { key: 'parentEmail', type: 'string', size: 255 },
             { key: 'parentPhone', type: 'string', size: 20 },
+            { key: 'allergies', type: 'string', size: 500 },
             { key: 'status', type: 'enum', elements: ['active', 'graduated', 'withdrawn'], default: 'active' },
         ],
         indexes: [
@@ -104,6 +106,7 @@ const COLLECTIONS = {
             { key: 'employmentYear', type: 'integer', required: true },
             { key: 'firstName', type: 'string', size: 100, required: true },
             { key: 'lastName', type: 'string', size: 100, required: true },
+            { key: 'dateOfBirth', type: 'string', size: 10 },
             { key: 'gender', type: 'enum', elements: ['male', 'female'] },
             { key: 'profileImage', type: 'string', size: 500 },
             { key: 'department', type: 'string', size: 100 },
@@ -111,6 +114,10 @@ const COLLECTIONS = {
             { key: 'assignedClasses', type: 'string', size: 500 },              // JSON array of class names
             { key: 'assignedSubjects', type: 'string', size: 500 },             // JSON array of subject IDs
             { key: 'formTeacherClass', type: 'string', size: 20 },              // class name if form teacher
+            { key: 'canMarkStaffAttendance', type: 'boolean', default: false },
+            { key: 'attendanceRole', type: 'enum', elements: ['none', 'officer'], default: 'none' },
+            { key: 'attendanceAssignedBy', type: 'string', size: 36 },
+            { key: 'attendanceAssignedAt', type: 'datetime' },
             { key: 'status', type: 'enum', elements: ['active', 'inactive'], default: 'active' },
         ],
         indexes: [
@@ -184,6 +191,7 @@ const COLLECTIONS = {
             { key: 'ranges', type: 'string', size: 2000 },                      // JSON: [{min,max,grade,remark}]
             { key: 'catWeight', type: 'float', default: 30 },                   // % weight for CAT
             { key: 'examWeight', type: 'float', default: 70 },                  // % weight for exam
+            { key: 'scoreComponents', type: 'string', size: 5000 },             // JSON: [{id,name,weight}]
         ],
         indexes: [
             { key: 'idx_school', type: 'key', attributes: ['schoolId'] },
@@ -208,11 +216,18 @@ const COLLECTIONS = {
             { key: 'remark', type: 'string', size: 100 },
             { key: 'status', type: 'enum', elements: ['draft', 'submitted', 'approved'], default: 'draft' },
             { key: 'submittedBy', type: 'string', size: 36 },                   // staff userId
+            { key: 'published', type: 'boolean', default: false },
+            { key: 'isPublished', type: 'boolean', default: false },
+            { key: 'isApproved', type: 'boolean', default: false },
+            { key: 'publishedAt', type: 'datetime' },
+            { key: 'publishedBy', type: 'string', size: 36 },
+            { key: 'pinId', type: 'string', size: 36 },
         ],
         indexes: [
             { key: 'idx_student_term', type: 'key', attributes: ['studentId', 'term', 'session'] },
             { key: 'idx_school_status', type: 'key', attributes: ['schoolId', 'status'] },
             { key: 'idx_class_term', type: 'key', attributes: ['schoolId', 'className', 'term', 'session'] },
+            { key: 'idx_published', type: 'key', attributes: ['schoolId', 'isPublished'] },
             { key: 'idx_unique_result', type: 'unique', attributes: ['studentId', 'subjectId', 'term', 'session'] },
         ],
     },
@@ -248,6 +263,9 @@ const COLLECTIONS = {
             { key: 'checkOut', type: 'string', size: 8 },                       // HH:MM:SS
             { key: 'status', type: 'enum', elements: ['present', 'absent', 'late', 'half_day'], default: 'present' },
             { key: 'markedBy', type: 'string', size: 36 },                      // admin or self
+            { key: 'excuseReason', type: 'string', size: 500 },
+            { key: 'excusedBy', type: 'string', size: 36 },
+            { key: 'excusedAt', type: 'datetime' },
         ],
         indexes: [
             { key: 'idx_staff_date', type: 'unique', attributes: ['staffDocId', 'date'] },
@@ -288,12 +306,13 @@ const COLLECTIONS = {
             { key: 'reference', type: 'string', size: 100, required: true },
             { key: 'amount', type: 'float', required: true },
             { key: 'currency', type: 'string', size: 3, default: 'NGN' },
-            { key: 'type', type: 'enum', elements: ['pin_purchase', 'withdrawal', 'student_pin_purchase'], default: 'pin_purchase' },
+            { key: 'type', type: 'enum', elements: ['pin_purchase', 'withdrawal', 'student_pin_purchase', 'school_result_publish', 'student_result_access'], default: 'pin_purchase' },
             { key: 'status', type: 'enum', elements: ['pending', 'success', 'failed'], default: 'pending' },
             { key: 'provider', type: 'string', size: 20, default: 'squad' },
             { key: 'description', type: 'string', size: 500 },
             { key: 'studentId', type: 'string', size: 36 },                     // for student_pin_purchase
             { key: 'pinCount', type: 'integer' },                               // how many pins
+            { key: 'metadata', type: 'string', size: 5000 },                    // JSON metadata
             { key: 'createdAt', type: 'datetime' },
         ],
         indexes: [
@@ -319,6 +338,26 @@ const COLLECTIONS = {
         indexes: [
             { key: 'idx_school_channel', type: 'key', attributes: ['schoolId', 'channel'] },
             { key: 'idx_created', type: 'key', attributes: ['createdAt'] },
+        ],
+    },
+
+    EMAIL_SENDS: {
+        id: 'email_sends',
+        name: 'Email Sends',
+        attributes: [
+            { key: 'schoolId', type: 'string', size: 36, required: true },
+            { key: 'recipients', type: 'string', size: 255, required: true, array: true },
+            { key: 'subject', type: 'string', size: 255, required: true },
+            { key: 'body', type: 'string', size: 20000, required: true },
+            { key: 'status', type: 'enum', elements: ['pending', 'sent', 'failed'], default: 'pending' },
+            { key: 'errorMessage', type: 'string', size: 1000 },
+            { key: 'sentBy', type: 'string', size: 36 },
+            { key: 'sentAt', type: 'datetime' },
+            { key: 'createdAt', type: 'datetime', required: true },
+        ],
+        indexes: [
+            { key: 'idx_school_created', type: 'key', attributes: ['schoolId', 'createdAt'] },
+            { key: 'idx_school_status', type: 'key', attributes: ['schoolId', 'status'] },
         ],
     },
 };

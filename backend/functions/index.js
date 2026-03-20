@@ -3,7 +3,7 @@ const { Client, Databases, Users, ID, Query } = require('node-appwrite');
 const nodemailer = require('nodemailer');
 
 // Alibaba Cloud Direct Mail SMTP Configuration
-const SMTP_FROM = process.env.SMTP_FROM || 'AcademicX <noreply@mail.sinod.app>';
+const SMTP_FROM = process.env.SMTP_FROM || 'AcademicX <no-reply@mail.sinod.app>';
 const SMTP_HOST = process.env.SMTP_HOST || 'smtpdm-ap-southeast-1.aliyun.com';
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '80', 10);
 const SMTP_USERNAME = process.env.SMTP_USERNAME || '';
@@ -372,6 +372,55 @@ async function getStaffDocByUser(db, userDocId) {
     return res.documents[0] || null;
 }
 
+async function getClassByIdOrName(db, schoolId, classId, className) {
+    if (classId) {
+        const classDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, classId);
+        if (classDoc.schoolId !== schoolId) {
+            throw new Error('Class does not belong to this school.');
+        }
+        return classDoc;
+    }
+
+    const normalized = String(className || '').trim();
+    if (!normalized) {
+        throw new Error('classId or className is required.');
+    }
+
+    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('name', normalized),
+        Query.limit(1),
+    ]);
+    if (res.total === 0) {
+        throw new Error('Class not found.');
+    }
+    return res.documents[0];
+}
+
+function isAdminRole(role) {
+    return role === 'admin' || role === 'super_admin';
+}
+
+async function canManageStaffAttendance(db, actor, schoolId) {
+    if (!actor?.role) return false;
+    if (isAdminRole(actor.role)) return true;
+    if (actor.role !== 'staff') return false;
+
+    const staffDoc = await getStaffDocByUser(db, actor.$id);
+    if (!staffDoc || staffDoc.schoolId !== schoolId) return false;
+    return Boolean(staffDoc.canMarkStaffAttendance || staffDoc.attendanceRole === 'officer');
+}
+
+async function canMarkClassAttendance(db, actor, schoolId, className) {
+    if (!actor?.role) return false;
+    if (isAdminRole(actor.role)) return true;
+    if (actor.role !== 'staff') return false;
+
+    const staffDoc = await getStaffDocByUser(db, actor.$id);
+    if (!staffDoc || staffDoc.schoolId !== schoolId) return false;
+    return String(staffDoc.formTeacherClass || '').trim() === String(className || '').trim();
+}
+
 const actions = {
     registerSchool: {
         handler: async ({ payload }) => {
@@ -472,6 +521,105 @@ const actions = {
         },
     },
 
+    listFormTeachers: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const [classesRes, staffRes] = await Promise.all([
+                db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
+                    Query.equal('schoolId', payload.schoolId),
+                    Query.limit(500),
+                ]),
+                db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF.id, [
+                    Query.equal('schoolId', payload.schoolId),
+                    Query.equal('status', 'active'),
+                    Query.limit(500),
+                ]),
+            ]);
+
+            const staffById = Object.fromEntries(staffRes.documents.map((item) => [item.$id, item]));
+            const rows = classesRes.documents.map((classDoc) => ({
+                ...classDoc,
+                formTeacher: classDoc.formTeacherId ? (staffById[classDoc.formTeacherId] || null) : null,
+            }));
+
+            return { success: true, data: rows };
+        },
+    },
+
+    assignFormTeacher: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            if (!payload.staffDocId) {
+                return { success: false, error: 'staffDocId is required.' };
+            }
+
+            const classDoc = await getClassByIdOrName(db, payload.schoolId, payload.classId, payload.className);
+            const staffDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.STAFF.id, payload.staffDocId);
+
+            if (staffDoc.schoolId !== payload.schoolId) {
+                return { success: false, error: 'Selected staff does not belong to this school.' };
+            }
+
+            if (classDoc.formTeacherId && classDoc.formTeacherId !== staffDoc.$id) {
+                await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, classDoc.formTeacherId, {
+                    formTeacherClass: '',
+                }).catch(() => null);
+            }
+
+            if (staffDoc.formTeacherClass && staffDoc.formTeacherClass !== classDoc.name) {
+                const previousClass = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
+                    Query.equal('schoolId', payload.schoolId),
+                    Query.equal('name', staffDoc.formTeacherClass),
+                    Query.limit(1),
+                ]);
+                if (previousClass.total > 0) {
+                    await db.updateDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, previousClass.documents[0].$id, {
+                        formTeacherId: '',
+                    });
+                }
+            }
+
+            const updatedClass = await db.updateDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, classDoc.$id, {
+                formTeacherId: staffDoc.$id,
+            });
+            const updatedStaff = await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, staffDoc.$id, {
+                formTeacherClass: classDoc.name,
+            });
+
+            return { success: true, data: { class: updatedClass, staff: updatedStaff } };
+        },
+    },
+
+    setStaffAttendanceOfficer: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            if (!payload.staffDocId) {
+                return { success: false, error: 'staffDocId is required.' };
+            }
+
+            const enabled = Boolean(payload.enabled);
+            const staffDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.STAFF.id, payload.staffDocId);
+            if (staffDoc.schoolId !== payload.schoolId) {
+                return { success: false, error: 'Selected staff does not belong to this school.' };
+            }
+
+            const updated = await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, payload.staffDocId, {
+                canMarkStaffAttendance: enabled,
+                attendanceRole: enabled ? 'officer' : 'none',
+                attendanceAssignedBy: enabled ? authId : '',
+                attendanceAssignedAt: enabled ? nowIso() : '',
+            });
+
+            return { success: true, data: updated };
+        },
+    },
+
     addStaff: {
         roles: ['admin', 'super_admin'],
         schoolId: ({ payload }) => payload.schoolId,
@@ -500,6 +648,7 @@ const actions = {
                 email: payload.email,
                 firstName: payload.firstName,
                 lastName: payload.lastName,
+                dateOfBirth: payload.dateOfBirth || '',
                 phone: payload.phone || '',
                 profileImage: '',
                 role: 'staff',
@@ -520,6 +669,7 @@ const actions = {
                 employmentYear: year,
                 firstName: payload.firstName,
                 lastName: payload.lastName,
+                dateOfBirth: payload.dateOfBirth || '',
                 gender: payload.gender || 'male',
                 profileImage: '',
                 department: payload.department || '',
@@ -527,6 +677,10 @@ const actions = {
                 assignedClasses: JSON.stringify(payload.assignedClasses || []),
                 assignedSubjects: JSON.stringify(payload.assignedSubjects || []),
                 formTeacherClass: payload.formTeacherClass || '',
+                canMarkStaffAttendance: Boolean(payload.canMarkStaffAttendance),
+                attendanceRole: payload.canMarkStaffAttendance ? 'officer' : 'none',
+                attendanceAssignedBy: payload.canMarkStaffAttendance ? (payload.attendanceAssignedBy || '') : '',
+                attendanceAssignedAt: payload.canMarkStaffAttendance ? nowIso() : '',
                 status: 'active',
             });
 
@@ -592,6 +746,7 @@ const actions = {
                 email: studentEmail,
                 firstName: payload.firstName,
                 lastName: payload.lastName,
+                dateOfBirth: payload.dateOfBirth || '',
                 phone: payload.parentPhone || '',
                 profileImage: '',
                 role: 'student',
@@ -616,6 +771,7 @@ const actions = {
                 parentName: payload.parentName || '',
                 parentEmail,
                 parentPhone,
+                allergies: payload.allergies || '',
                 status: 'active',
             });
 
@@ -713,6 +869,7 @@ const actions = {
             const allowed = {
                 firstName: updates.firstName,
                 lastName: updates.lastName,
+                dateOfBirth: updates.dateOfBirth,
                 phone: updates.phone,
                 profileImage: updates.profileImage,
                 status: updates.status,
@@ -727,17 +884,20 @@ const actions = {
                     await db.updateDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, student.$id, {
                         ...(clean.firstName ? { firstName: clean.firstName } : {}),
                         ...(clean.lastName ? { lastName: clean.lastName } : {}),
+                        ...(clean.dateOfBirth !== undefined ? { dateOfBirth: clean.dateOfBirth || '' } : {}),
+                        ...(updates.allergies !== undefined ? { allergies: updates.allergies || '' } : {}),
                         ...(clean.profileImage ? { profileImage: clean.profileImage } : {}),
                     });
                 }
             }
 
-            if (targetDoc.role === 'staff' && (clean.firstName || clean.lastName || clean.profileImage)) {
+            if (targetDoc.role === 'staff' && (clean.firstName || clean.lastName || clean.profileImage || clean.dateOfBirth !== undefined)) {
                 const staff = await getStaffDocByUser(db, targetDoc.$id);
                 if (staff) {
                     await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, staff.$id, {
                         ...(clean.firstName ? { firstName: clean.firstName } : {}),
                         ...(clean.lastName ? { lastName: clean.lastName } : {}),
+                        ...(clean.dateOfBirth !== undefined ? { dateOfBirth: clean.dateOfBirth || '' } : {}),
                         ...(clean.profileImage ? { profileImage: clean.profileImage } : {}),
                     });
                 }
@@ -755,6 +915,12 @@ const actions = {
             const records = Array.isArray(payload.records) ? payload.records : [];
             const date = payload.date || todayDate();
             const output = [];
+
+            const className = payload.className || records[0]?.className || '';
+            const allowed = await canMarkClassAttendance(db, user, payload.schoolId, className);
+            if (!allowed) {
+                return { success: false, error: 'Only the assigned form teacher for this class (or an admin) can mark student attendance.' };
+            }
 
             for (const record of records) {
                 const existing = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENT_ATTENDANCE.id, [
@@ -790,6 +956,11 @@ const actions = {
         schoolId: ({ payload }) => payload.schoolId,
         handler: async ({ payload, user }) => {
             const db = getDb();
+            const allowed = await canManageStaffAttendance(db, user, payload.schoolId);
+            if (!allowed) {
+                return { success: false, error: 'Only assigned attendance officers or admins can mark staff attendance.' };
+            }
+
             const date = todayDate();
             const now = new Date().toTimeString().slice(0, 8);
             const existing = await db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, [
@@ -803,6 +974,9 @@ const actions = {
                     checkIn: now,
                     status: 'present',
                     markedBy: payload.markedBy || user?.$id || '',
+                    excuseReason: '',
+                    excusedBy: '',
+                    excusedAt: '',
                 });
             }
 
@@ -814,16 +988,25 @@ const actions = {
                 checkOut: '',
                 status: 'present',
                 markedBy: payload.markedBy || user?.$id || '',
+                excuseReason: '',
+                excusedBy: '',
+                excusedAt: '',
             });
         },
     },
 
     staffCheckOut: {
         roles: ['admin', 'staff', 'super_admin'],
-        handler: async ({ payload }) => {
+        handler: async ({ payload, user }) => {
             const db = getDb();
             const date = todayDate();
             const now = new Date().toTimeString().slice(0, 8);
+
+            const targetStaff = await db.getDocument(DATABASE_ID, COLLECTIONS.STAFF.id, payload.staffDocId);
+            const allowed = await canManageStaffAttendance(db, user, targetStaff.schoolId);
+            if (!allowed) {
+                return { success: false, error: 'Only assigned attendance officers or admins can mark staff attendance.' };
+            }
 
             const existing = await db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, [
                 Query.equal('staffDocId', payload.staffDocId),
@@ -838,6 +1021,71 @@ const actions = {
             return db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, existing.documents[0].$id, {
                 checkOut: now,
             });
+        },
+    },
+
+    staffSetExcused: {
+        roles: ['admin', 'staff', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload, user }) => {
+            const db = getDb();
+            const allowed = await canManageStaffAttendance(db, user, payload.schoolId);
+            if (!allowed) {
+                return { success: false, error: 'Only assigned attendance officers or admins can set excuses.' };
+            }
+
+            const date = payload.date || todayDate();
+            const reason = String(payload.excuseReason || '').trim();
+            if (!reason) {
+                return { success: false, error: 'excuseReason is required.' };
+            }
+
+            const existing = await db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, [
+                Query.equal('staffDocId', payload.staffDocId),
+                Query.equal('date', date),
+                Query.limit(1),
+            ]);
+
+            const baseData = {
+                schoolId: payload.schoolId,
+                staffDocId: payload.staffDocId,
+                date,
+                status: 'absent',
+                markedBy: payload.markedBy || user?.$id || '',
+                excuseReason: reason,
+                excusedBy: user?.$id || '',
+                excusedAt: nowIso(),
+                checkIn: '',
+                checkOut: '',
+            };
+
+            if (existing.total > 0) {
+                return db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, existing.documents[0].$id, baseData);
+            }
+            return db.createDocument(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, ID.unique(), baseData);
+        },
+    },
+
+    listStaffAttendanceRecords: {
+        roles: ['admin', 'staff', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload, user }) => {
+            const db = getDb();
+            const allowed = await canManageStaffAttendance(db, user, payload.schoolId);
+            if (!allowed) {
+                return { success: false, error: 'Only assigned attendance officers or admins can view staff attendance records.' };
+            }
+
+            const queries = [
+                Query.equal('schoolId', payload.schoolId),
+                Query.orderDesc('date'),
+                Query.limit(Number(payload.limit || 200)),
+            ];
+            if (payload.staffDocId) queries.push(Query.equal('staffDocId', payload.staffDocId));
+            if (payload.date) queries.push(Query.equal('date', payload.date));
+            if (payload.status) queries.push(Query.equal('status', payload.status));
+
+            return db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, queries);
         },
     },
 
@@ -906,6 +1154,36 @@ const actions = {
             const updated = await Promise.all(rows.documents.map((doc) => (
                 db.updateDocument(DATABASE_ID, COLLECTIONS.RESULTS.id, doc.$id, { status: 'approved' })
             )));
+            return { success: true, data: updated };
+        },
+    },
+
+    publishResults: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const filters = [
+                Query.equal('schoolId', payload.schoolId),
+                Query.equal('className', payload.className),
+                Query.equal('term', payload.term),
+                Query.equal('session', payload.session),
+                Query.equal('status', 'approved'),
+                Query.limit(1000),
+            ];
+
+            const rows = await db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, filters);
+            const publishedAt = nowIso();
+
+            const updated = await Promise.all(rows.documents.map((doc) => (
+                db.updateDocument(DATABASE_ID, COLLECTIONS.RESULTS.id, doc.$id, {
+                    published: true,
+                    isPublished: true,
+                    publishedAt,
+                    publishedBy: authId || '',
+                })
+            )));
+
             return { success: true, data: updated };
         },
     },
@@ -1292,8 +1570,7 @@ const actions = {
                 Query.equal('schoolId', schoolId),
                 Query.equal('session', academicSession),
                 Query.equal('term', term),
-                Query.equal('isApproved', true),
-                Query.equal('isPublished', false),
+                Query.equal('status', 'approved'),
             ];
             if (className && className !== 'all') {
                 resultFilters.push(Query.equal('className', className));
@@ -1470,11 +1747,12 @@ const actions = {
                         Query.equal('studentId', studentId),
                         Query.equal('session', academicSession),
                         Query.equal('term', term),
-                        Query.equal('isApproved', true),
+                        Query.equal('status', 'approved'),
                     ]);
 
                     for (const result of studentResults.documents) {
                         await db.updateDocument(DATABASE_ID, COLLECTIONS.RESULTS.id, result.$id, {
+                            published: true,
                             isPublished: true,
                             publishedAt: nowIso(),
                             publishedBy: authId,
@@ -1504,7 +1782,7 @@ const actions = {
                     status: 'success',
                     provider: 'squadco',
                     description: `Result publishing for ${studentIds.length} students`,
-                    metadata: { studentIds, academicSession, term, className },
+                    metadata: JSON.stringify({ studentIds, academicSession, term, className }),
                     createdAt: nowIso(),
                 });
             }

@@ -35,6 +35,7 @@ export const COLLECTIONS = {
     PINS: 'pins',
     PAYMENTS: 'payments',
     CHAT_MESSAGES: 'chat_messages',
+    EMAIL_SENDS: 'email_sends',
 };
 
 // ── Auth Helpers ──────────────────────────────────────────
@@ -249,11 +250,57 @@ export async function getGradingScheme(schoolId) {
     return res.documents[0] || null;
 }
 
-export async function saveGradingScheme(schoolId, data, documentId) {
-    if (documentId) {
-        return databases.updateDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, documentId, data);
+function isUnknownScoreComponentsError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('unknown attribute') && message.includes('scorecomponents');
+}
+
+function toLegacyGradingPayload(data = {}) {
+    let components = [];
+    if (Array.isArray(data.scoreComponents)) {
+        components = data.scoreComponents;
+    } else if (typeof data.scoreComponents === 'string') {
+        try {
+            const parsed = JSON.parse(data.scoreComponents);
+            components = Array.isArray(parsed) ? parsed : [];
+        } catch {
+            components = [];
+        }
     }
-    return databases.createDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, ID.unique(), { schoolId, ...data });
+
+    const normalized = components.map((item) => ({
+        name: String(item?.name || '').toLowerCase(),
+        weight: Number(item?.weight || 0),
+    }));
+
+    const catWeight = normalized.find((item) => item.name.includes('cat'))?.weight ?? 30;
+    const examWeight = normalized.find((item) => item.name.includes('exam'))?.weight ?? Math.max(0, 100 - catWeight);
+
+    return {
+        name: data.name,
+        ranges: data.ranges,
+        catWeight,
+        examWeight,
+    };
+}
+
+export async function saveGradingScheme(schoolId, data, documentId) {
+    try {
+        if (documentId) {
+            return databases.updateDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, documentId, data);
+        }
+        return databases.createDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, ID.unique(), { schoolId, ...data });
+    } catch (error) {
+        if (!isUnknownScoreComponentsError(error)) {
+            throw error;
+        }
+
+        const legacyData = toLegacyGradingPayload(data);
+        if (documentId) {
+            return databases.updateDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, documentId, legacyData);
+        }
+        return databases.createDocument(DATABASE_ID, COLLECTIONS.GRADING_SCHEMES, ID.unique(), { schoolId, ...legacyData });
+    }
 }
 
 // ── Results ───────────────────────────────────────────────
@@ -323,6 +370,26 @@ export async function markStudentAttendance(payload) {
     return invokeBackendFunction('markStudentAttendance', payload);
 }
 
+export async function listFormTeachers(schoolId) {
+    return invokeBackendFunction('listFormTeachers', { schoolId });
+}
+
+export async function assignFormTeacher(payload) {
+    return invokeBackendFunction('assignFormTeacher', payload);
+}
+
+export async function setStaffAttendanceOfficer(payload) {
+    return invokeBackendFunction('setStaffAttendanceOfficer', payload);
+}
+
+export async function setStaffExcused(payload) {
+    return invokeBackendFunction('staffSetExcused', payload);
+}
+
+export async function listStaffAttendanceRecords(payload) {
+    return invokeBackendFunction('listStaffAttendanceRecords', payload);
+}
+
 export async function submitResult(payload) {
     return invokeBackendFunction('submitResult', payload);
 }
@@ -366,19 +433,43 @@ export async function purchaseStudentPin(payload) {
 
 // ── Chat ──────────────────────────────────────────────────
 
+function assertChatChannelAccess(role, channel) {
+    const normalizedRole = String(role || '').toLowerCase();
+    const normalizedChannel = String(channel || '').toLowerCase();
+    if ((normalizedRole === 'staff' || normalizedRole === 'student') && (normalizedChannel === 'admins' || normalizedChannel === 'admin')) {
+        throw new Error('Access denied to admin-only chat channel.');
+    }
+}
+
 export async function sendChatMessage(schoolId, senderId, senderName, senderRole, message, channel = 'general') {
-    return invokeBackendFunction('sendChatMessage', {
+    assertChatChannelAccess(senderRole, channel);
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.CHAT_MESSAGES, ID.unique(), {
         schoolId,
         senderId,
         senderName,
         senderRole,
         message,
         channel,
+        createdAt: new Date().toISOString(),
     });
 }
 
-export async function listChatMessages(schoolId, channel = 'general', limit = 50) {
-    return invokeBackendFunction('listChatMessages', { schoolId, channel, limit });
+export async function listChatMessages(schoolId, channel = 'general', limit = 50, viewerRole = '') {
+    assertChatChannelAccess(viewerRole, channel);
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.CHAT_MESSAGES, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('channel', channel),
+        Query.orderDesc('createdAt'),
+        Query.limit(Number(limit || 50)),
+    ]);
+}
+
+export async function listSchoolChatMessages(schoolId, limit = 400) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.CHAT_MESSAGES, [
+        Query.equal('schoolId', schoolId),
+        Query.orderDesc('createdAt'),
+        Query.limit(Number(limit || 400)),
+    ]);
 }
 
 /**
@@ -388,6 +479,15 @@ export function subscribeToChatMessages(schoolId, channel, callback) {
     const channelString = `databases.${DATABASE_ID}.collections.${COLLECTIONS.CHAT_MESSAGES}.documents`;
     return client.subscribe(channelString, (response) => {
         if (response.payload.schoolId === schoolId && response.payload.channel === channel) {
+            callback(response.payload);
+        }
+    });
+}
+
+export function subscribeToSchoolChatMessages(schoolId, callback) {
+    const channelString = `databases.${DATABASE_ID}.collections.${COLLECTIONS.CHAT_MESSAGES}.documents`;
+    return client.subscribe(channelString, (response) => {
+        if (response.payload.schoolId === schoolId) {
             callback(response.payload);
         }
     });

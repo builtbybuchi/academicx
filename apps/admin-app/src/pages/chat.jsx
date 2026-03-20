@@ -1,25 +1,94 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { listChatMessages, sendChatMessage, subscribeToChatMessages, listStaff } from '../../../../shared/utils/api.js';
+import { useToast } from '../../../../shared/components/Toast.jsx';
+import {
+    listChatMessages,
+    listSchoolChatMessages,
+    sendChatMessage,
+    subscribeToChatMessages,
+    subscribeToSchoolChatMessages,
+    listStaff,
+} from '../../../../shared/utils/api.js';
 import { useAuth } from '../../../../shared/utils/auth.jsx';
 import { useRxDB } from '../utils/rxdb-hooks.jsx';
 import { upsertDocument } from '../utils/rxdb.js';
 import { Search, MessageSquare, X, Hash, User } from 'lucide-react';
 
+function getDmChannel(currentUserId, recipientUserId) {
+    return `dm:${[currentUserId, recipientUserId].sort().join(':')}`;
+}
+
+function sortMessages(list) {
+    return [...list].sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+}
+
+function mergeMessages(existing, incoming) {
+    const map = new Map(existing.map((item) => [item.$id, item]));
+    incoming.forEach((item) => {
+        const key = item.$id || `${item.senderId}-${item.createdAt}-${item.message}`;
+        map.set(key, { ...map.get(key), ...item, $id: item.$id || key });
+    });
+    return sortMessages(Array.from(map.values()));
+}
+
+function parseDmParticipants(channel) {
+    if (!String(channel).startsWith('dm:')) return [];
+    return String(channel).slice(3).split(':').filter(Boolean);
+}
+
+function isDmForUser(channel, userId) {
+    const participants = parseDmParticipants(channel);
+    return participants.includes(String(userId || ''));
+}
+
+function localStorageKey(userId, schoolId) {
+    return `academicx.admin.chat.read.${schoolId}.${userId}`;
+}
+
 export default function AdminChat() {
     const { profile, schoolId } = useAuth();
+    const toast = useToast();
     const { db } = useRxDB();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState([]);
     const [sending, setSending] = useState(false);
     const [channel, setChannel] = useState('general');
     const [staff, setStaff] = useState([]);
+    const [dmMessages, setDmMessages] = useState([]);
     const [selectedRecipient, setSelectedRecipient] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showStaffPicker, setShowStaffPicker] = useState(false);
+    const [lastReadByThread, setLastReadByThread] = useState({});
     const messagesEndRef = useRef(null);
     const staffPickerRef = useRef(null);
     const subscriptionRef = useRef(null);
+    const currentUserId = profile?.$id || profile?.authId || '';
+
+    function persistReadState(state) {
+        if (!currentUserId || !schoolId) return;
+        localStorage.setItem(localStorageKey(currentUserId, schoolId), JSON.stringify(state));
+    }
+
+    function markThreadRead(threadChannel) {
+        if (!threadChannel || !String(threadChannel).startsWith('dm:')) return;
+        const next = {
+            ...lastReadByThread,
+            [threadChannel]: new Date().toISOString(),
+        };
+        setLastReadByThread(next);
+        persistReadState(next);
+    }
+
+    useEffect(() => {
+        if (!currentUserId || !schoolId) return;
+        try {
+            const raw = localStorage.getItem(localStorageKey(currentUserId, schoolId));
+            const parsed = raw ? JSON.parse(raw) : {};
+            setLastReadByThread(parsed && typeof parsed === 'object' ? parsed : {});
+        } catch {
+            setLastReadByThread({});
+        }
+    }, [currentUserId, schoolId]);
 
     // Load staff list for individual messaging
     useEffect(() => {
@@ -40,64 +109,101 @@ export default function AdminChat() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Reactive RxDB query for messages
+    // Load + subscribe messages (RxDB when available, Appwrite fallback always active)
     useEffect(() => {
-        if (!db || !schoolId) return;
+        if (!schoolId) return;
 
-        // Cleanup previous subscription
-        if (subscriptionRef.current) {
-            subscriptionRef.current.unsubscribe();
-        }
+        let rxSubscription = null;
 
-        const targetChannel = selectedRecipient 
-            ? `dm:${[profile?.$id, selectedRecipient.$id].sort().join(':')}` 
+        const recipientUserId = selectedRecipient?.userId || selectedRecipient?.$id;
+        const targetChannel = selectedRecipient && currentUserId && recipientUserId
+            ? getDmChannel(currentUserId, recipientUserId)
             : channel;
 
-        const collection = db.chatMessages;
-        const query = collection.find({
-            selector: { 
-                schoolId,
-                channel: targetChannel
-            }
-        });
+        if (db?.chatMessages) {
+            const collection = db.chatMessages;
+            const query = collection.find({
+                selector: {
+                    schoolId,
+                    channel: targetChannel,
+                },
+            });
 
-        // Initial load from RxDB
-        query.exec().then(docs => {
-            const sorted = docs
-                .map(d => d.toMutableJSON())
-                .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
-            setMessages(sorted);
-        });
+            query.exec().then((docs) => {
+                const sorted = sortMessages(docs.map((d) => d.toMutableJSON()));
+                setMessages(sorted);
+            });
 
-        // Subscribe to real-time changes
-        subscriptionRef.current = query.$.subscribe(docs => {
-            const sorted = docs
-                .map(d => d.toMutableJSON())
-                .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
-            setMessages(sorted);
-        });
+            rxSubscription = query.$.subscribe((docs) => {
+                const sorted = sortMessages(docs.map((d) => d.toMutableJSON()));
+                setMessages(sorted);
+            });
+            subscriptionRef.current = rxSubscription;
+        }
 
-        // Sync with Appwrite in background
-        listChatMessages(schoolId, targetChannel, 100).then(response => {
-            const docs = response.documents || [];
-            const docsWithSync = docs.map(doc => ({ ...doc, synced: true }));
-            if (docsWithSync.length > 0) {
-                collection.bulkUpsert(docsWithSync);
-            }
-        }).catch(console.error);
+        listChatMessages(schoolId, targetChannel, 100, profile?.role)
+            .then((response) => {
+                const docs = response.documents || [];
+                if (db?.chatMessages && docs.length > 0) {
+                    db.chatMessages.bulkUpsert(docs.map((doc) => ({ ...doc, synced: true })));
+                } else {
+                    setMessages(sortMessages(docs));
+                }
+            })
+            .catch((error) => {
+                console.error('Failed to load chat messages:', error);
+            });
 
         // Subscribe to Appwrite real-time for new messages
         const unsub = subscribeToChatMessages(schoolId, targetChannel, (message) => {
-            upsertDocument('chatMessages', { ...message, synced: true });
+            if (db?.chatMessages) {
+                upsertDocument('chatMessages', { ...message, synced: true });
+                return;
+            }
+            setMessages((prev) => mergeMessages(prev, [message]));
         });
 
         return () => {
-            if (subscriptionRef.current) {
-                subscriptionRef.current.unsubscribe();
+            if (rxSubscription) {
+                rxSubscription.unsubscribe();
+                subscriptionRef.current = null;
             }
             if (typeof unsub === 'function') unsub();
         };
-    }, [db, schoolId, channel, selectedRecipient, profile?.$id]);
+    }, [db, schoolId, channel, selectedRecipient, profile?.$id, profile?.authId]);
+
+    useEffect(() => {
+        if (!schoolId || !currentUserId) return;
+
+        let unsub = null;
+
+        listSchoolChatMessages(schoolId, 500)
+            .then((response) => {
+                const all = response.documents || [];
+                const ownDms = all.filter((item) => isDmForUser(item.channel, currentUserId));
+                setDmMessages(sortMessages(ownDms));
+            })
+            .catch((error) => {
+                console.error('Failed to load DM history:', error);
+            });
+
+        unsub = subscribeToSchoolChatMessages(schoolId, (message) => {
+            if (!isDmForUser(message.channel, currentUserId)) return;
+            setDmMessages((prev) => mergeMessages(prev, [message]));
+        });
+
+        return () => {
+            if (typeof unsub === 'function') unsub();
+        };
+    }, [schoolId, currentUserId]);
+
+    useEffect(() => {
+        if (!selectedRecipient || !currentUserId) return;
+        const recipientUserId = selectedRecipient?.userId || selectedRecipient?.$id;
+        const threadChannel = getDmChannel(currentUserId, recipientUserId);
+        markThreadRead(threadChannel);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedRecipient, currentUserId]);
 
     const channels = useMemo(() => (['general', 'admins', 'teachers']), []);
 
@@ -117,47 +223,110 @@ export default function AdminChat() {
         );
     }, [staff, searchQuery, profile?.$id]);
 
+    const threadSummaries = useMemo(() => {
+        const byChannel = new Map();
+        for (const message of dmMessages) {
+            const participants = parseDmParticipants(message.channel);
+            const partnerId = participants.find((id) => id !== currentUserId);
+            if (!partnerId) continue;
+            const previous = byChannel.get(message.channel);
+            if (!previous || new Date(message.createdAt) > new Date(previous.createdAt)) {
+                byChannel.set(message.channel, {
+                    channel: message.channel,
+                    partnerId,
+                    message,
+                });
+            }
+        }
+
+        const unreadByThread = {};
+        for (const message of dmMessages) {
+            if (message.senderId === currentUserId) continue;
+            const lastRead = lastReadByThread[message.channel];
+            if (!lastRead || new Date(message.createdAt) > new Date(lastRead)) {
+                unreadByThread[message.channel] = (unreadByThread[message.channel] || 0) + 1;
+            }
+        }
+
+        return Array.from(byChannel.values())
+            .map((entry) => {
+                const partner = staff.find((item) => item.userId === entry.partnerId || item.$id === entry.partnerId) || {
+                    $id: entry.partnerId,
+                    userId: entry.partnerId,
+                    firstName: 'Staff',
+                    lastName: '',
+                    department: '',
+                };
+                return {
+                    ...entry,
+                    partner,
+                    unread: unreadByThread[entry.channel] || 0,
+                };
+            })
+            .sort((a, b) => new Date(b.message.createdAt) - new Date(a.message.createdAt));
+    }, [dmMessages, staff, currentUserId, lastReadByThread]);
+
     const send = async () => {
-        if (!input.trim() || sending || !db) return;
+        if (!input.trim() || sending) return;
+        if (!schoolId) {
+            toast({ type: 'error', title: 'Send failed', message: 'Missing school context for chat.' });
+            return;
+        }
         const messageText = input.trim();
         setInput('');
         setSending(true);
         
-        const targetChannel = selectedRecipient 
-            ? `dm:${[profile?.$id, selectedRecipient.$id].sort().join(':')}` 
+        const recipientUserId = selectedRecipient?.userId || selectedRecipient?.$id;
+        const targetChannel = selectedRecipient && currentUserId && recipientUserId
+            ? getDmChannel(currentUserId, recipientUserId)
             : channel;
         
-        // Optimistically add to RxDB immediately
-        const optimisticMessage = {
-            $id: `temp-${Date.now()}`,
+        const outgoingMessage = {
             schoolId,
-            senderId: profile?.$id || profile?.authId,
+            senderId: currentUserId,
             senderName: `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Admin',
             senderRole: profile?.role || 'admin',
             message: messageText,
             channel: targetChannel,
             createdAt: new Date().toISOString(),
-            synced: false,
         };
         
         try {
-            await upsertDocument('chatMessages', optimisticMessage);
-            
-            await sendChatMessage(
+            const created = await sendChatMessage(
                 schoolId,
-                profile?.$id || '',
-                optimisticMessage.senderName,
-                profile?.role || 'admin',
+                outgoingMessage.senderId,
+                outgoingMessage.senderName,
+                outgoingMessage.senderRole,
                 messageText,
                 targetChannel
             );
-            
-            // Mark as synced
-            await upsertDocument('chatMessages', { ...optimisticMessage, synced: true });
+
+            if (db?.chatMessages) {
+                await upsertDocument('chatMessages', { ...created, synced: true });
+            } else {
+                setMessages((prev) => mergeMessages(prev, [created]));
+            }
+            if (targetChannel.startsWith('dm:')) {
+                setDmMessages((prev) => mergeMessages(prev, [created]));
+            }
         } catch (error) {
             console.error('Failed to send message:', error);
-            // Mark as failed
-            await upsertDocument('chatMessages', { ...optimisticMessage, failed: true, error: error.message });
+            toast({ type: 'error', title: 'Send failed', message: error.message || 'Unable to send chat message.' });
+            const failed = {
+                ...outgoingMessage,
+                $id: `failed-${Date.now()}`,
+                synced: false,
+                failed: true,
+                error: error.message || 'Send failed',
+            };
+            if (db?.chatMessages) {
+                await upsertDocument('chatMessages', failed);
+            } else {
+                setMessages((prev) => mergeMessages(prev, [failed]));
+            }
+            if (targetChannel.startsWith('dm:')) {
+                setDmMessages((prev) => mergeMessages(prev, [failed]));
+            }
         } finally {
             setSending(false);
         }
@@ -348,10 +517,16 @@ export default function AdminChat() {
                         )}
 
                         {/* Recent DMs */}
-                        {staff.filter(s => s.$id !== profile?.$id).slice(0, 5).map((s) => (
+                        {threadSummaries.length === 0 && !selectedRecipient && (
+                            <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>No direct messages yet.</div>
+                        )}
+                        {threadSummaries.map((thread) => (
                             <button
-                                key={s.$id}
-                                onClick={() => setSelectedRecipient(s)}
+                                key={thread.channel}
+                                onClick={() => {
+                                    setSelectedRecipient(thread.partner);
+                                    markThreadRead(thread.channel);
+                                }}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -359,8 +534,8 @@ export default function AdminChat() {
                                     padding: '8px 12px',
                                     borderRadius: 8,
                                     border: 'none',
-                                    background: selectedRecipient?.$id === s.$id ? '#fff' : 'transparent',
-                                    color: selectedRecipient?.$id === s.$id ? '#fff' : '#1D4ED8',
+                                    background: selectedRecipient?.$id === thread.partner.$id ? '#0A91F9' : 'transparent',
+                                    color: selectedRecipient?.$id === thread.partner.$id ? '#fff' : '#1D4ED8',
                                     cursor: 'pointer',
                                     fontSize: 13,
                                     width: '100%',
@@ -368,7 +543,31 @@ export default function AdminChat() {
                                 }}
                             >
                                 <User size={14} />
-                                {s.firstName} {s.lastName}
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {thread.partner.firstName} {thread.partner.lastName}
+                                    </div>
+                                    <div style={{ fontSize: 11, opacity: 0.75, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {thread.message.message}
+                                    </div>
+                                </div>
+                                {thread.unread > 0 && (
+                                    <span style={{
+                                        minWidth: 18,
+                                        height: 18,
+                                        borderRadius: 10,
+                                        background: '#EF4444',
+                                        color: '#fff',
+                                        fontSize: 10,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '0 6px',
+                                        fontWeight: 700,
+                                    }}>
+                                        {thread.unread}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -440,7 +639,7 @@ export default function AdminChat() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8 }}>
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: 'rgba(8, 12, 24, 0.75)', backdropFilter: 'blur(8px)' }}>
                         <input
                             className="input"
                             placeholder={isDirectMessage ? `Message ${selectedRecipient?.firstName}...` : "Type a message..."}

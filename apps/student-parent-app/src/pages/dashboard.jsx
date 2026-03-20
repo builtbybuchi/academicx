@@ -1,18 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart2, CheckSquare, BookOpen, Trophy, Bell } from 'lucide-react';
 import StatsCard from '../../../../shared/components/StatsCard.jsx';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { getStudentPortalData, updateProfile } from '../../../../shared/utils/api.js';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
+import { getStudentPortalData } from '../../../../shared/utils/api.js';
 
 const typeColors = { important: 'var(--color-danger)', info: 'var(--color-primary)', warning: 'var(--color-warning)' };
 
 export default function Dashboard() {
-    const { profile, checkAuth } = useAuth();
+    const navigate = useNavigate();
     const [data, setData] = useState(null);
-    const [editing, setEditing] = useState(false);
-    const [saveBusy, setSaveBusy] = useState(false);
-    const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
 
     useEffect(() => {
         let active = true;
@@ -20,11 +17,6 @@ export default function Dashboard() {
             const response = await getStudentPortalData();
             if (!active) return;
             setData(response);
-            setForm({
-                firstName: response.user?.firstName || '',
-                lastName: response.user?.lastName || '',
-                phone: response.user?.phone || '',
-            });
         }
         load();
         return () => {
@@ -47,25 +39,6 @@ export default function Dashboard() {
             rank: sorted.length ? `${Math.min(10, sorted.length)}th` : '-',
         };
     }, [data]);
-
-    async function saveProfile() {
-        if (!profile?.$id) return;
-        setSaveBusy(true);
-        try {
-            await updateProfile({
-                userId: profile.$id,
-                updates: {
-                    firstName: form.firstName,
-                    lastName: form.lastName,
-                    phone: form.phone,
-                },
-            });
-            await checkAuth();
-            setEditing(false);
-        } finally {
-            setSaveBusy(false);
-        }
-    }
 
     const announcements = [
         {
@@ -99,18 +72,9 @@ export default function Dashboard() {
             <LiquidGlassPanel hover={false} style={{ padding: 20, marginBottom: 18 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <h3 style={{ fontSize: 16, color: 'var(--color-gray-900)', margin: 0 }}>Profile</h3>
-                    <button className="btn btn-sm btn-glass" onClick={() => setEditing((current) => !current)}>{editing ? 'Cancel' : 'Edit Profile'}</button>
+                    <button className="btn btn-sm btn-glass" onClick={() => navigate('/profile')}>Open Profile</button>
                 </div>
-                {editing ? (
-                    <div style={{ display: 'grid', gap: 10 }}>
-                        <input className="input" value={form.firstName} onChange={(event) => setForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="First Name" />
-                        <input className="input" value={form.lastName} onChange={(event) => setForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Last Name" />
-                        <input className="input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="Phone" />
-                        <button className="btn btn-primary" disabled={saveBusy} onClick={saveProfile}>{saveBusy ? 'Saving...' : 'Save Profile'}</button>
-                    </div>
-                ) : (
-                    <div style={{ fontSize: 14, color: 'var(--color-gray-600)' }}>{data?.user?.firstName} {data?.user?.lastName} • {data?.user?.email}</div>
-                )}
+                <div style={{ fontSize: 14, color: 'var(--color-gray-600)' }}>{data?.user?.firstName} {data?.user?.lastName} • {data?.user?.email}</div>
             </LiquidGlassPanel>
 
             <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--color-gray-900)', display: 'flex', alignItems: 'center', gap: 8 }}><Bell size={18} /> Announcements</h3>

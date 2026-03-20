@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock, LogOut, UserCircle } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
 import AuthPage from '../../../shared/components/AuthPage.jsx';
@@ -9,6 +9,7 @@ import ResultsEntry from './pages/results-entry.jsx';
 import Attendance from './pages/attendance.jsx';
 import StaffAttendance from './pages/staff-attendance.jsx';
 import Chat from './pages/chat.jsx';
+import StaffProfile from './pages/profile.jsx';
 
 const menuGroups = [
     { section: 'Overview', items: [{ id: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> }] },
@@ -21,6 +22,7 @@ const menuGroups = [
     {
         section: 'My Records', items: [
             { id: '/my-attendance', label: 'My Attendance', icon: <Clock size={20} /> },
+            { id: '/profile', label: 'My Profile', icon: <UserCircle size={20} /> },
         ]
     },
     { section: 'Communication', items: [{ id: '/chat', label: 'Chat', icon: <MessageCircle size={20} /> }] },
@@ -76,6 +78,7 @@ export default function App() {
                 menuGroups={menuGroups}
                 activeId={location.pathname}
                 onNavigate={(id) => navigate(id)}
+                onUserClick={() => navigate('/profile')}
                 appName="Staff Portal"
                 userName={profile ? `${profile.firstName} ${profile.lastName}` : 'Staff'}
                 userRole={profile?.department || 'Teacher'}
@@ -86,6 +89,7 @@ export default function App() {
                     <Route path="/results-entry" element={<ResultsEntry />} />
                     <Route path="/attendance" element={<Attendance />} />
                     <Route path="/my-attendance" element={<StaffAttendance />} />
+                    <Route path="/profile" element={<StaffProfile />} />
                     <Route path="/chat" element={<Chat />} />
                 </Routes>
             </main>
