@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from '../../../../shared/components/DataTable.jsx';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
 import FormField from '../../../../shared/components/FormField.jsx';
+import Modal from '../../../../shared/components/Modal.jsx';
 import { useToast } from '../../../../shared/components/Toast.jsx';
 import { useAuth } from '../../../../shared/utils/auth.jsx';
 import {
@@ -13,6 +14,8 @@ import {
     listSubjects,
     upsertClassNames,
     upsertSubjects,
+    updateSubject,
+    deleteSubject,
 } from '../../../../shared/utils/api.js';
 
 const TERM_LABELS = ['First Term', 'Second Term', 'Third Term', 'Fourth Term'];
@@ -81,6 +84,13 @@ export default function Academics() {
     const [savingCombos, setSavingCombos] = useState(false);
     const [savingSubject, setSavingSubject] = useState(false);
 
+    // Edit/Delete Modal States
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [selectedSubject, setSelectedSubject] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', code: '', className: '', staffId: '' });
+    const [processingAction, setProcessingAction] = useState(false);
+
     async function loadData() {
         if (!schoolId) return;
         const [sessionRes, classRes, subjectRes, staffRes] = await Promise.all([
@@ -132,6 +142,29 @@ export default function Academics() {
                 const teacher = staff.find((item) => item.$id === value);
                 return teacher ? `${teacher.firstName} ${teacher.lastName}` : '-';
             },
+        },
+        {
+            key: 'actions',
+            label: 'Actions',
+            sortable: false,
+            render: (_, row) => (
+                <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                        className="btn btn-glass btn-sm"
+                        onClick={() => handleEditClick(row)}
+                        style={{ padding: '6px 12px', fontSize: 12 }}
+                    >
+                        ✏️ Edit
+                    </button>
+                    <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleDeleteClick(row)}
+                        style={{ padding: '6px 12px', fontSize: 12 }}
+                    >
+                        🗑️ Delete
+                    </button>
+                </div>
+            ),
         },
     ];
 
@@ -287,6 +320,64 @@ export default function Academics() {
         }
     }
 
+    function handleEditClick(subject) {
+        setSelectedSubject(subject);
+        setEditForm({
+            name: subject.name,
+            code: subject.code,
+            className: subject.className,
+            staffId: subject.staffId || ''
+        });
+        setEditModalOpen(true);
+    }
+
+    function handleDeleteClick(subject) {
+        setSelectedSubject(subject);
+        setDeleteModalOpen(true);
+    }
+
+    async function handleSaveEdit() {
+        if (!editForm.name || !editForm.code || !editForm.className) {
+            toast({ type: 'error', title: 'Missing fields', message: 'Name, code, and class are required.' });
+            return;
+        }
+
+        setProcessingAction(true);
+        try {
+            await updateSubject(selectedSubject.$id, {
+                name: editForm.name,
+                code: editForm.code.toUpperCase(),
+                className: editForm.className,
+                staffId: editForm.staffId || ''
+            });
+            toast({ type: 'success', title: 'Subject updated', message: 'Subject updated successfully.' });
+            setEditModalOpen(false);
+            setSelectedSubject(null);
+            await loadData();
+        } catch (error) {
+            toast({ type: 'error', title: 'Update failed', message: error.message });
+        } finally {
+            setProcessingAction(false);
+        }
+    }
+
+    async function handleConfirmDelete() {
+        if (!selectedSubject) return;
+
+        setProcessingAction(true);
+        try {
+            await deleteSubject(selectedSubject.$id);
+            toast({ type: 'success', title: 'Subject deleted', message: 'Subject deleted successfully.' });
+            setDeleteModalOpen(false);
+            setSelectedSubject(null);
+            await loadData();
+        } catch (error) {
+            toast({ type: 'error', title: 'Delete failed', message: error.message });
+        } finally {
+            setProcessingAction(false);
+        }
+    }
+
     return (
         <div>
             <div className="page-header">
@@ -439,6 +530,101 @@ export default function Academics() {
             </LiquidGlassPanel>
 
             <DataTable columns={subjectColumns} data={subjects} />
+
+            {/* Edit Subject Modal */}
+            <Modal
+                open={editModalOpen}
+                onClose={() => setEditModalOpen(false)}
+                title="Edit Subject"
+                footer={
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                        <button
+                            className="btn btn-glass btn-sm"
+                            onClick={() => setEditModalOpen(false)}
+                            disabled={processingAction}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            onClick={handleSaveEdit}
+                            disabled={processingAction}
+                        >
+                            {processingAction ? 'Saving...' : 'Save Changes'}
+                        </button>
+                    </div>
+                }
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <FormField
+                        label="Subject Name"
+                        value={editForm.name}
+                        onChange={(value) => setEditForm((prev) => ({ ...prev, name: value }))}
+                        placeholder="Mathematics"
+                        required
+                    />
+                    <FormField
+                        label="Subject Code"
+                        value={editForm.code}
+                        onChange={(value) => setEditForm((prev) => ({ ...prev, code: value.toUpperCase() }))}
+                        placeholder="MTH"
+                        required
+                    />
+                    <FormField
+                        label="Class"
+                        type="select"
+                        options={classNames.map((item) => ({ value: item, label: item }))}
+                        value={editForm.className}
+                        onChange={(value) => setEditForm((prev) => ({ ...prev, className: value }))}
+                        required
+                    />
+                    <FormField
+                        label="Teacher"
+                        type="select"
+                        options={staff.map((item) => ({ value: item.$id, label: `${item.firstName} ${item.lastName}` }))}
+                        value={editForm.staffId}
+                        onChange={(value) => setEditForm((prev) => ({ ...prev, staffId: value }))}
+                    />
+                </div>
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                open={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                title="Delete Subject"
+                footer={
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                        <button
+                            className="btn btn-glass btn-sm"
+                            onClick={() => setDeleteModalOpen(false)}
+                            disabled={processingAction}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="btn btn-danger btn-sm"
+                            onClick={handleConfirmDelete}
+                            disabled={processingAction}
+                        >
+                            {processingAction ? 'Deleting...' : 'Delete'}
+                        </button>
+                    </div>
+                }
+            >
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+                    <p style={{ fontSize: 16, marginBottom: 8 }}>
+                        Are you sure you want to delete this subject?
+                    </p>
+                    <p style={{ fontSize: 14, color: 'var(--color-gray-600)' }}>
+                        <strong>{selectedSubject?.name}</strong> ({selectedSubject?.code}) for {selectedSubject?.className}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--color-gray-500)', marginTop: 16 }}>
+                        This action cannot be undone.
+                    </p>
+                </div>
+            </Modal>
         </div>
     );
 }

@@ -1,4 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Add responsive styles globally
+const styleSheet = typeof window !== 'undefined' ? document.createElement('style') : null;
+if (styleSheet) {
+    styleSheet.textContent = `
+        @media (max-width: 768px) {
+            .welcome-grid {
+                grid-template-columns: 1fr !important;
+                gap: 20px !important;
+            }
+        }
+    `;
+    if (document.head && !document.getElementById('auth-page-styles')) {
+        styleSheet.id = 'auth-page-styles';
+        document.head.appendChild(styleSheet);
+    }
+}
 
 export default function AuthPage({
     brand = 'academicX',
@@ -15,9 +33,39 @@ export default function AuthPage({
     onLogin,
     onSignup,
     loading = false,
+    role = 'default', // 'student', 'staff', 'admin'
 }) {
+    const roleWelcome = {
+        student: {
+            heading: "YOUR ACADEMIC JOURNEY, SIMPLIFIED.",
+            subheading: "All your grades, schedules, and learning materials in one place.",
+            image: "https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp",
+            buttonText: "GET STARTED"
+        },
+        staff: {
+            heading: "EMPOWERING EXCELLENCE IN TEACHING.",
+            subheading: "Automated grading, real-time attendance, and secure result management.",
+            image: "https://diviengine.com/wp-content/uploads/2025/08/naughtyduk-liquid-glass-1024x611.webp",
+            buttonText: "CONTINUE TO STAFF PORTAL"
+        },
+        admin: {
+            heading: "INSTITUTION-WIDE CONTROL AT YOUR FINGERTIPS.",
+            subheading: "Secure data access, multi-app management, and performance insights.",
+            image: "https://diviengine.com/wp-content/uploads/2025/08/naughtyduk-liquid-glass-1024x611.webp",
+            buttonText: "ADMINISTRATOR LOGIN"
+        },
+        default: {
+            heading: "Welcome to academicX",
+            subheading: "The complete platform for modern education.",
+            image: "https://diviengine.com/wp-content/uploads/2025/08/naughtyduk-liquid-glass-1024x611.webp",
+            buttonText: "Get Started"
+        }
+    };
+
+    const [view, setView] = useState('welcome');
     const [tab, setTab] = useState('login');
     const [error, setError] = useState('');
+    
     const normalizedLoginFields = useMemo(() => (
         loginFields && loginFields.length > 0
             ? loginFields
@@ -76,27 +124,207 @@ export default function AuthPage({
         }
     }
 
+    if (view === 'welcome') {
+        const welcome = roleWelcome[role] || roleWelcome.default;
+
+        const containerVariants = {
+            hidden: { opacity: 0 },
+            visible: { 
+                opacity: 1, 
+                transition: { staggerChildren: 0.1, delayChildren: 0.2 } 
+            }
+        };
+
+        const itemVariants = {
+            hidden: { opacity: 0, y: 20 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } }
+        };
+
+        const imageVariants = {
+            hidden: { opacity: 0, scale: 0.95 },
+            visible: { opacity: 1, scale: 1, transition: { duration: 0.6, ease: "easeOut" } }
+        };
+
+        return (
+            <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: '100vh',
+                background: '#FFFFFF',
+                padding: isDesktop ? '60px 40px' : '40px 20px',
+                position: 'relative',
+                zIndex: 1
+            }}>
+                <motion.div
+                    variants={containerVariants}
+                    initial="hidden"
+                    animate="visible"
+                    style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100%',
+                        maxWidth: isDesktop ? 1200 : '100%'
+                    }}
+                >
+                    {/* Brand Logo */}
+                    <motion.div
+                        variants={itemVariants}
+                        style={{
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: '#1D4ED8',
+                            marginBottom: 48,
+                            fontFamily: 'Inter, sans-serif',
+                            letterSpacing: '-0.5px'
+                        }}
+                    >
+                        {brand}
+                    </motion.div>
+
+                    {/* Main Container: Desktop side-by-side, Mobile stacked */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr',
+                        gap: isDesktop ? 60 : 40,
+                        alignItems: 'center',
+                        width: '100%'
+                    }}>
+                        {/* Image Section - appears first on mobile, second on desktop */}
+                        {!isDesktop && (
+                            <motion.div
+                                variants={itemVariants}
+                                style={{
+                                    width: '100%',
+                                    height: 300,
+                                    borderRadius: 16,
+                                    overflow: 'hidden',
+                                    order: -1
+                                }}
+                            >
+                                <img
+                                    src={welcome.image}
+                                    alt={welcome.heading}
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover',
+                                        display: 'block'
+                                    }}
+                                />
+                            </motion.div>
+                        )}
+
+                        {/* Text Content */}
+                        <motion.div
+                            variants={itemVariants}
+                            style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 20,
+                                textAlign: 'center'
+                            }}
+                        >
+                            {/* Heading */}
+                            <motion.h1
+                                variants={itemVariants}
+                                style={{
+                                    fontSize: isDesktop ? 32 : 28,
+                                    fontWeight: 700,
+                                    fontFamily: 'Inter, sans-serif',
+                                    color: '#1D4ED8',
+                                    lineHeight: 1.2,
+                                    margin: 0,
+                                    letterSpacing: '-0.02em'
+                                }}
+                            >
+                                {welcome.heading}
+                            </motion.h1>
+
+                            {/* Subheading */}
+                            <motion.p
+                                variants={itemVariants}
+                                style={{
+                                    fontSize: isDesktop ? 20 : 16,
+                                    fontWeight: 500,
+                                    fontFamily: 'Inter, sans-serif',
+                                    color: '#374151',
+                                    lineHeight: 1.6,
+                                    margin: 0,
+                                    maxWidth: 500
+                                }}
+                            >
+                                {welcome.subheading}
+                            </motion.p>
+
+                            {/* CTA Button */}
+                            <motion.div
+                                variants={itemVariants}
+                                style={{ marginTop: 20 }}
+                            >
+                                <motion.button
+                                    type="button"
+                                    whileHover={{ backgroundColor: '#3B82F6' }}
+                                    whileTap={{ scale: 0.98 }}
+                                    style={{
+                                        padding: '14px 40px',
+                                        backgroundColor: '#1D4ED8',
+                                        color: '#FFFFFF',
+                                        fontWeight: 500,
+                                        fontSize: 16,
+                                        fontFamily: 'Inter, sans-serif',
+                                        border: 'none',
+                                        borderRadius: 8,
+                                        cursor: 'pointer',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: 0.5,
+                                        transition: 'background-color 0.3s ease',
+                                        boxShadow: '0 2px 8px rgba(29, 78, 216, 0.15)'
+                                    }}
+                                    onClick={() => setView('auth')}
+                                >
+                                    {welcome.buttonText}
+                                </motion.button>
+                            </motion.div>
+                        </motion.div>
+
+                        {/* Image Section - appears on desktop on the right */}
+                        {isDesktop && (
+                            <motion.div
+                                variants={imageVariants}
+                                style={{
+                                    width: '100%',
+                                    height: 400,
+                                    borderRadius: 16,
+                                    overflow: 'hidden'
+                                }}
+                            >
+                                <img
+                                    src={welcome.image}
+                                    alt={welcome.heading}
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        objectFit: 'cover',
+                                        display: 'block'
+                                    }}
+                                />
+                            </motion.div>
+                        )}
+                    </div>
+                </motion.div>
+            </div>
+        );
+    }
+
     return (
         <div style={styles.page}>
             <div style={styles.layer} />
             <div style={{ ...styles.grid, gridTemplateColumns: isDesktop ? 'minmax(420px, 1fr) minmax(360px, 1fr)' : '1fr' }}>
                 <section style={{ ...styles.left, padding: isDesktop ? 34 : 24 }}>
-                    <div style={styles.brandWrap}>
-                        <div style={styles.brandRow}>
-                        <img
-                            src={logoSrc}
-                            alt={brand}
-                            style={styles.logo}
-                            onError={(event) => {
-                                event.currentTarget.style.display = 'none';
-                                const textNode = event.currentTarget.nextSibling;
-                                if (textNode && textNode.style) textNode.style.display = 'inline';
-                            }}
-                        />
-                        <span style={{ ...styles.logoFallback, display: 'none' }}>{fallbackLogoText}</span>
-                        <span style={styles.brandText}>{brand}</span>
-                        </div>
-                    </div>
 
                     <h1 style={styles.title}>{title}</h1>
                     <p style={styles.subtitle}>{subtitle}</p>
@@ -204,30 +432,52 @@ export default function AuthPage({
                     </div>
                 </section>
 
-                <section style={{ ...styles.right, padding: isDesktop ? 24 : 20 }}>
-                    <div style={styles.previewCard}>
-                        <div style={styles.previewChip}>Insights from your portal</div>
-                        {previewItems.map((item) => (
-                            <div key={item} style={styles.previewItem}>• {item}</div>
-                        ))}
-                        <div style={styles.previewPanel}>
-                            <div style={styles.fakeLineLong} />
-                            <div style={styles.fakeLineShort} />
-                            <div style={styles.fakeChart}>
-                                <span style={{ ...styles.chartBar, height: 36 }} />
-                                <span style={{ ...styles.chartBar, height: 58 }} />
-                                <span style={{ ...styles.chartBar, height: 42 }} />
-                                <span style={{ ...styles.chartBar, height: 70 }} />
+                {isDesktop && (
+                    <section style={{ ...styles.right, padding: 24 }}>
+                        <div style={styles.previewCard}>
+                            <div style={styles.previewChip}>Insights from your portal</div>
+                            {previewItems.map((item) => (
+                                <div key={item} style={styles.previewItem}>• {item}</div>
+                            ))}
+                            <div style={styles.previewPanel}>
+                                <div style={styles.fakeLineLong} />
+                                <div style={styles.fakeLineShort} />
+                                <div style={styles.fakeChart}>
+                                    <span style={{ ...styles.chartBar, height: 36 }} />
+                                    <span style={{ ...styles.chartBar, height: 58 }} />
+                                    <span style={{ ...styles.chartBar, height: 42 }} />
+                                    <span style={{ ...styles.chartBar, height: 70 }} />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                </section>
+                    </section>
+                )}
             </div>
         </div>
     );
 }
 
 const styles = {
+    welcomePage: {
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #f4f8ff 0%, #eef5ff 48%, #f6faff 100%)',
+        position: 'relative',
+        overflow: 'hidden',
+        padding: '32px 20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    welcomeGrid: {
+        position: 'relative',
+        width: '100%',
+        maxWidth: 1400,
+        margin: '0 auto',
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: 40,
+        alignItems: 'center',
+    },
     page: {
         minHeight: '100vh',
         background: 'linear-gradient(145deg, #f4f8ff 0%, #eef5ff 48%, #f6faff 100%)',
@@ -261,42 +511,6 @@ const styles = {
         background: 'rgba(239,246,255,0.88)',
         padding: 26,
         border: '1px solid rgba(29,78,216,0.1)',
-    },
-    brandRow: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        marginBottom: 18,
-    },
-    brandWrap: {
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        textAlign: 'center',
-    },
-    logo: {
-        width: 34,
-        height: 34,
-        objectFit: 'cover',
-        borderRadius: 10,
-        border: '1px solid rgba(0,0,0,0.08)',
-    },
-    logoFallback: {
-        fontSize: 12,
-        fontWeight: 700,
-        padding: '6px 8px',
-        borderRadius: 8,
-        background: '#de7d43',
-        color: '#fff',
-    },
-    brandText: {
-        fontSize: 30,
-        fontWeight: 700,
-        fontFamily: 'Georgia, Cambria, Times New Roman, serif',
-        color: '#111827',
-        lineHeight: 1,
     },
     title: {
         margin: 0,

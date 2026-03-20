@@ -186,6 +186,14 @@ export async function createSubject(data) {
     return databases.createDocument(DATABASE_ID, COLLECTIONS.SUBJECTS, ID.unique(), data);
 }
 
+export async function updateSubject(docId, data) {
+    return databases.updateDocument(DATABASE_ID, COLLECTIONS.SUBJECTS, docId, data);
+}
+
+export async function deleteSubject(docId) {
+    return databases.deleteDocument(DATABASE_ID, COLLECTIONS.SUBJECTS, docId);
+}
+
 export async function upsertClassNames(schoolId, classNames = []) {
     const existing = await listClasses(schoolId);
     const existingNames = new Set(existing.documents.map((item) => item.name));

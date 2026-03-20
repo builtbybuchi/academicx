@@ -4,6 +4,7 @@
     "tauri:build:apps:default": "node scripts/build-tauri-apps.mjs --school-code ACADEMICX"
   },
   "dependencies": {
-    "appwrite": "^23.0.0"
+    "appwrite": "^23.0.0",
+    "framer-motion": "^12.36.0"
   }
 }

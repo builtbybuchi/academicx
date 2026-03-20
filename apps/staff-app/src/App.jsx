@@ -38,6 +38,7 @@ export default function App() {
     if (!user) {
         return (
             <AuthPage
+                role="staff"
                 brand="AcademicX"
                 title="Spark your teaching flow"
                 subtitle="Manage attendance, class results, and school communication from one portal."

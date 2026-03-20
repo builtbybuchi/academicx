@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Mail, Send, Users, Filter, Loader, CheckCircle, AlertCircle, ChevronDown } from 'lucide-react';
+import { Mail, Send, Users, Filter, Loader, CheckCircle, AlertCircle, ChevronDown, XCircle, Clock } from 'lucide-react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
 import { useToast } from '../../../../shared/components/Toast.jsx';
 import { useAuth } from '../../../../shared/utils/auth.jsx';
@@ -15,6 +15,7 @@ export default function Communication() {
     const [sending, setSending] = useState(false);
     const [result, setResult] = useState(null);
     const [classes, setClasses] = useState([]);
+    const [emailHistory, setEmailHistory] = useState([]);
 
     useEffect(() => {
         if (!schoolId) return;
@@ -32,10 +33,52 @@ export default function Communication() {
             const response = recipientType === 'all_parents'
                 ? await sendSchoolAnnouncement({ schoolId, subject, messageHtml: message })
                 : await sendBulkEmailToParents({ schoolId, className: selectedClass, subject, messageHtml: message });
+
+            // Check for delivery issues
+            if (response.success === false) {
+                throw new Error(response.error || 'Email sending failed');
+            }
+
             setResult(response);
-            toast({ type: 'success', title: 'Email dispatched', message: `${response.sent || response.totalRecipients || 0} recipient(s) processed.` });
+
+            // Add to email history
+            const historyEntry = {
+                id: Date.now(),
+                subject,
+                recipientType: recipientType === 'all_parents' ? 'All Parents' : `Class: ${selectedClass}`,
+                recipients: response.sent || response.totalRecipients || 0,
+                failed: response.failed || 0,
+                status: response.previewOnly ? 'preview' : (response.failed > 0 ? 'partial' : 'sent'),
+                timestamp: new Date().toISOString(),
+                error: response.errorMessage || null,
+            };
+            setEmailHistory(prev => [historyEntry, ...prev]);
+
+            if (response.previewOnly) {
+                toast({ type: 'warning', title: 'Email Service Not Configured', message: 'Email service is not configured. Please contact support to set up email delivery.' });
+            } else if (response.failed > 0) {
+                toast({ type: 'warning', title: 'Partial Delivery', message: `${response.sent} sent, ${response.failed} failed. Check email configuration.` });
+            } else {
+                toast({ type: 'success', title: 'Email dispatched', message: `${response.sent || response.totalRecipients || 0} recipient(s) processed.` });
+            }
         } catch (error) {
-            toast({ type: 'error', title: 'Send failed', message: error.message });
+            const errorMsg = error.message || 'Failed to send emails';
+            setResult({ error: errorMsg, success: false });
+
+            // Add failed entry to history
+            const historyEntry = {
+                id: Date.now(),
+                subject,
+                recipientType: recipientType === 'all_parents' ? 'All Parents' : `Class: ${selectedClass}`,
+                recipients: 0,
+                failed: 0,
+                status: 'failed',
+                timestamp: new Date().toISOString(),
+                error: errorMsg,
+            };
+            setEmailHistory(prev => [historyEntry, ...prev]);
+
+            toast({ type: 'error', title: 'Send failed', message: errorMsg });
         } finally {
             setSending(false);
         }
@@ -148,12 +191,31 @@ export default function Communication() {
 
                     {/* Result feedback */}
                     {result && (
-                        <div style={{ marginTop: 16, padding: 16, borderRadius: 12, background: 'var(--color-primary-50)', border: '1px solid var(--color-primary-100)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, color: 'var(--color-primary-700)', marginBottom: 4 }}>
-                                <CheckCircle size={18} /> Emails dispatched
+                        <div style={{
+                            marginTop: 16,
+                            padding: 16,
+                            borderRadius: 12,
+                            background: result.error ? '#FEE2E2' : result.previewOnly ? '#FEF3C7' : result.failed > 0 ? '#FEF3C7' : '#DCFCE7',
+                            border: `1px solid ${result.error ? '#FECACA' : result.previewOnly ? '#FDE68A' : result.failed > 0 ? '#FDE68A' : '#BBF7D0'}`
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontWeight: 600,
+                                color: result.error ? '#DC2626' : result.previewOnly ? '#D97706' : result.failed > 0 ? '#D97706' : '#166534',
+                                marginBottom: 4
+                            }}>
+                                {result.error ? <XCircle size={18} /> : result.previewOnly ? <AlertCircle size={18} /> : result.failed > 0 ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
+                                {result.error ? 'Email sending failed' : result.previewOnly ? 'Preview Mode - Email not sent' : result.failed > 0 ? 'Partial Delivery' : 'Emails dispatched'}
                             </div>
-                            <div style={{ fontSize: 13, color: 'var(--color-gray-600)' }}>
-                                {result.sent} sent successfully{result.failed > 0 ? `, ${result.failed} failed` : ''}
+                            <div style={{ fontSize: 13, color: result.error ? '#7F1D1D' : result.previewOnly ? '#92400E' : result.failed > 0 ? '#92400E' : '#166534' }}>
+                                {result.error
+                                    ? result.error
+                                    : result.previewOnly
+                                        ? 'Email service not configured. Contact support to enable email delivery.'
+                                        : `${result.sent || 0} sent successfully${result.failed > 0 ? `, ${result.failed} failed` : ''}`
+                                }
                             </div>
                         </div>
                     )}
@@ -176,10 +238,53 @@ export default function Communication() {
                     </LiquidGlassPanel>
 
                     <LiquidGlassPanel hover={false} style={{ padding: 32 }}>
-                        <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--color-gray-900)' }}>Communication Log</h3>
-                        <div style={{ fontSize: 13, color: 'var(--color-gray-600)', lineHeight: 1.7 }}>
-                            No dedicated communication log collection is configured yet. Once you add one, this panel can read recent email history from the database instead of storing UI-only history.
-                        </div>
+                        <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--color-gray-900)' }}>Email History</h3>
+                        {emailHistory.length === 0 ? (
+                            <div style={{ fontSize: 13, color: 'var(--color-gray-500)', textAlign: 'center', padding: 20 }}>
+                                <Clock size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                                No emails sent yet.
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
+                                {emailHistory.map((entry) => (
+                                    <div key={entry.id} style={{
+                                        padding: 12,
+                                        borderRadius: 8,
+                                        background: entry.status === 'failed' ? '#FEE2E2' : entry.status === 'preview' ? '#FEF3C7' : entry.status === 'partial' ? '#FEF3C7' : '#DCFCE7',
+                                        border: `1px solid ${entry.status === 'failed' ? '#FECACA' : entry.status === 'preview' ? '#FDE68A' : entry.status === 'partial' ? '#FDE68A' : '#BBF7D0'}`
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                                            <div style={{ fontSize: 13, fontWeight: 600, color: entry.status === 'failed' ? '#7F1D1D' : entry.status === 'preview' || entry.status === 'partial' ? '#92400E' : '#166534' }}>
+                                                {entry.subject}
+                                            </div>
+                                            <div style={{
+                                                fontSize: 11,
+                                                padding: '2px 8px',
+                                                borderRadius: 4,
+                                                background: entry.status === 'failed' ? '#FECACA' : entry.status === 'preview' ? '#FDE68A' : entry.status === 'partial' ? '#FDE68A' : '#BBF7D0',
+                                                color: entry.status === 'failed' ? '#991B1B' : entry.status === 'preview' || entry.status === 'partial' ? '#92400E' : '#166534'
+                                            }}>
+                                                {entry.status === 'sent' ? 'Sent' : entry.status === 'partial' ? 'Partial' : entry.status === 'preview' ? 'Preview' : 'Failed'}
+                                            </div>
+                                        </div>
+                                        <div style={{ fontSize: 12, color: 'var(--color-gray-500)' }}>
+                                            {entry.recipientType} • {new Date(entry.timestamp).toLocaleString()}
+                                        </div>
+                                        {entry.status !== 'failed' && (
+                                            <div style={{ fontSize: 12, color: entry.status === 'preview' ? '#92400E' : '#166534', marginTop: 4 }}>
+                                                {entry.recipients} recipient{entry.recipients !== 1 ? 's' : ''}
+                                                {entry.failed > 0 && ` • ${entry.failed} failed`}
+                                            </div>
+                                        )}
+                                        {entry.error && (
+                                            <div style={{ fontSize: 11, color: '#991B1B', marginTop: 4 }}>
+                                                Error: {entry.error}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </LiquidGlassPanel>
                 </div>
             </div>

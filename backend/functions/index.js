@@ -1,6 +1,10 @@
 require('dotenv').config();
 const { Client, Databases, Users, ID, Query } = require('node-appwrite');
 
+// Email service configuration - requires RESEND_API_KEY environment variable
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@academicx.com';
+
 const DATABASE_ID = 'academicx_db';
 const COLLECTIONS = {
     SCHOOLS: { id: 'schools' },
@@ -102,6 +106,39 @@ function extractRoleFromTags(authUser) {
 
 function normalizePhone(value) {
     return String(value || '').replace(/\D+/g, '');
+}
+
+async function sendEmailWithResend({ to, subject, html, text }) {
+    if (!RESEND_API_KEY) {
+        return { success: false, error: 'Email service not configured. Please set RESEND_API_KEY environment variable.' };
+    }
+
+    try {
+        const response = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${RESEND_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                from: FROM_EMAIL,
+                to: Array.isArray(to) ? to : [to],
+                subject,
+                html,
+                text,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { success: false, error: data.message || `Email API error: ${response.status}` };
+        }
+
+        return { success: true, id: data.id };
+    } catch (error) {
+        return { success: false, error: error.message || 'Failed to send email' };
+    }
 }
 
 function phoneMatches(inputPhone, storedPhone) {
@@ -949,14 +986,66 @@ const actions = {
             const students = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, filters);
             const recipients = students.documents.filter((item) => item.parentEmail).map((item) => item.parentEmail);
 
+            if (recipients.length === 0) {
+                return {
+                    success: true,
+                    data: {
+                        totalRecipients: 0,
+                        sent: 0,
+                        failed: 0,
+                        previewOnly: false,
+                        subject: payload.subject,
+                        message: 'No recipients found with parent email addresses.',
+                    },
+                };
+            }
+
+            // If email service not configured, return preview mode
+            if (!RESEND_API_KEY) {
+                return {
+                    success: true,
+                    data: {
+                        totalRecipients: recipients.length,
+                        sent: 0,
+                        failed: 0,
+                        previewOnly: true,
+                        subject: payload.subject,
+                        message: 'Email service not configured. Set RESEND_API_KEY to enable sending.',
+                    },
+                };
+            }
+
+            // Send emails
+            const emailResult = await sendEmailWithResend({
+                to: recipients,
+                subject: payload.subject,
+                html: payload.messageHtml,
+                text: payload.messageHtml?.replace(/<[^>]*>/g, ' ') || '',
+            });
+
+            if (!emailResult.success) {
+                return {
+                    success: false,
+                    error: emailResult.error,
+                    data: {
+                        totalRecipients: recipients.length,
+                        sent: 0,
+                        failed: recipients.length,
+                        previewOnly: false,
+                        subject: payload.subject,
+                    },
+                };
+            }
+
             return {
                 success: true,
                 data: {
                     totalRecipients: recipients.length,
                     sent: recipients.length,
                     failed: 0,
-                    previewOnly: true,
+                    previewOnly: false,
                     subject: payload.subject,
+                    emailId: emailResult.id,
                 },
             };
         },
@@ -973,14 +1062,66 @@ const actions = {
             ]);
             const recipients = students.documents.filter((item) => item.parentEmail).map((item) => item.parentEmail);
 
+            if (recipients.length === 0) {
+                return {
+                    success: true,
+                    data: {
+                        totalRecipients: 0,
+                        sent: 0,
+                        failed: 0,
+                        previewOnly: false,
+                        subject: payload.subject,
+                        message: 'No recipients found with parent email addresses.',
+                    },
+                };
+            }
+
+            // If email service not configured, return preview mode
+            if (!RESEND_API_KEY) {
+                return {
+                    success: true,
+                    data: {
+                        totalRecipients: recipients.length,
+                        sent: 0,
+                        failed: 0,
+                        previewOnly: true,
+                        subject: payload.subject,
+                        message: 'Email service not configured. Set RESEND_API_KEY to enable sending.',
+                    },
+                };
+            }
+
+            // Send emails
+            const emailResult = await sendEmailWithResend({
+                to: recipients,
+                subject: payload.subject,
+                html: payload.messageHtml,
+                text: payload.messageHtml?.replace(/<[^>]*>/g, ' ') || '',
+            });
+
+            if (!emailResult.success) {
+                return {
+                    success: false,
+                    error: emailResult.error,
+                    data: {
+                        totalRecipients: recipients.length,
+                        sent: 0,
+                        failed: recipients.length,
+                        previewOnly: false,
+                        subject: payload.subject,
+                    },
+                };
+            }
+
             return {
                 success: true,
                 data: {
                     totalRecipients: recipients.length,
                     sent: recipients.length,
                     failed: 0,
-                    previewOnly: true,
+                    previewOnly: false,
                     subject: payload.subject,
+                    emailId: emailResult.id,
                 },
             };
         },

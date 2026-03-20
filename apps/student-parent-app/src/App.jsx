@@ -32,6 +32,7 @@ export default function App() {
     if (!user) {
         return (
             <AuthPage
+                role="student"
                 brand="AcademicX"
                 title="Spark your learning journey"
                 subtitle="Sign in with your Student ID and your parent phone number or parent email. Student accounts are created by school admins."

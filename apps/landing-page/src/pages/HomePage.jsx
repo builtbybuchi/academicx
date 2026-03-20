@@ -106,13 +106,13 @@ export default function HomePage() {
 
             {/* Dashboard Preview Section */}
             <section style={{ padding: '80px 20px', background: 'var(--color-gray-50)' }}>
-                <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
+                <div className="grid" style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }}>
                     <div>
                         <h2 style={{ fontSize: 'clamp(28px, 5vw, 40px)', marginBottom: 20 }}>Beautifully Simple.<br />Incredibly Powerful.</h2>
                         <p style={{ fontSize: 'clamp(16px, 2vw, 18px)', color: 'var(--color-gray-600)', marginBottom: 32 }}>We've reimagined how a school portal should feel. Light, fast, and organized. Say goodbye to old clunky paper based system and hello to ultra-modern software.</p>
                         <Link to="/how-it-works" className="btn btn-primary" style={{ padding: '12px 24px', textDecoration: 'none', display: 'inline-block' }}>See How It Works →</Link>
                     </div>
-                    <div>
+                    <div className="dashboard-preview-image">
                         <img src="https://res.cloudinary.com/dlvffw5wt/image/upload/f_webp/q_auto:eco/Gemini_Generated_Image_l0aqi5l0aqi5l0aq_mqmtcp" alt="academicX Dashboard Preview" style={{ width: '100%', borderRadius: 24, boxShadow: '0 20px 40px rgba(0,0,0,0.08)' }} />
                     </div>
                 </div>
@@ -174,6 +174,9 @@ export default function HomePage() {
                     }
                     h1, h2 {
                         margin-bottom: 16px !important;
+                    }
+                    .dashboard-preview-image {
+                        display: none !important;
                     }
                 }
                 @media (max-width: 980px) {
