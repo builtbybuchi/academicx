@@ -1,9 +1,13 @@
 require('dotenv').config();
 const { Client, Databases, Users, ID, Query } = require('node-appwrite');
+const nodemailer = require('nodemailer');
 
-// Email service configuration - requires RESEND_API_KEY environment variable
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'noreply@academicx.com';
+// Alibaba Cloud Direct Mail SMTP Configuration
+const SMTP_FROM = process.env.SMTP_FROM || 'AcademicX <noreply@mail.sinod.app>';
+const SMTP_HOST = process.env.SMTP_HOST || 'smtpdm-ap-southeast-1.aliyun.com';
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || '80', 10);
+const SMTP_USERNAME = process.env.SMTP_USERNAME || '';
+const SMTP_PASS = process.env.SMTP_PASS || '';
 
 const DATABASE_ID = 'academicx_db';
 const COLLECTIONS = {
@@ -19,6 +23,7 @@ const COLLECTIONS = {
     PINS: { id: 'pins' },
     PAYMENTS: { id: 'payments' },
     CHAT_MESSAGES: { id: 'chat_messages' },
+    EMAIL_SENDS: { id: 'email_sends' },
 };
 
 function getClient() {
@@ -108,36 +113,97 @@ function normalizePhone(value) {
     return String(value || '').replace(/\D+/g, '');
 }
 
-async function sendEmailWithResend({ to, subject, html, text }) {
-    if (!RESEND_API_KEY) {
-        return { success: false, error: 'Email service not configured. Please set RESEND_API_KEY environment variable.' };
+// Create SMTP transporter for Alibaba Cloud Direct Mail
+function createSMTPTransport() {
+    if (!SMTP_USERNAME || !SMTP_PASS) {
+        return null;
+    }
+    
+    return nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        auth: {
+            user: SMTP_USERNAME,
+            pass: SMTP_PASS,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    });
+}
+
+async function sendEmailWithSMTP({ to, subject, html, text }) {
+    const transporter = createSMTPTransport();
+    
+    if (!transporter) {
+        return { success: false, error: 'SMTP not configured. Please set SMTP_USERNAME and SMTP_PASS.' };
     }
 
     try {
-        const response = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${RESEND_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                from: FROM_EMAIL,
-                to: Array.isArray(to) ? to : [to],
-                subject,
-                html,
-                text,
-            }),
+        const info = await transporter.sendMail({
+            from: SMTP_FROM,
+            to: Array.isArray(to) ? to.join(',') : to,
+            subject,
+            html,
+            text,
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-            return { success: false, error: data.message || `Email API error: ${response.status}` };
-        }
-
-        return { success: true, id: data.id };
+        return { success: true, messageId: info.messageId };
     } catch (error) {
         return { success: false, error: error.message || 'Failed to send email' };
+    }
+}
+
+// Save email send record to database
+async function saveEmailRecord(db, { schoolId, recipients, subject, body, status, errorMessage, sentBy }) {
+    try {
+        return await db.createDocument(DATABASE_ID, COLLECTIONS.EMAIL_SENDS.id, ID.unique(), {
+            schoolId,
+            recipients: Array.isArray(recipients) ? recipients : [recipients],
+            subject,
+            body,
+            status,
+            errorMessage: errorMessage || '',
+            sentBy: sentBy || '',
+            sentAt: status === 'sent' ? nowIso() : '',
+            createdAt: nowIso(),
+        });
+    } catch (err) {
+        console.error('Failed to save email record:', err);
+        return null;
+    }
+}
+
+// Resend a previously sent email
+async function resendEmail(db, emailId) {
+    try {
+        const emailRecord = await db.getDocument(DATABASE_ID, COLLECTIONS.EMAIL_SENDS.id, emailId);
+        if (!emailRecord) {
+            return { success: false, error: 'Email record not found' };
+        }
+
+        const result = await sendEmailWithSMTP({
+            to: emailRecord.recipients,
+            subject: emailRecord.subject,
+            html: emailRecord.body,
+            text: emailRecord.body?.replace(/<[^>]*>/g, ' ') || '',
+        });
+
+        // Save new record
+        await saveEmailRecord(db, {
+            schoolId: emailRecord.schoolId,
+            recipients: emailRecord.recipients,
+            subject: emailRecord.subject,
+            body: emailRecord.body,
+            status: result.success ? 'sent' : 'failed',
+            errorMessage: result.error || '',
+            sentBy: emailRecord.sentBy,
+        });
+
+        return result;
+    } catch (err) {
+        return { success: false, error: err.message };
     }
 }
 
@@ -1000,8 +1066,17 @@ const actions = {
                 };
             }
 
-            // If email service not configured, return preview mode
-            if (!RESEND_API_KEY) {
+            // If email service not configured, save as pending and return
+            if (!SMTP_USERNAME || !SMTP_PASS) {
+                await saveEmailRecord(db, {
+                    schoolId: payload.schoolId,
+                    recipients,
+                    subject: payload.subject,
+                    body: payload.messageHtml,
+                    status: 'failed',
+                    errorMessage: 'SMTP not configured',
+                    sentBy: payload.sentBy || '',
+                });
                 return {
                     success: true,
                     data: {
@@ -1010,17 +1085,28 @@ const actions = {
                         failed: 0,
                         previewOnly: true,
                         subject: payload.subject,
-                        message: 'Email service not configured. Set RESEND_API_KEY to enable sending.',
+                        message: 'Email service not configured. Set SMTP credentials to enable sending.',
                     },
                 };
             }
 
-            // Send emails
-            const emailResult = await sendEmailWithResend({
+            // Send emails via SMTP
+            const emailResult = await sendEmailWithSMTP({
                 to: recipients,
                 subject: payload.subject,
                 html: payload.messageHtml,
                 text: payload.messageHtml?.replace(/<[^>]*>/g, ' ') || '',
+            });
+
+            // Save email record
+            await saveEmailRecord(db, {
+                schoolId: payload.schoolId,
+                recipients,
+                subject: payload.subject,
+                body: payload.messageHtml,
+                status: emailResult.success ? 'sent' : 'failed',
+                errorMessage: emailResult.error || '',
+                sentBy: payload.sentBy || '',
             });
 
             if (!emailResult.success) {
@@ -1045,7 +1131,7 @@ const actions = {
                     failed: 0,
                     previewOnly: false,
                     subject: payload.subject,
-                    emailId: emailResult.id,
+                    messageId: emailResult.messageId,
                 },
             };
         },
@@ -1076,8 +1162,17 @@ const actions = {
                 };
             }
 
-            // If email service not configured, return preview mode
-            if (!RESEND_API_KEY) {
+            // If email service not configured, save as pending and return
+            if (!SMTP_USERNAME || !SMTP_PASS) {
+                await saveEmailRecord(db, {
+                    schoolId: payload.schoolId,
+                    recipients,
+                    subject: payload.subject,
+                    body: payload.messageHtml,
+                    status: 'failed',
+                    errorMessage: 'SMTP not configured',
+                    sentBy: payload.sentBy || '',
+                });
                 return {
                     success: true,
                     data: {
@@ -1086,17 +1181,28 @@ const actions = {
                         failed: 0,
                         previewOnly: true,
                         subject: payload.subject,
-                        message: 'Email service not configured. Set RESEND_API_KEY to enable sending.',
+                        message: 'Email service not configured. Set SMTP credentials to enable sending.',
                     },
                 };
             }
 
-            // Send emails
-            const emailResult = await sendEmailWithResend({
+            // Send emails via SMTP
+            const emailResult = await sendEmailWithSMTP({
                 to: recipients,
                 subject: payload.subject,
                 html: payload.messageHtml,
                 text: payload.messageHtml?.replace(/<[^>]*>/g, ' ') || '',
+            });
+
+            // Save email record
+            await saveEmailRecord(db, {
+                schoolId: payload.schoolId,
+                recipients,
+                subject: payload.subject,
+                body: payload.messageHtml,
+                status: emailResult.success ? 'sent' : 'failed',
+                errorMessage: emailResult.error || '',
+                sentBy: payload.sentBy || '',
             });
 
             if (!emailResult.success) {
@@ -1121,7 +1227,294 @@ const actions = {
                     failed: 0,
                     previewOnly: false,
                     subject: payload.subject,
-                    emailId: emailResult.id,
+                    messageId: emailResult.messageId,
+                },
+            };
+        },
+    },
+
+    listEmailSends: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const queries = [
+                Query.equal('schoolId', payload.schoolId),
+                Query.orderDesc('createdAt'),
+                Query.limit(Number(payload.limit || 100)),
+            ];
+            if (payload.status) {
+                queries.push(Query.equal('status', payload.status));
+            }
+            return db.listDocuments(DATABASE_ID, COLLECTIONS.EMAIL_SENDS.id, queries);
+        },
+    },
+
+    resendEmail: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const result = await resendEmail(db, payload.emailId);
+            return result;
+        },
+    },
+
+    getEmailTemplate: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const emailRecord = await db.getDocument(DATABASE_ID, COLLECTIONS.EMAIL_SENDS.id, payload.emailId);
+            if (!emailRecord) {
+                return { success: false, error: 'Email template not found' };
+            }
+            return {
+                success: true,
+                data: {
+                    subject: emailRecord.subject,
+                    body: emailRecord.body,
+                    recipients: emailRecord.recipients,
+                },
+            };
+        },
+    },
+
+    initiateResultPublishing: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { schoolId, academicSession, term, className, paymentOption } = payload;
+
+            // Get all students with results for this session/term/class
+            const resultFilters = [
+                Query.equal('schoolId', schoolId),
+                Query.equal('session', academicSession),
+                Query.equal('term', term),
+                Query.equal('isApproved', true),
+                Query.equal('isPublished', false),
+            ];
+            if (className && className !== 'all') {
+                resultFilters.push(Query.equal('className', className));
+            }
+
+            const results = await db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
+                ...resultFilters,
+                Query.limit(1000),
+            ]);
+
+            // Get unique students
+            const studentIds = [...new Set(results.documents.map(r => r.studentId))];
+            const studentCount = studentIds.length;
+
+            if (studentCount === 0) {
+                return { success: false, error: 'No approved results found to publish.' };
+            }
+
+            // Calculate costs
+            const costPerStudent = paymentOption === 'school_pays' ? 400 : 500;
+            const totalCost = studentCount * costPerStudent;
+
+            return {
+                success: true,
+                data: {
+                    studentCount,
+                    costPerStudent,
+                    totalCost,
+                    paymentOption,
+                    academicSession,
+                    term,
+                    className,
+                },
+            };
+        },
+    },
+
+    createSquadCoPayment: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const { amount, email, reference, metadata } = payload;
+            
+            const SQUADCO_SECRET_KEY = process.env.SQUADCO_SECRET_KEY;
+            const SQUADCO_BASE_URL = process.env.SQUADCO_BASE_URL || 'https://api-d.squadco.com';
+
+            if (!SQUADCO_SECRET_KEY) {
+                return { success: false, error: 'SquadCo not configured' };
+            }
+
+            try {
+                const response = await fetch(`${SQUADCO_BASE_URL}/transaction/initiate`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${SQUADCO_SECRET_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        amount: amount * 100, // Convert to kobo
+                        email,
+                        currency: 'NGN',
+                        initiate_type: 'inline',
+                        transaction_ref: reference,
+                        metadata,
+                        callback_url: payload.callbackUrl || '',
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || data.status !== 200) {
+                    return { success: false, error: data.message || 'Payment initiation failed' };
+                }
+
+                return {
+                    success: true,
+                    data: {
+                        checkoutUrl: data.data?.checkout_url,
+                        transactionRef: data.data?.transaction_ref || reference,
+                    },
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+    },
+
+    verifySquadCoPayment: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload }) => {
+            const { transactionRef } = payload;
+            
+            const SQUADCO_SECRET_KEY = process.env.SQUADCO_SECRET_KEY;
+            const SQUADCO_BASE_URL = process.env.SQUADCO_BASE_URL || 'https://api-d.squadco.com';
+
+            if (!SQUADCO_SECRET_KEY) {
+                return { success: false, error: 'SquadCo not configured' };
+            }
+
+            try {
+                const response = await fetch(`${SQUADCO_BASE_URL}/transaction/${transactionRef}`, {
+                    headers: {
+                        'Authorization': `Bearer ${SQUADCO_SECRET_KEY}`,
+                    },
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    return { success: false, error: data.message || 'Verification failed' };
+                }
+
+                const isSuccess = data.data?.transaction_status === 'success';
+
+                return {
+                    success: true,
+                    data: {
+                        status: data.data?.transaction_status,
+                        isSuccess,
+                        amount: data.data?.amount / 100, // Convert from kobo
+                        reference: data.data?.transaction_ref,
+                        metadata: data.data?.metadata,
+                    },
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
+    },
+
+    publishResultsWithPins: {
+        roles: ['admin', 'super_admin'],
+        schoolId: ({ payload }) => payload.schoolId,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { schoolId, academicSession, term, className, paymentOption, paymentRef, studentIds } = payload;
+
+            const results = [];
+            const errors = [];
+
+            // Generate pins for each student
+            for (const studentId of studentIds) {
+                try {
+                    // Check if pin already exists
+                    const existingPins = await db.listDocuments(DATABASE_ID, COLLECTIONS.PINS.id, [
+                        Query.equal('studentId', studentId),
+                        Query.equal('session', academicSession),
+                        Query.equal('term', term),
+                        Query.limit(1),
+                    ]);
+
+                    let pin;
+                    if (existingPins.total > 0) {
+                        pin = existingPins.documents[0];
+                    } else {
+                        // Create new pin
+                        pin = await db.createDocument(DATABASE_ID, COLLECTIONS.PINS.id, ID.unique(), {
+                            schoolId,
+                            studentId,
+                            code: randomPin(),
+                            session: academicSession,
+                            term,
+                            used: false,
+                            paymentStatus: paymentOption === 'school_pays' ? 'school_paid' : 'pending',
+                            paymentRef: paymentRef || '',
+                            createdAt: nowIso(),
+                            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                        });
+                    }
+
+                    // Publish all results for this student
+                    const studentResults = await db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
+                        Query.equal('studentId', studentId),
+                        Query.equal('session', academicSession),
+                        Query.equal('term', term),
+                        Query.equal('isApproved', true),
+                    ]);
+
+                    for (const result of studentResults.documents) {
+                        await db.updateDocument(DATABASE_ID, COLLECTIONS.RESULTS.id, result.$id, {
+                            isPublished: true,
+                            publishedAt: nowIso(),
+                            publishedBy: authId,
+                            pinId: pin.$id,
+                        });
+                    }
+
+                    results.push({
+                        studentId,
+                        pinCode: pin.code,
+                        pinId: pin.$id,
+                        status: 'published',
+                    });
+                } catch (err) {
+                    errors.push({ studentId, error: err.message });
+                }
+            }
+
+            // Save payment record
+            if (paymentRef) {
+                await db.createDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, ID.unique(), {
+                    schoolId,
+                    reference: paymentRef,
+                    amount: payload.amount,
+                    currency: 'NGN',
+                    type: paymentOption === 'school_pays' ? 'school_result_publish' : 'student_result_access',
+                    status: 'success',
+                    provider: 'squadco',
+                    description: `Result publishing for ${studentIds.length} students`,
+                    metadata: { studentIds, academicSession, term, className },
+                    createdAt: nowIso(),
+                });
+            }
+
+            return {
+                success: true,
+                data: {
+                    published: results.length,
+                    errors: errors.length > 0 ? errors : undefined,
+                    results,
                 },
             };
         },

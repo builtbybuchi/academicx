@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
 import { listChatMessages, sendChatMessage, subscribeToChatMessages, listStaff } from '../../../../shared/utils/api.js';
 import { useAuth } from '../../../../shared/utils/auth.jsx';
-import { Search, Users, MessageSquare, ChevronDown, X, Hash, User } from 'lucide-react';
+import { useRxDB } from '../utils/rxdb-hooks.jsx';
+import { upsertDocument } from '../utils/rxdb.js';
+import { Search, MessageSquare, X, Hash, User } from 'lucide-react';
 
 export default function AdminChat() {
     const { profile, schoolId } = useAuth();
+    const { db } = useRxDB();
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState([]);
     const [sending, setSending] = useState(false);
@@ -16,6 +19,7 @@ export default function AdminChat() {
     const [showStaffPicker, setShowStaffPicker] = useState(false);
     const messagesEndRef = useRef(null);
     const staffPickerRef = useRef(null);
+    const subscriptionRef = useRef(null);
 
     // Load staff list for individual messaging
     useEffect(() => {
@@ -36,34 +40,64 @@ export default function AdminChat() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Load messages and subscribe to real-time updates
+    // Reactive RxDB query for messages
     useEffect(() => {
-        let unsub = null;
-        async function load() {
-            const targetChannel = selectedRecipient ? `dm:${profile?.$id}:${selectedRecipient.$id}` : channel;
-            const response = await listChatMessages(schoolId, targetChannel, 100);
-            const docs = response.documents || [];
-            setMessages(docs.sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt)));
+        if (!db || !schoolId) return;
 
-            unsub = subscribeToChatMessages(schoolId, targetChannel, (message) => {
-                setMessages((prev) => {
-                    // Check if message already exists (by $id or by content + time match)
-                    const exists = prev.some((item) =>
-                        item.$id === message.$id ||
-                        (item.senderId === message.senderId &&
-                         item.message === message.message &&
-                         Math.abs(new Date(item.createdAt) - new Date(message.createdAt)) < 5000)
-                    );
-                    if (exists) return prev;
-                    return [...prev, message].sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
-                });
-            });
+        // Cleanup previous subscription
+        if (subscriptionRef.current) {
+            subscriptionRef.current.unsubscribe();
         }
-        if (schoolId) load();
+
+        const targetChannel = selectedRecipient 
+            ? `dm:${[profile?.$id, selectedRecipient.$id].sort().join(':')}` 
+            : channel;
+
+        const collection = db.chatMessages;
+        const query = collection.find({
+            selector: { 
+                schoolId,
+                channel: targetChannel
+            }
+        });
+
+        // Initial load from RxDB
+        query.exec().then(docs => {
+            const sorted = docs
+                .map(d => d.toMutableJSON())
+                .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+            setMessages(sorted);
+        });
+
+        // Subscribe to real-time changes
+        subscriptionRef.current = query.$.subscribe(docs => {
+            const sorted = docs
+                .map(d => d.toMutableJSON())
+                .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
+            setMessages(sorted);
+        });
+
+        // Sync with Appwrite in background
+        listChatMessages(schoolId, targetChannel, 100).then(response => {
+            const docs = response.documents || [];
+            const docsWithSync = docs.map(doc => ({ ...doc, synced: true }));
+            if (docsWithSync.length > 0) {
+                collection.bulkUpsert(docsWithSync);
+            }
+        }).catch(console.error);
+
+        // Subscribe to Appwrite real-time for new messages
+        const unsub = subscribeToChatMessages(schoolId, targetChannel, (message) => {
+            upsertDocument('chatMessages', { ...message, synced: true });
+        });
+
         return () => {
+            if (subscriptionRef.current) {
+                subscriptionRef.current.unsubscribe();
+            }
             if (typeof unsub === 'function') unsub();
         };
-    }, [schoolId, channel, selectedRecipient, profile?.$id]);
+    }, [db, schoolId, channel, selectedRecipient, profile?.$id]);
 
     const channels = useMemo(() => (['general', 'admins', 'teachers']), []);
 
@@ -84,19 +118,46 @@ export default function AdminChat() {
     }, [staff, searchQuery, profile?.$id]);
 
     const send = async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || sending || !db) return;
+        const messageText = input.trim();
+        setInput('');
         setSending(true);
+        
+        const targetChannel = selectedRecipient 
+            ? `dm:${[profile?.$id, selectedRecipient.$id].sort().join(':')}` 
+            : channel;
+        
+        // Optimistically add to RxDB immediately
+        const optimisticMessage = {
+            $id: `temp-${Date.now()}`,
+            schoolId,
+            senderId: profile?.$id || profile?.authId,
+            senderName: `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Admin',
+            senderRole: profile?.role || 'admin',
+            message: messageText,
+            channel: targetChannel,
+            createdAt: new Date().toISOString(),
+            synced: false,
+        };
+        
         try {
-            const targetChannel = selectedRecipient ? `dm:${selectedRecipient.$id}:${profile?.$id}` : channel;
+            await upsertDocument('chatMessages', optimisticMessage);
+            
             await sendChatMessage(
                 schoolId,
                 profile?.$id || '',
-                `${profile?.firstName || ''} ${profile?.lastName || ''}`.trim() || 'Admin',
+                optimisticMessage.senderName,
                 profile?.role || 'admin',
-                input.trim(),
+                messageText,
                 targetChannel
             );
-            setInput('');
+            
+            // Mark as synced
+            await upsertDocument('chatMessages', { ...optimisticMessage, synced: true });
+        } catch (error) {
+            console.error('Failed to send message:', error);
+            // Mark as failed
+            await upsertDocument('chatMessages', { ...optimisticMessage, failed: true, error: error.message });
         } finally {
             setSending(false);
         }
@@ -114,8 +175,8 @@ export default function AdminChat() {
             <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, height: 'calc(100vh - 200px)' }}>
                 {/* Sidebar */}
                 <LiquidGlassPanel hover={false} style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 12 }}>Channels</div>
+                    <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.27)' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1D4ED8', marginBottom: 12 }}>Channels</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             {channels.map((ch) => (
                                 <button
@@ -128,8 +189,8 @@ export default function AdminChat() {
                                         padding: '8px 12px',
                                         borderRadius: 8,
                                         border: 'none',
-                                        background: !selectedRecipient && channel === ch ? 'rgba(59,130,246,0.3)' : 'transparent',
-                                        color: !selectedRecipient && channel === ch ? '#fff' : 'rgba(255,255,255,0.7)',
+                                        background: !selectedRecipient && channel === ch ? '#1D4ED8' : 'transparent',
+                                        color: !selectedRecipient && channel === ch ? '#fff' : 'rgba(92, 84, 84, 0.7)',
                                         cursor: 'pointer',
                                         fontSize: 13,
                                         textAlign: 'left',
@@ -144,7 +205,7 @@ export default function AdminChat() {
                     </div>
 
                     <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1D4ED8', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span>Direct Messages</span>
                             <button
                                 onClick={() => setShowStaffPicker(true)}
@@ -152,7 +213,7 @@ export default function AdminChat() {
                                     padding: '4px 8px',
                                     borderRadius: 4,
                                     border: 'none',
-                                    background: 'rgba(59,130,246,0.3)',
+                                    background: '#1d4fd8c7',
                                     color: '#fff',
                                     cursor: 'pointer',
                                     fontSize: 12
@@ -256,7 +317,7 @@ export default function AdminChat() {
                                     padding: '10px 12px',
                                     borderRadius: 8,
                                     border: 'none',
-                                    background: 'rgba(59,130,246,0.3)',
+                                    background: '#1D4ED8',
                                     color: '#fff',
                                     cursor: 'pointer',
                                     fontSize: 13,
@@ -298,8 +359,8 @@ export default function AdminChat() {
                                     padding: '8px 12px',
                                     borderRadius: 8,
                                     border: 'none',
-                                    background: selectedRecipient?.$id === s.$id ? 'rgba(59,130,246,0.3)' : 'transparent',
-                                    color: selectedRecipient?.$id === s.$id ? '#fff' : 'rgba(255,255,255,0.7)',
+                                    background: selectedRecipient?.$id === s.$id ? '#fff' : 'transparent',
+                                    color: selectedRecipient?.$id === s.$id ? '#fff' : '#1D4ED8',
                                     cursor: 'pointer',
                                     fontSize: 13,
                                     width: '100%',
@@ -333,30 +394,25 @@ export default function AdminChat() {
                                         {selectedRecipient.firstName?.[0]}{selectedRecipient.lastName?.[0]}
                                     </div>
                                     <div>
-                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{selectedRecipient.firstName} {selectedRecipient.lastName}</div>
-                                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Direct Message</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1D4ED8' }}>{selectedRecipient.firstName} {selectedRecipient.lastName}</div>
+                                        <div style={{ fontSize: 12, color: '#1D4ED8' }}>Direct Message</div>
                                     </div>
                                 </>
                             ) : (
                                 <>
-                                    <Hash size={18} color="rgba(255,255,255,0.5)" />
+                                    <Hash size={18} color="#1D4ED8" />
                                     <div>
-                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{channel}</div>
-                                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Channel</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#1D4ED8' }}>{channel}</div>
+                                        <div style={{ fontSize: 12, color: '#1D4ED8' }}>Channel</div>
                                     </div>
                                 </>
                             )}
                         </div>
-                        {!isDirectMessage && (
-                            <select className="input" value={channel} onChange={(event) => setChannel(event.target.value)} style={{ width: 140 }}>
-                                {channels.map((item) => <option key={item} value={item}>{item}</option>)}
-                            </select>
-                        )}
                     </div>
 
                     <div style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {messages.length === 0 && (
-                            <div style={{ textAlign: 'center', padding: 40, color: 'rgba(255,255,255,0.4)' }}>
+                            <div style={{ textAlign: 'center', padding: 40, color: '#00000096' }}>
                                 <MessageSquare size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
                                 <div style={{ fontSize: 14 }}>No messages yet</div>
                                 <div style={{ fontSize: 12, marginTop: 4 }}>Start the conversation by sending a message</div>
@@ -368,13 +424,13 @@ export default function AdminChat() {
                                 <div key={m.$id || `${m.senderId}-${m.createdAt}`} style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start' }}>
                                     <div style={{
                                         maxWidth: '70%', padding: '10px 14px', borderRadius: 16,
-                                        background: isOwn ? 'linear-gradient(135deg, #1D4ED8, #2563EB)' : 'rgba(255,255,255,0.08)',
+                                        background: isOwn ? 'linear-gradient(135deg, #1D4ED8, #2563EB)' : '#0A91F9',
                                         borderBottomRightRadius: isOwn ? 4 : 16,
                                         borderBottomLeftRadius: isOwn ? 16 : 4,
                                     }}>
-                                        {!isOwn && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 2 }}>{m.senderName}</div>}
+                                        {!isOwn && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', marginBottom: 2 }}>{m.senderName}</div>}
                                         <div style={{ fontSize: 13, color: '#fff', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.message}</div>
-                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 4, textAlign: 'right' }}>
+                                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 4, textAlign: 'right' }}>
                                             {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </div>
                                     </div>

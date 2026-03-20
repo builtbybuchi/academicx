@@ -9,5 +9,8 @@ export default defineConfig({
             appwrite: path.resolve(__dirname, 'node_modules/appwrite'),
         },
     },
+    optimizeDeps: {
+        include: ['rxdb'],
+    },
     server: { port: 3001 },
 });

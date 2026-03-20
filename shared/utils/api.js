@@ -423,6 +423,34 @@ export async function sendSchoolAnnouncement(payload) {
     return invokeBackendFunction('sendSchoolAnnouncement', payload);
 }
 
+export async function listEmailSends(schoolId, status, limit = 100) {
+    return invokeBackendFunction('listEmailSends', { schoolId, status, limit });
+}
+
+export async function resendEmail(schoolId, emailId) {
+    return invokeBackendFunction('resendEmail', { schoolId, emailId });
+}
+
+export async function getEmailTemplate(schoolId, emailId) {
+    return invokeBackendFunction('getEmailTemplate', { schoolId, emailId });
+}
+
+export async function initiateResultPublishing(payload) {
+    return invokeBackendFunction('initiateResultPublishing', payload);
+}
+
+export async function createSquadCoPayment(payload) {
+    return invokeBackendFunction('createSquadCoPayment', payload);
+}
+
+export async function verifySquadCoPayment(payload) {
+    return invokeBackendFunction('verifySquadCoPayment', payload);
+}
+
+export async function publishResultsWithPins(payload) {
+    return invokeBackendFunction('publishResultsWithPins', payload);
+}
+
 export async function listSchools() {
     return databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOLS, [Query.limit(200)]);
 }
