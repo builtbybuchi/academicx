@@ -220,7 +220,8 @@ export async function upsertClassNames(schoolId, classNames = []) {
 
 export async function upsertSubjects(schoolId, subjectRows = []) {
     const existing = await listSubjects(schoolId);
-    const existingKeys = new Set(existing.documents.map((item) => `${item.className}::${item.code}`));
+    const existingCodeKeys = new Set(existing.documents.map((item) => `${item.className}::${String(item.code || '').toUpperCase()}`));
+    const existingNameKeys = new Set(existing.documents.map((item) => `${item.className}::${String(item.name || '').trim().toLowerCase()}`));
     const created = [];
 
     for (const row of subjectRows) {
@@ -229,8 +230,9 @@ export async function upsertSubjects(schoolId, subjectRows = []) {
         const code = String(row.code || '').trim().toUpperCase();
         if (!className || !name || !code) continue;
 
-        const key = `${className}::${code}`;
-        if (existingKeys.has(key)) continue;
+        const codeKey = `${className}::${code}`;
+        const nameKey = `${className}::${name.toLowerCase()}`;
+        if (existingCodeKeys.has(codeKey) || existingNameKeys.has(nameKey)) continue;
 
         const doc = await createSubject({
             schoolId,
@@ -238,9 +240,11 @@ export async function upsertSubjects(schoolId, subjectRows = []) {
             code,
             className,
             staffId: row.staffId || '',
+            templateName: row.templateName || '',
         });
         created.push(doc);
-        existingKeys.add(key);
+        existingCodeKeys.add(codeKey);
+        existingNameKeys.add(nameKey);
     }
 
     return { created, existing: existing.documents };

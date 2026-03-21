@@ -174,11 +174,13 @@ const COLLECTIONS = {
             { key: 'code', type: 'string', size: 10, required: true },
             { key: 'className', type: 'string', size: 20, required: true },
             { key: 'staffId', type: 'string', size: 36 },                       // assigned teacher
+            { key: 'templateName', type: 'string', size: 100 },                 // template grouping for bulk operations
         ],
         indexes: [
             { key: 'idx_school_class', type: 'key', attributes: ['schoolId', 'className'] },
             { key: 'idx_code', type: 'unique', attributes: ['schoolId', 'code', 'className'] },
             { key: 'idx_staff', type: 'key', attributes: ['staffId'] },
+            { key: 'idx_template', type: 'key', attributes: ['schoolId', 'templateName'] },
         ],
     },
 

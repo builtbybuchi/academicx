@@ -16,6 +16,7 @@ import {
     updateAcademicSession,
     upsertClassNames,
     upsertSubjects,
+    updateSchool,
     updateSubject,
     deleteSubject,
 } from '../../../../shared/utils/api.js';
@@ -256,6 +257,9 @@ export default function Academics() {
     const [selectedSubject, setSelectedSubject] = useState(null);
     const [editForm, setEditForm] = useState({ name: '', code: '', className: '', staffId: '' });
     const [processingAction, setProcessingAction] = useState(false);
+    const [sessionDeleteModalOpen, setSessionDeleteModalOpen] = useState(false);
+    const [sessionDeleteInput, setSessionDeleteInput] = useState('');
+    const [pendingDeleteSession, setPendingDeleteSession] = useState('');
 
     async function loadData() {
         if (!schoolId) return;
@@ -327,6 +331,15 @@ export default function Academics() {
 
     const classNames = useMemo(() => [...new Set(classes.map((item) => item.name).filter(Boolean))], [classes]);
 
+    const uniqueSubjectCount = useMemo(() => {
+        const names = new Set(
+            subjects
+                .map((item) => String(item.name || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+        return names.size;
+    }, [subjects]);
+
     const filteredSubjects = useMemo(() => {
         let filtered = subjects;
         if (searchTerm) {
@@ -341,10 +354,42 @@ export default function Academics() {
         return filtered;
     }, [subjects, searchTerm, filterClass]);
 
+    // Reconstruct templates from saved subjects (for editing mode)
+    function reconstructTemplatesFromSubjects() {
+        const templateMap = new Map();
+        
+        for (const subject of subjects) {
+            const templateName = subject.templateName || 'General';
+            if (!templateMap.has(templateName)) {
+                templateMap.set(templateName, {
+                    name: templateName,
+                    classPrefix: '',
+                    subjects: [],
+                });
+            }
+            const template = templateMap.get(templateName);
+            if (!template.subjects.includes(subject.name)) {
+                template.subjects.push(subject.name);
+            }
+        }
+
+        // If templates were reconstructed, determine class prefixes
+        const reconstructed = Array.from(templateMap.values());
+        for (const template of reconstructed) {
+            if (template.name === 'General') {
+                template.classPrefix = '';
+            } else if (['Sciences', 'Arts', 'Social Sciences'].includes(template.name)) {
+                template.classPrefix = 'SS';
+            }
+        }
+
+        return reconstructed.length > 0 ? reconstructed : DEFAULT_TEMPLATES;
+    }
+
     const kpiData = [
         { label: 'Academic Sessions', value: sessionGroups.length, icon: Calendar, color: '#3B82F6' },
         { label: 'Class Arms', value: classNames.length, icon: Users, color: '#10B981' },
-        { label: 'Subjects', value: subjects.length, icon: BookOpen, color: '#F59E0B' },
+        { label: 'Unique Subjects', value: uniqueSubjectCount, icon: BookOpen, color: '#F59E0B' },
     ];
 
     async function handleCreateSession() {
@@ -352,43 +397,7 @@ export default function Academics() {
             toast({ type: 'error', title: 'Session required', message: 'Please select an academic session.' });
             return;
         }
-
-        const termCount = Math.max(1, Math.min(4, Number(sessionForm.termsCount || 3)));
-        const terms = TERM_LABELS.slice(0, termCount);
-
-        setSaving(true);
-        try {
-            const existing = new Set(sessions.map((item) => `${item.session}::${item.term}`));
-            let created = 0;
-            for (const term of terms) {
-                const key = `${sessionForm.session}::${term}`;
-                if (existing.has(key)) continue;
-                await createAcademicSession({
-                    schoolId,
-                    session: sessionForm.session,
-                    term,
-                    startDate: '',
-                    endDate: '',
-                    isCurrent: sessionGroups.length === 0, // First session is current
-                    resultPublished: false,
-                });
-                created += 1;
-            }
-
-            toast({
-                type: 'success',
-                title: 'Academic session created',
-                message: `${created} term record(s) created for ${sessionForm.session}.`,
-            });
-            
-            // Move to classes tab
-            setActiveTab('classes');
-            await loadData();
-        } catch (error) {
-            toast({ type: 'error', title: 'Session creation failed', message: error.message });
-        } finally {
-            setSaving(false);
-        }
+        setActiveTab('classes');
     }
 
     async function handleSaveClasses() {
@@ -396,25 +405,8 @@ export default function Academics() {
             toast({ type: 'error', title: 'No classes generated', message: 'Add base classes and arms to generate combinations.' });
             return;
         }
-
-        setSaving(true);
-        try {
-            const result = await upsertClassNames(schoolId, generatedClasses);
-            toast({
-                type: 'success',
-                title: 'Classes saved',
-                message: `${result.created.length} new class arm(s) created.`,
-            });
-            
-            // Move to subjects tab
-            setActiveTab('subjects');
-            setComboClassTargets(generatedClasses);
-            await loadData();
-        } catch (error) {
-            toast({ type: 'error', title: 'Class setup failed', message: error.message });
-        } finally {
-            setSaving(false);
-        }
+        setComboClassTargets(generatedClasses);
+        setActiveTab('subjects');
     }
 
     async function handleApplyTemplates() {
@@ -515,6 +507,43 @@ export default function Academics() {
             termsCount: session.terms.length.toString(),
             schoolType: 'primary', // Default, should be determined from existing data
         });
+        
+        // Reconstruct templates from previously saved subjects
+        const reconstructed = reconstructTemplatesFromSubjects();
+        setTemplates(reconstructed);
+        
+        // Set combo class targets to existing classes
+        setComboClassTargets(classNames);
+        
+        // Auto-generate base classes and arms from existing class names
+        const baseClassMap = new Map();
+        for (const className of classNames) {
+            // Split class name into base and arm (e.g., "JSS1A" -> "JSS1" + "A")
+            const match = String(className || '').match(/^(.+?)([A-Z]?)$/);
+            if (match) {
+                const baseClass = match[1];
+                const arm = match[2] || '';
+                if (!baseClassMap.has(baseClass)) {
+                    baseClassMap.set(baseClass, []);
+                }
+                if (arm && !baseClassMap.get(baseClass).includes(arm)) {
+                    baseClassMap.get(baseClass).push(arm);
+                }
+            }
+        }
+        
+        // If we can parse classes, set them
+        if (baseClassMap.size > 0) {
+            const arms = Array.from(new Set(
+                Array.from(baseClassMap.values()).flat()
+            )).sort();
+            const bases = Array.from(baseClassMap.keys()).sort();
+            if (bases.length > 0 && arms.length > 0) {
+                setBaseClasses(bases);
+                setClassArms(arms.length > 0 ? arms : ['A', 'B', 'C']);
+            }
+        }
+        
         setViewMode('edit');
         setActiveTab('sessions');
     }
@@ -528,14 +557,70 @@ export default function Academics() {
         setActiveTab('sessions');
     }
 
-    async function handleSaveChanges() {
-        if (!editingSession?.session) {
-            toast({ type: 'error', title: 'No session selected', message: 'Please select a valid session to update.' });
+    function requestDeleteSession(sessionValue) {
+        const targetSession = String(sessionValue || '').trim();
+        if (!targetSession) return;
+        setPendingDeleteSession(targetSession);
+        setSessionDeleteInput('');
+        setSessionDeleteModalOpen(true);
+    }
+
+    async function handleDeleteSession(sessionValue) {
+        const targetSession = String(sessionValue || '').trim();
+        if (!targetSession) return;
+
+        setSaving(true);
+        try {
+            const matching = sessions.filter((item) => item.session === targetSession);
+            if (matching.length === 0) {
+                toast({ type: 'error', title: 'Not found', message: 'No records found for that session.' });
+                return;
+            }
+
+            for (const row of matching) {
+                await deleteAcademicSession(row.$id);
+            }
+
+            const nextSessionsRes = await listAcademicSessions(schoolId);
+            const nextSessions = nextSessionsRes.documents || [];
+
+            // Keep school pointers in sync after deletion.
+            if (nextSessions.length === 0) {
+                await updateSchool(schoolId, { currentSession: '', currentTerm: '' });
+            } else {
+                const currentRow = nextSessions.find((row) => row.isCurrent) || nextSessions[0];
+                await updateSchool(schoolId, {
+                    currentSession: currentRow.session || '',
+                    currentTerm: currentRow.term || '',
+                });
+            }
+
+            toast({
+                type: 'success',
+                title: 'Session deleted',
+                message: `${targetSession} and its term records were removed successfully.`,
+            });
+
+            setSessionDeleteModalOpen(false);
+            setPendingDeleteSession('');
+            setSessionDeleteInput('');
+            await loadData();
+            handleCancelEdit();
+        } catch (error) {
+            toast({ type: 'error', title: 'Delete failed', message: error.message || 'Unable to delete session.' });
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleFinalizeSession() {
+        if (!sessionForm.session) {
+            toast({ type: 'error', title: 'Session required', message: 'Please select an academic session.' });
             return;
         }
 
-        if (!sessionForm.session) {
-            toast({ type: 'error', title: 'Session required', message: 'Please select an academic session.' });
+        if (viewMode === 'edit' && !editingSession?.session) {
+            toast({ type: 'error', title: 'No session selected', message: 'Please select a valid session to update.' });
             return;
         }
 
@@ -546,7 +631,8 @@ export default function Academics() {
 
         setSaving(true);
         try {
-            const existingForSession = sessions.filter((item) => item.session === editingSession.session);
+            const targetSession = viewMode === 'edit' ? editingSession.session : sessionForm.session;
+            const existingForSession = sessions.filter((item) => item.session === targetSession);
             const nextTermCount = Math.max(1, Math.min(4, Number(sessionForm.termsCount || 3)));
             const nextTerms = TERM_LABELS.slice(0, nextTermCount);
             const existingByTerm = new Map(existingForSession.map((item) => [item.term, item]));
@@ -565,10 +651,12 @@ export default function Academics() {
                 });
             }
 
-            // Remove terms that are no longer selected.
-            for (const oldItem of existingForSession) {
-                if (!nextTerms.includes(oldItem.term)) {
-                    await deleteAcademicSession(oldItem.$id);
+            // Remove terms no longer selected only while editing an existing session.
+            if (viewMode === 'edit') {
+                for (const oldItem of existingForSession) {
+                    if (!nextTerms.includes(oldItem.term)) {
+                        await deleteAcademicSession(oldItem.$id);
+                    }
                 }
             }
 
@@ -576,6 +664,7 @@ export default function Academics() {
 
             if (comboClassTargets.length > 0) {
                 const subjectRows = [];
+                const existingNameKeys = new Set(subjects.map((item) => `${item.className}::${String(item.name || '').trim().toLowerCase()}`));
                 const usedCodes = new Set(subjects.map((item) => `${item.className}::${String(item.code || '').toUpperCase()}`));
 
                 for (const template of templates) {
@@ -587,6 +676,8 @@ export default function Academics() {
                         for (const subjectName of template.subjects) {
                             const trimmedName = String(subjectName || '').trim();
                             if (!trimmedName) continue;
+                            const nameKey = `${className}::${trimmedName.toLowerCase()}`;
+                            if (existingNameKeys.has(nameKey)) continue;
 
                             const baseCode = makeSubjectCode(trimmedName);
                             let code = baseCode;
@@ -602,7 +693,9 @@ export default function Academics() {
                                 name: trimmedName,
                                 code,
                                 staffId: '',
+                                templateName: template.name,
                             });
+                            existingNameKeys.add(nameKey);
                         }
                     }
                 }
@@ -622,7 +715,7 @@ export default function Academics() {
 
             toast({
                 type: 'success',
-                title: 'Academic settings saved',
+                title: viewMode === 'create' ? 'Academic session created' : 'Academic settings saved',
                 message: `Updated ${sessionForm.session} with ${nextTerms.length} term(s), classes, and subject mappings.`,
             });
 
@@ -753,7 +846,7 @@ export default function Academics() {
                                         <strong>Terms:</strong> {currentSession.terms.join(', ')}
                                     </p>
                                     <p style={{ fontSize: '14px', color: '#6B7280', margin: '0' }}>
-                                        <strong>Classes:</strong> {classNames.length} • <strong>Subjects:</strong> {subjects.length}
+                                        <strong>Classes:</strong> {classNames.length} • <strong>Unique Subjects:</strong> {uniqueSubjectCount}
                                     </p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '12px' }}>
@@ -886,12 +979,23 @@ export default function Academics() {
                                 />
                                 <button 
                                     className="btn btn-primary" 
-                                    onClick={viewMode === 'create' ? handleCreateSession : () => setActiveTab('classes')} 
+                                    onClick={handleCreateSession} 
                                     disabled={saving}
                                     style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
                                 >
-                                    {saving ? 'Processing...' : viewMode === 'create' ? 'Create Session' : 'Next Step'}
+                                    Next
                                 </button>
+                                {viewMode === 'edit' && (
+                                    <button
+                                        className="btn btn-glass"
+                                        onClick={() => requestDeleteSession(editingSession?.session)}
+                                        disabled={saving}
+                                        style={{ color: '#B91C1C' }}
+                                    >
+                                        <Trash2 size={16} style={{ marginRight: 6 }} />
+                                        Delete Session
+                                    </button>
+                                )}
                             </div>
                         </LiquidGlassPanel>
 
@@ -997,7 +1101,7 @@ export default function Academics() {
                                     disabled={saving}
                                     style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
                                 >
-                                    {saving ? 'Saving...' : 'Save Classes'}
+                                    Next
                                 </button>
                             </LiquidGlassPanel>
                         )}
@@ -1124,27 +1228,65 @@ export default function Academics() {
                             <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
                                 <button 
                                     className="btn btn-primary" 
-                                    onClick={handleApplyTemplates} 
+                                    onClick={handleFinalizeSession} 
                                     disabled={saving}
                                     style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
                                 >
-                                    {saving ? 'Applying...' : 'Apply Templates'}
+                                    {saving ? 'Saving...' : viewMode === 'create' ? 'Create Session' : 'Save Session'}
                                 </button>
-                                {viewMode === 'edit' && (
-                                    <button 
-                                        className="btn btn-success" 
-                                        onClick={handleSaveChanges} 
-                                        disabled={saving}
-                                        style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
-                                    >
-                                        {saving ? 'Saving...' : 'Save All Changes'}
-                                    </button>
-                                )}
                             </div>
                         </LiquidGlassPanel>
                     </div>
                 )}
             </div>
+
+            <Modal
+                open={sessionDeleteModalOpen}
+                onClose={() => {
+                    if (saving) return;
+                    setSessionDeleteModalOpen(false);
+                    setSessionDeleteInput('');
+                    setPendingDeleteSession('');
+                }}
+                title="Confirm Session Deletion"
+                footer={(
+                    <>
+                        <button
+                            className="btn btn-glass"
+                            onClick={() => {
+                                setSessionDeleteModalOpen(false);
+                                setSessionDeleteInput('');
+                                setPendingDeleteSession('');
+                            }}
+                            disabled={saving}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="btn btn-danger"
+                            disabled={saving || sessionDeleteInput.trim() !== 'sudo delete session'}
+                            onClick={() => handleDeleteSession(pendingDeleteSession)}
+                        >
+                            {saving ? 'Deleting...' : 'Delete Session'}
+                        </button>
+                    </>
+                )}
+            >
+                <div style={{ display: 'grid', gap: 12 }}>
+                    <p style={{ margin: 0, color: 'var(--color-gray-700)', fontSize: 14 }}>
+                        This will permanently remove all term records for <strong>{pendingDeleteSession || 'this session'}</strong>.
+                    </p>
+                    <p style={{ margin: 0, color: 'var(--color-gray-600)', fontSize: 13 }}>
+                        Type <strong>sudo delete session</strong> to confirm.
+                    </p>
+                    <input
+                        className="input"
+                        value={sessionDeleteInput}
+                        onChange={(event) => setSessionDeleteInput(event.target.value)}
+                        placeholder="sudo delete session"
+                    />
+                </div>
+            </Modal>
         </div>
     );
 }
