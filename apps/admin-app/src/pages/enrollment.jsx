@@ -12,6 +12,7 @@ import {
     listFormTeachers,
     listStaff,
     listStudents,
+    listSubjects,
     listUsers,
     setStaffAttendanceOfficer,
     updateProfile,
@@ -31,25 +32,28 @@ export default function Enrollment() {
     const [formTeacherRows, setFormTeacherRows] = useState([]);
     const [assigningByClass, setAssigningByClass] = useState({});
     const [classes, setClasses] = useState([]);
+    const [subjects, setSubjects] = useState([]);
     const [saving, setSaving] = useState(false);
     const [studentForm, setStudentForm] = useState({ firstName: '', lastName: '', className: '', section: 'A', gender: '', parentName: '', parentEmail: '', parentPhone: '', dateOfBirth: '', allergies: '' });
-    const [staffForm, setStaffForm] = useState({ firstName: '', lastName: '', email: '', password: '', department: '', staffType: 'academic', gender: '', dateOfBirth: '', canMarkStaffAttendance: false });
+    const [staffForm, setStaffForm] = useState({ firstName: '', lastName: '', email: '', password: '', department: [], staffType: 'academic', gender: '', dateOfBirth: '', canMarkStaffAttendance: false });
     const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '', dateOfBirth: '', allergies: '' });
 
     async function loadData() {
         if (!schoolId) return;
-        const [studentRes, staffRes, classRes, userRes, formTeacherRes] = await Promise.all([
+        const [studentRes, staffRes, classRes, userRes, formTeacherRes, subjectRes] = await Promise.all([
             listStudents(schoolId),
             listStaff(schoolId),
             listClasses(schoolId),
             listUsers(schoolId),
             listFormTeachers(schoolId),
+            listSubjects(schoolId),
         ]);
         setStudents(studentRes.documents);
         setStaff(staffRes.documents);
         setClasses(classRes.documents);
         setUsers(userRes.documents);
         setFormTeacherRows(Array.isArray(formTeacherRes) ? formTeacherRes : []);
+        setSubjects(subjectRes.documents || []);
     }
 
     useEffect(() => {
@@ -75,10 +79,19 @@ export default function Enrollment() {
 
     const staffRows = useMemo(() => staff.map((item) => {
         const user = usersById[item.userId] || {};
+        const formTeacherClasses = (() => {
+            try {
+                const parsed = JSON.parse(item.formTeacherClasses || '[]');
+                return Array.isArray(parsed) ? parsed : [];
+            } catch {
+                return item.formTeacherClass ? [item.formTeacherClass] : [];
+            }
+        })();
         return {
             ...item,
             dateOfBirth: user.dateOfBirth || item.dateOfBirth || '',
             phone: user.phone || '',
+            formTeacherClasses,
         };
     }), [staff, usersById]);
 
@@ -121,7 +134,7 @@ export default function Enrollment() {
         { key: 'firstName', label: 'First Name' },
         { key: 'lastName', label: 'Last Name' },
         { key: 'department', label: 'Department' },
-        { key: 'formTeacherClass', label: 'Form Class', render: (v) => v || '-' },
+        { key: 'formTeacherClasses', label: 'Form Classes', render: (v, row) => (Array.isArray(v) && v.length > 0 ? v.join(', ') : (row.formTeacherClass || '-')) },
         {
             key: 'attendanceRole',
             label: 'Attendance Officer',
@@ -248,8 +261,15 @@ export default function Enrollment() {
                     message: `Student created. Login uses Student ID ${studentId || '-'} and parent phone/email (${credential || '-'})`,
                 });
             } else {
-                await addStaff({ schoolId, schoolCode: profile.schoolCode, ...staffForm });
-                setStaffForm({ firstName: '', lastName: '', email: '', password: '', department: '', staffType: 'academic', gender: '', dateOfBirth: '', canMarkStaffAttendance: false });
+                const assignedSubjects = Array.isArray(staffForm.department) ? staffForm.department : [];
+                await addStaff({
+                    schoolId,
+                    schoolCode: profile.schoolCode,
+                    ...staffForm,
+                    department: assignedSubjects,
+                    assignedSubjects,
+                });
+                setStaffForm({ firstName: '', lastName: '', email: '', password: '', department: [], staffType: 'academic', gender: '', dateOfBirth: '', canMarkStaffAttendance: false });
                 toast({ type: 'success', title: 'Staff added', message: 'Staff record and login were created successfully.' });
             }
 
@@ -332,7 +352,26 @@ export default function Enrollment() {
                         <FormField label="Last Name" required placeholder="Enter last name" value={staffForm.lastName} onChange={(value) => setStaffForm((current) => ({ ...current, lastName: value }))} />
                         <FormField label="Email" type="email" placeholder="staff@example.com" value={staffForm.email} onChange={(value) => setStaffForm((current) => ({ ...current, email: value }))} />
                         <FormField label="Temporary Password" type="password" placeholder="Temporary login password" value={staffForm.password} onChange={(value) => setStaffForm((current) => ({ ...current, password: value }))} />
-                        <FormField label="Department" placeholder="e.g. Mathematics" value={staffForm.department} onChange={(value) => setStaffForm((current) => ({ ...current, department: value }))} />
+                        <div style={{ marginBottom: 16 }}>
+                            <label className="input-label">Department / Subjects</label>
+                            <select
+                                className="input"
+                                multiple
+                                value={staffForm.department}
+                                onChange={(event) => {
+                                    const values = Array.from(event.target.selectedOptions).map((option) => option.value);
+                                    setStaffForm((current) => ({ ...current, department: values }));
+                                }}
+                                style={{ minHeight: 120 }}
+                            >
+                                {[...new Set(subjects.map((item) => item.name).filter(Boolean))].map((name) => (
+                                    <option key={name} value={name}>{name}</option>
+                                ))}
+                            </select>
+                            <div style={{ fontSize: 12, color: 'var(--color-gray-500)', marginTop: 6 }}>
+                                Hold Ctrl/Cmd to select multiple subjects.
+                            </div>
+                        </div>
                         <FormField label="Staff Type" type="select" options={[{ value: 'academic', label: 'Academic' }, { value: 'non_academic', label: 'Non Academic' }]} value={staffForm.staffType} onChange={(value) => setStaffForm((current) => ({ ...current, staffType: value }))} />
                         <FormField label="Gender" type="select" options={[{ value: 'male', label: 'Male' }, { value: 'female', label: 'Female' }]} value={staffForm.gender} onChange={(value) => setStaffForm((current) => ({ ...current, gender: value }))} />
                         <FormField label="Date of Birth" type="date" value={staffForm.dateOfBirth} onChange={(value) => setStaffForm((current) => ({ ...current, dateOfBirth: value }))} />
@@ -357,7 +396,7 @@ export default function Enrollment() {
                         <div><strong>Class/Dept:</strong> {selectedRecord.className || selectedRecord.department || '-'}</div>
                         {selectedRecord.recordType === 'student' && <div><strong>Allergies:</strong> {selectedRecord.allergies || '-'}</div>}
                         {selectedRecord.recordType === 'student' && <div><strong>Parent Contact:</strong> {selectedRecord.parentEmail || selectedRecord.parentPhone || '-'}</div>}
-                        {selectedRecord.recordType === 'staff' && <div><strong>Form Class:</strong> {selectedRecord.formTeacherClass || '-'}</div>}
+                        {selectedRecord.recordType === 'staff' && <div><strong>Form Classes:</strong> {(selectedRecord.formTeacherClasses || []).length ? selectedRecord.formTeacherClasses.join(', ') : (selectedRecord.formTeacherClass || '-')}</div>}
                     </div>
                 )}
             </Modal>

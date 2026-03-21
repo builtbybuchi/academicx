@@ -29,8 +29,8 @@ export default function FormField({
             </label>
             {type === 'select' ? (
                 <select id={id} name={id} className={inputClass} value={value} onChange={handleChange} disabled={disabled}>
-                    <option value="" style={{ background: '#1E293B' }}>{placeholder || 'Select...'}</option>
-                    {options.map(o => <option key={o.value} value={o.value} style={{ background: '#1E293B' }}>{o.label}</option>)}
+                    <option value="" style={{ background: '#FFFFFF', color: '#111827' }}>{placeholder || 'Select...'}</option>
+                    {options.map(o => <option key={o.value} value={o.value} style={{ background: '#FFFFFF', color: '#111827' }}>{o.label}</option>)}
                 </select>
             ) : type === 'textarea' ? (
                 <textarea id={id} name={id} className={inputClass} placeholder={placeholder} value={value}

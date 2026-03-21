@@ -112,8 +112,9 @@ const COLLECTIONS = {
             { key: 'department', type: 'string', size: 100 },
             { key: 'staffType', type: 'enum', elements: ['academic', 'non_academic'], default: 'academic' },
             { key: 'assignedClasses', type: 'string', size: 500 },              // JSON array of class names
-            { key: 'assignedSubjects', type: 'string', size: 500 },             // JSON array of subject IDs
+            { key: 'assignedSubjects', type: 'string', size: 5000 },            // JSON array of subject IDs or subject names
             { key: 'formTeacherClass', type: 'string', size: 20 },              // class name if form teacher
+            { key: 'formTeacherClasses', type: 'string', size: 2000 },          // JSON array of class names
             { key: 'canMarkStaffAttendance', type: 'boolean', default: false },
             { key: 'attendanceRole', type: 'enum', elements: ['none', 'officer'], default: 'none' },
             { key: 'attendanceAssignedBy', type: 'string', size: 36 },

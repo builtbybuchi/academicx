@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DataTable from '../../../../shared/components/DataTable.jsx';
+import { Search, Plus, X, Edit2, Trash2, BookOpen, Calendar, Users, ChevronRight, Check, School, UserCheck, AlertCircle } from 'lucide-react';
 import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
 import FormField from '../../../../shared/components/FormField.jsx';
 import Modal from '../../../../shared/components/Modal.jsx';
@@ -8,10 +8,12 @@ import { useAuth } from '../../../../shared/utils/auth.jsx';
 import {
     createAcademicSession,
     createSubject,
+    deleteAcademicSession,
     listAcademicSessions,
     listClasses,
     listStaff,
     listSubjects,
+    updateAcademicSession,
     upsertClassNames,
     upsertSubjects,
     updateSubject,
@@ -22,30 +24,36 @@ const TERM_LABELS = ['First Term', 'Second Term', 'Third Term', 'Fourth Term'];
 
 const SCHOOL_CLASS_TEMPLATES = {
     primary: ['Prenursery', 'Nursery 1', 'Nursery 2', 'Nursery 3', 'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6'],
-    secondary: ['JSS1', 'JSS2', 'JSS3', 'UBE1', 'UBE2', 'UBE3', 'SS1', 'SS2', 'SS3', 'SS4', 'SS5', 'SS6'],
+    secondary: ['JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'],
     combined: [
         'Prenursery', 'Nursery 1', 'Nursery 2', 'Nursery 3',
         'Primary 1', 'Primary 2', 'Primary 3', 'Primary 4', 'Primary 5', 'Primary 6',
-        'JSS1', 'JSS2', 'JSS3', 'UBE1', 'UBE2', 'UBE3', 'SS1', 'SS2', 'SS3', 'SS4', 'SS5', 'SS6',
+        'JSS1', 'JSS2', 'JSS3', 'SS1', 'SS2', 'SS3'
     ],
 };
 
-const defaultCombinations = [
-    { name: 'Science', classPrefix: 'SS', subjects: 'Mathematics, English Language, Physics, Chemistry, Biology, Further Mathematics' },
-    { name: 'Arts', classPrefix: 'SS', subjects: 'Mathematics, English Language, Literature in English, Government, CRS, Civic Education' },
-    { name: 'Social Science', classPrefix: 'SS', subjects: 'Mathematics, English Language, Economics, Commerce, Government, Civic Education' },
+const DEFAULT_TEMPLATES = [
+    { 
+        name: 'General Subjects', 
+        classPrefix: '', 
+        subjects: ['English Language', 'Mathematics', 'Basic Science', 'Social Studies', 'Civic Education'] 
+    },
+    { 
+        name: 'Sciences', 
+        classPrefix: 'SS', 
+        subjects: ['Mathematics', 'English Language', 'Physics', 'Chemistry', 'Biology', 'Further Mathematics'] 
+    },
+    { 
+        name: 'Arts', 
+        classPrefix: 'SS', 
+        subjects: ['Mathematics', 'English Language', 'Literature in English', 'Government', 'CRS', 'Civic Education'] 
+    },
+    { 
+        name: 'Social Sciences', 
+        classPrefix: 'SS', 
+        subjects: ['Mathematics', 'English Language', 'Economics', 'Commerce', 'Government', 'Civic Education'] 
+    },
 ];
-
-function normalizeSession(value) {
-    return String(value || '').trim();
-}
-
-function parseList(value) {
-    return String(value || '')
-        .split(/[,\n]/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-}
 
 function makeSubjectCode(name) {
     const words = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -54,37 +62,195 @@ function makeSubjectCode(name) {
     return code.slice(0, 10);
 }
 
+// Enhanced Tag Input Component
+function TagInput({ value, onChange, placeholder, suggestions = [] }) {
+    const [inputValue, setInputValue] = useState('');
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const [currentTags, setCurrentTags] = useState(value || []);
+
+    useEffect(() => {
+        setCurrentTags(value || []);
+    }, [value]);
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            const newTag = inputValue.trim();
+            if (newTag && !currentTags.includes(newTag)) {
+                const updatedTags = [...currentTags, newTag];
+                setCurrentTags(updatedTags);
+                onChange(updatedTags);
+            }
+            setInputValue('');
+            setShowSuggestions(false);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        const value = e.target.value;
+        setInputValue(value);
+        setShowSuggestions(value.length > 0);
+    };
+
+    const removeTag = (tagToRemove) => {
+        const updatedTags = currentTags.filter(tag => tag !== tagToRemove);
+        setCurrentTags(updatedTags);
+        onChange(updatedTags);
+    };
+
+    const addSuggestion = (suggestion) => {
+        if (!currentTags.includes(suggestion)) {
+            const updatedTags = [...currentTags, suggestion];
+            setCurrentTags(updatedTags);
+            onChange(updatedTags);
+        }
+        setInputValue('');
+        setShowSuggestions(false);
+    };
+
+    const filteredSuggestions = suggestions.filter(s => 
+        s.toLowerCase().includes(inputValue.toLowerCase()) && !currentTags.includes(s)
+    );
+
+    return (
+        <div style={{ position: 'relative', zIndex: showSuggestions ? 40 : 1 }}>
+            <div style={{
+                border: '1px solid #D1D5DB',
+                borderRadius: 8,
+                padding: 8,
+                minHeight: 44,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 6,
+                alignItems: 'center',
+                backgroundColor: 'white',
+                transition: 'border-color 0.2s',
+                cursor: 'text'
+            }}>
+                {currentTags.map((tag, index) => (
+                    <span key={index} style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 8px',
+                        backgroundColor: '#EBF5FF',
+                        color: '#1E40AF',
+                        borderRadius: 16,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        border: '1px solid #BFDBFE'
+                    }}>
+                        {tag}
+                        <button
+                            onClick={() => removeTag(tag)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#1E40AF',
+                                cursor: 'pointer',
+                                padding: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                borderRadius: '50%'
+                            }}
+                        >
+                            <X size={14} />
+                        </button>
+                    </span>
+                ))}
+                <input
+                    type="text"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    onFocus={() => setShowSuggestions(true)}
+                    placeholder={currentTags.length === 0 ? placeholder : ''}
+                    style={{
+                        border: 'none',
+                        outline: 'none',
+                        flex: 1,
+                        minWidth: 120,
+                        fontSize: 14,
+                        background: 'transparent'
+                    }}
+                />
+            </div>
+            
+            {showSuggestions && filteredSuggestions.length > 0 && (
+                <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #D1D5DB',
+                    borderTop: 'none',
+                    borderRadius: '0 0 8px 8px',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    zIndex: 999
+                }}>
+                    {filteredSuggestions.map((suggestion, index) => (
+                        <div
+                            key={index}
+                            onClick={() => addSuggestion(suggestion)}
+                            style={{
+                                padding: '8px 12px',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                color: '#374151',
+                                borderBottom: '1px solid #F3F4F6'
+                            }}
+                            onMouseEnter={(e) => e.target.style.backgroundColor = '#F9FAFB'}
+                            onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                        >
+                            {suggestion}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function Academics() {
     const { schoolId } = useAuth();
     const toast = useToast();
 
+    // View states
+    const [viewMode, setViewMode] = useState('home'); // home, create, edit
+    const [activeTab, setActiveTab] = useState('sessions');
+    const [editingSession, setEditingSession] = useState(null);
+
+    // Data
     const [sessions, setSessions] = useState([]);
     const [classes, setClasses] = useState([]);
     const [subjects, setSubjects] = useState([]);
     const [staff, setStaff] = useState([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterClass, setFilterClass] = useState('');
 
+    // Session Form
     const [sessionForm, setSessionForm] = useState({
         session: '',
         termsCount: '3',
-        schoolType: 'combined',
-        clonePrevious: true,
+        schoolType: 'primary',
     });
 
-    const [classSetup, setClassSetup] = useState({
-        baseClasses: SCHOOL_CLASS_TEMPLATES.combined.join(', '),
-        streams: 'A, B, C',
-    });
+    // Classes Form
+    const [baseClasses, setBaseClasses] = useState([]);
+    const [classArms, setClassArms] = useState(['A', 'B', 'C']);
 
-    const [combinationRows, setCombinationRows] = useState(defaultCombinations);
-    const [comboClassTargets, setComboClassTargets] = useState('SS1, SS2, SS3, SS4, SS5, SS6');
-
+    // Subjects Form
+    const [subjectView, setSubjectView] = useState('bulk');
     const [subjectForm, setSubjectForm] = useState({ name: '', code: '', className: '', staffId: '' });
-    const [savingSession, setSavingSession] = useState(false);
-    const [savingClasses, setSavingClasses] = useState(false);
-    const [savingCombos, setSavingCombos] = useState(false);
-    const [savingSubject, setSavingSubject] = useState(false);
+    const [templates, setTemplates] = useState(DEFAULT_TEMPLATES);
+    const [comboClassTargets, setComboClassTargets] = useState([]);
 
-    // Edit/Delete Modal States
+    // Loading states
+    const [saving, setSaving] = useState(false);
+
+    // Modal states
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [selectedSubject, setSelectedSubject] = useState(null);
@@ -110,18 +276,46 @@ export default function Academics() {
     }, [schoolId]);
 
     useEffect(() => {
-        setClassSetup((current) => ({
-            ...current,
-            baseClasses: SCHOOL_CLASS_TEMPLATES[sessionForm.schoolType].join(', '),
-        }));
+        setBaseClasses(SCHOOL_CLASS_TEMPLATES[sessionForm.schoolType] || []);
     }, [sessionForm.schoolType]);
+
+    // Generate session options
+    const sessionOptions = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const options = [];
+        for (let i = 0; i < 5; i++) {
+            const startYear = currentYear + i;
+            const endYear = startYear + 1;
+            options.push({
+                value: `${startYear}/${endYear}`,
+                label: `${startYear}/${endYear} Academic Session`
+            });
+        }
+        return options;
+    }, []);
+
+    // Generate class combinations
+    const generatedClasses = useMemo(() => {
+        const combinations = [];
+        for (const baseClass of baseClasses) {
+            if (classArms.length === 0) {
+                combinations.push(baseClass);
+            } else {
+                for (const arm of classArms) {
+                    combinations.push(`${baseClass}${arm}`);
+                }
+            }
+        }
+        return combinations;
+    }, [baseClasses, classArms]);
 
     const sessionGroups = useMemo(() => {
         const map = new Map();
         for (const item of sessions) {
             const key = item.session;
-            const existing = map.get(key) || { session: key, terms: [] };
+            const existing = map.get(key) || { session: key, terms: [], isCurrent: false };
             existing.terms.push(item.term);
+            if (item.isCurrent) existing.isCurrent = true;
             map.set(key, existing);
         }
         return Array.from(map.values())
@@ -129,175 +323,148 @@ export default function Academics() {
             .sort((a, b) => b.session.localeCompare(a.session));
     }, [sessions]);
 
+    const currentSession = sessionGroups.find(s => s.isCurrent) || sessionGroups[0];
+
     const classNames = useMemo(() => [...new Set(classes.map((item) => item.name).filter(Boolean))], [classes]);
 
-    const subjectColumns = [
-        { key: 'code', label: 'Code' },
-        { key: 'name', label: 'Subject Name' },
-        { key: 'className', label: 'Class' },
-        {
-            key: 'staffId',
-            label: 'Assigned Teacher',
-            render: (value) => {
-                const teacher = staff.find((item) => item.$id === value);
-                return teacher ? `${teacher.firstName} ${teacher.lastName}` : '-';
-            },
-        },
-        {
-            key: 'actions',
-            label: 'Actions',
-            sortable: false,
-            render: (_, row) => (
-                <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                        className="btn btn-glass btn-sm"
-                        onClick={() => handleEditClick(row)}
-                        style={{ padding: '6px 12px', fontSize: 12 }}
-                    >
-                        ✏️ Edit
-                    </button>
-                    <button
-                        className="btn btn-danger btn-sm"
-                        onClick={() => handleDeleteClick(row)}
-                        style={{ padding: '6px 12px', fontSize: 12 }}
-                    >
-                        🗑️ Delete
-                    </button>
-                </div>
-            ),
-        },
+    const filteredSubjects = useMemo(() => {
+        let filtered = subjects;
+        if (searchTerm) {
+            filtered = filtered.filter(subject => 
+                subject.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                subject.code.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+        if (filterClass) {
+            filtered = filtered.filter(subject => subject.className === filterClass);
+        }
+        return filtered;
+    }, [subjects, searchTerm, filterClass]);
+
+    const kpiData = [
+        { label: 'Academic Sessions', value: sessionGroups.length, icon: Calendar, color: '#3B82F6' },
+        { label: 'Class Arms', value: classNames.length, icon: Users, color: '#10B981' },
+        { label: 'Subjects', value: subjects.length, icon: BookOpen, color: '#F59E0B' },
     ];
 
     async function handleCreateSession() {
-        const value = normalizeSession(sessionForm.session);
-        if (!/^\d{4}\/\d{4}$/.test(value)) {
-            toast({ type: 'error', title: 'Invalid session format', message: 'Use format like 2025/2026.' });
+        if (!sessionForm.session) {
+            toast({ type: 'error', title: 'Session required', message: 'Please select an academic session.' });
             return;
         }
 
         const termCount = Math.max(1, Math.min(4, Number(sessionForm.termsCount || 3)));
         const terms = TERM_LABELS.slice(0, termCount);
 
-        setSavingSession(true);
+        setSaving(true);
         try {
             const existing = new Set(sessions.map((item) => `${item.session}::${item.term}`));
             let created = 0;
             for (const term of terms) {
-                const key = `${value}::${term}`;
+                const key = `${sessionForm.session}::${term}`;
                 if (existing.has(key)) continue;
                 await createAcademicSession({
                     schoolId,
-                    session: value,
+                    session: sessionForm.session,
                     term,
                     startDate: '',
                     endDate: '',
-                    isCurrent: false,
+                    isCurrent: sessionGroups.length === 0, // First session is current
                     resultPublished: false,
                 });
                 created += 1;
             }
 
-            if (sessionForm.clonePrevious) {
-                const existingClassesText = classNames.join(', ');
-                if (existingClassesText) {
-                    setClassSetup((current) => ({ ...current, baseClasses: existingClassesText }));
-                }
-            }
-
             toast({
                 type: 'success',
-                title: 'Academic session saved',
-                message: created > 0
-                    ? `${created} term record(s) created for ${value}.`
-                    : `${value} terms already exist, defaults loaded for editing.`,
+                title: 'Academic session created',
+                message: `${created} term record(s) created for ${sessionForm.session}.`,
             });
-            setSessionForm((current) => ({ ...current, session: '' }));
+            
+            // Move to classes tab
+            setActiveTab('classes');
             await loadData();
         } catch (error) {
-            toast({ type: 'error', title: 'Session save failed', message: error.message });
+            toast({ type: 'error', title: 'Session creation failed', message: error.message });
         } finally {
-            setSavingSession(false);
+            setSaving(false);
         }
     }
 
-    async function handleCreateClasses() {
-        const bases = parseList(classSetup.baseClasses);
-        const streams = parseList(classSetup.streams).map((item) => item.toUpperCase());
-
-        if (bases.length === 0) {
-            toast({ type: 'error', title: 'No classes provided', message: 'Add at least one base class.' });
+    async function handleSaveClasses() {
+        if (generatedClasses.length === 0) {
+            toast({ type: 'error', title: 'No classes generated', message: 'Add base classes and arms to generate combinations.' });
             return;
         }
 
-        const outputNames = [];
-        for (const base of bases) {
-            if (streams.length === 0) {
-                outputNames.push(base);
-                continue;
-            }
-            for (const stream of streams) {
-                outputNames.push(`${base}${stream}`);
-            }
-        }
-
-        setSavingClasses(true);
+        setSaving(true);
         try {
-            const result = await upsertClassNames(schoolId, outputNames);
+            const result = await upsertClassNames(schoolId, generatedClasses);
             toast({
                 type: 'success',
-                title: 'Class setup saved',
-                message: `${result.created.length} new class arm(s) created, ${outputNames.length - result.created.length} already existed.`,
+                title: 'Classes saved',
+                message: `${result.created.length} new class arm(s) created.`,
             });
+            
+            // Move to subjects tab
+            setActiveTab('subjects');
+            setComboClassTargets(generatedClasses);
             await loadData();
         } catch (error) {
             toast({ type: 'error', title: 'Class setup failed', message: error.message });
         } finally {
-            setSavingClasses(false);
+            setSaving(false);
         }
     }
 
-    async function handleApplyCombinations() {
-        const targets = parseList(comboClassTargets);
-        if (targets.length === 0) {
-            toast({ type: 'error', title: 'No target classes', message: 'Specify target classes for subject combinations.' });
-            return;
-        }
-
-        const resolvedClasses = classNames.filter((name) => targets.some((target) => name.startsWith(target)));
-        if (resolvedClasses.length === 0) {
-            toast({ type: 'error', title: 'No class match', message: 'Create matching classes first, e.g. SS1A/SS1B.' });
+    async function handleApplyTemplates() {
+        if (comboClassTargets.length === 0) {
+            toast({ type: 'error', title: 'No target classes', message: 'Select target classes for subject templates.' });
             return;
         }
 
         const subjectRows = [];
-        for (const row of combinationRows) {
-            const subjectsForTrack = parseList(row.subjects);
-            const allowedClasses = resolvedClasses.filter((name) => name.startsWith(row.classPrefix || ''));
+        const usedCodes = new Set();
+
+        for (const template of templates) {
+            const allowedClasses = template.classPrefix 
+                ? comboClassTargets.filter((name) => name.startsWith(template.classPrefix))
+                : comboClassTargets;
+            
             for (const className of allowedClasses) {
-                for (const subjectName of subjectsForTrack) {
+                for (const subjectName of template.subjects) {
+                    let code = makeSubjectCode(subjectName);
+                    let counter = 1;
+                    while (usedCodes.has(code)) {
+                        code = `${makeSubjectCode(subjectName)}${counter}`;
+                        counter++;
+                    }
+                    usedCodes.add(code);
+                    
                     subjectRows.push({
                         className,
                         name: subjectName,
-                        code: makeSubjectCode(subjectName),
+                        code,
                         staffId: '',
+                        templateName: template.name
                     });
                 }
             }
         }
 
-        setSavingCombos(true);
+        setSaving(true);
         try {
             const result = await upsertSubjects(schoolId, subjectRows);
             toast({
                 type: 'success',
-                title: 'Subject combinations applied',
-                message: `${result.created.length} subject record(s) created across ${resolvedClasses.length} class arm(s).`,
+                title: 'Subject templates applied',
+                message: `${result.created.length} subject record(s) created.`,
             });
             await loadData();
         } catch (error) {
-            toast({ type: 'error', title: 'Combination setup failed', message: error.message });
+            toast({ type: 'error', title: 'Template application failed', message: error.message });
         } finally {
-            setSavingCombos(false);
+            setSaving(false);
         }
     }
 
@@ -307,7 +474,7 @@ export default function Academics() {
             return;
         }
 
-        setSavingSubject(true);
+        setSaving(true);
         try {
             await createSubject({ schoolId, ...subjectForm, code: subjectForm.code.toUpperCase() });
             toast({ type: 'success', title: 'Subject created', message: 'Subject added successfully.' });
@@ -316,315 +483,668 @@ export default function Academics() {
         } catch (error) {
             toast({ type: 'error', title: 'Subject save failed', message: error.message });
         } finally {
-            setSavingSubject(false);
+            setSaving(false);
         }
     }
 
-    function handleEditClick(subject) {
-        setSelectedSubject(subject);
-        setEditForm({
-            name: subject.name,
-            code: subject.code,
-            className: subject.className,
-            staffId: subject.staffId || ''
+    function handleAddTemplate() {
+        const newTemplate = {
+            name: `Custom Template ${templates.length + 1}`,
+            classPrefix: '',
+            subjects: []
+        };
+        setTemplates([...templates, newTemplate]);
+    }
+
+    function handleUpdateTemplate(index, field, value) {
+        const updated = [...templates];
+        updated[index] = { ...updated[index], [field]: value };
+        setTemplates(updated);
+    }
+
+    function handleRemoveTemplate(index) {
+        if (templates.length <= 1) return;
+        const updated = templates.filter((_, i) => i !== index);
+        setTemplates(updated);
+    }
+
+    function handleEditSession(session) {
+        setEditingSession(session);
+        setSessionForm({
+            session: session.session,
+            termsCount: session.terms.length.toString(),
+            schoolType: 'primary', // Default, should be determined from existing data
         });
-        setEditModalOpen(true);
+        setViewMode('edit');
+        setActiveTab('sessions');
     }
 
-    function handleDeleteClick(subject) {
-        setSelectedSubject(subject);
-        setDeleteModalOpen(true);
+    function handleCancelEdit() {
+        setEditingSession(null);
+        setViewMode('home');
+        setSessionForm({ session: '', termsCount: '3', schoolType: 'primary' });
+        setBaseClasses([]);
+        setClassArms(['A', 'B', 'C']);
+        setActiveTab('sessions');
     }
 
-    async function handleSaveEdit() {
-        if (!editForm.name || !editForm.code || !editForm.className) {
-            toast({ type: 'error', title: 'Missing fields', message: 'Name, code, and class are required.' });
+    async function handleSaveChanges() {
+        if (!editingSession?.session) {
+            toast({ type: 'error', title: 'No session selected', message: 'Please select a valid session to update.' });
             return;
         }
 
-        setProcessingAction(true);
+        if (!sessionForm.session) {
+            toast({ type: 'error', title: 'Session required', message: 'Please select an academic session.' });
+            return;
+        }
+
+        if (generatedClasses.length === 0) {
+            toast({ type: 'error', title: 'No classes generated', message: 'Add base classes and arms to generate combinations.' });
+            return;
+        }
+
+        setSaving(true);
         try {
-            await updateSubject(selectedSubject.$id, {
-                name: editForm.name,
-                code: editForm.code.toUpperCase(),
-                className: editForm.className,
-                staffId: editForm.staffId || ''
+            const existingForSession = sessions.filter((item) => item.session === editingSession.session);
+            const nextTermCount = Math.max(1, Math.min(4, Number(sessionForm.termsCount || 3)));
+            const nextTerms = TERM_LABELS.slice(0, nextTermCount);
+            const existingByTerm = new Map(existingForSession.map((item) => [item.term, item]));
+
+            // Keep previously current session current, unless this is explicitly marked current later.
+            for (const term of nextTerms) {
+                if (existingByTerm.has(term)) continue;
+                await createAcademicSession({
+                    schoolId,
+                    session: sessionForm.session,
+                    term,
+                    startDate: '',
+                    endDate: '',
+                    isCurrent: false,
+                    resultPublished: false,
+                });
+            }
+
+            // Remove terms that are no longer selected.
+            for (const oldItem of existingForSession) {
+                if (!nextTerms.includes(oldItem.term)) {
+                    await deleteAcademicSession(oldItem.$id);
+                }
+            }
+
+            await upsertClassNames(schoolId, generatedClasses);
+
+            if (comboClassTargets.length > 0) {
+                const subjectRows = [];
+                const usedCodes = new Set(subjects.map((item) => `${item.className}::${String(item.code || '').toUpperCase()}`));
+
+                for (const template of templates) {
+                    const allowedClasses = template.classPrefix
+                        ? comboClassTargets.filter((name) => name.startsWith(template.classPrefix))
+                        : comboClassTargets;
+
+                    for (const className of allowedClasses) {
+                        for (const subjectName of template.subjects) {
+                            const trimmedName = String(subjectName || '').trim();
+                            if (!trimmedName) continue;
+
+                            const baseCode = makeSubjectCode(trimmedName);
+                            let code = baseCode;
+                            let counter = 1;
+                            while (usedCodes.has(`${className}::${code}`)) {
+                                code = `${baseCode}${counter}`;
+                                counter += 1;
+                            }
+                            usedCodes.add(`${className}::${code}`);
+
+                            subjectRows.push({
+                                className,
+                                name: trimmedName,
+                                code,
+                                staffId: '',
+                            });
+                        }
+                    }
+                }
+
+                if (subjectRows.length > 0) {
+                    await upsertSubjects(schoolId, subjectRows);
+                }
+            }
+
+            // Keep school currentSession/currentTerm aligned with active records.
+            const updatedSessions = await listAcademicSessions(schoolId);
+            const rows = updatedSessions.documents || [];
+            const anyCurrent = rows.find((item) => item.isCurrent);
+            if (!anyCurrent && rows.length > 0) {
+                await updateAcademicSession(rows[0].$id, { isCurrent: true });
+            }
+
+            toast({
+                type: 'success',
+                title: 'Academic settings saved',
+                message: `Updated ${sessionForm.session} with ${nextTerms.length} term(s), classes, and subject mappings.`,
             });
-            toast({ type: 'success', title: 'Subject updated', message: 'Subject updated successfully.' });
-            setEditModalOpen(false);
-            setSelectedSubject(null);
+
             await loadData();
+            handleCancelEdit();
         } catch (error) {
-            toast({ type: 'error', title: 'Update failed', message: error.message });
+            toast({ type: 'error', title: 'Save failed', message: error.message || 'Unable to save academic setup changes.' });
         } finally {
-            setProcessingAction(false);
+            setSaving(false);
         }
     }
 
-    async function handleConfirmDelete() {
-        if (!selectedSubject) return;
-
-        setProcessingAction(true);
-        try {
-            await deleteSubject(selectedSubject.$id);
-            toast({ type: 'success', title: 'Subject deleted', message: 'Subject deleted successfully.' });
-            setDeleteModalOpen(false);
-            setSelectedSubject(null);
-            await loadData();
-        } catch (error) {
-            toast({ type: 'error', title: 'Delete failed', message: error.message });
-        } finally {
-            setProcessingAction(false);
-        }
-    }
-
-    return (
-        <div>
-            <div className="page-header">
-                <h1 className="page-title">Academics Setup</h1>
-                <p className="page-subtitle">Create sessions, terms, class arms, and subject combinations with reusable defaults.</p>
-            </div>
-
-            <div className="grid grid-3" style={{ marginBottom: 24 }}>
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <div style={{ fontSize: 12, color: 'var(--color-gray-500)' }}>Academic Sessions</div>
-                    <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--color-gray-900)' }}>{sessionGroups.length}</div>
-                </LiquidGlassPanel>
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <div style={{ fontSize: 12, color: 'var(--color-gray-500)' }}>Class Arms</div>
-                    <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--color-gray-900)' }}>{classNames.length}</div>
-                </LiquidGlassPanel>
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <div style={{ fontSize: 12, color: 'var(--color-gray-500)' }}>Subjects</div>
-                    <div style={{ fontSize: 30, fontWeight: 800, color: 'var(--color-gray-900)' }}>{subjects.length}</div>
-                </LiquidGlassPanel>
-            </div>
-
-            <div className="grid grid-2" style={{ gap: 20, marginBottom: 24 }}>
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 12 }}>1) Academic Session Setup</h3>
-                    <FormField
-                        label="Session"
-                        required
-                        placeholder="2025/2026"
-                        value={sessionForm.session}
-                        onChange={(value) => setSessionForm((current) => ({ ...current, session: value }))}
-                    />
-                    <FormField
-                        label="Number of terms"
-                        type="select"
-                        options={[
-                            { value: '2', label: '2 Terms' },
-                            { value: '3', label: '3 Terms (Trimester)' },
-                            { value: '4', label: '4 Terms' },
-                        ]}
-                        value={sessionForm.termsCount}
-                        onChange={(value) => setSessionForm((current) => ({ ...current, termsCount: value }))}
-                    />
-                    <FormField
-                        label="School Type"
-                        type="select"
-                        options={[
-                            { value: 'primary', label: 'Primary School' },
-                            { value: 'secondary', label: 'Secondary School' },
-                            { value: 'combined', label: 'Combined (Primary + Secondary)' },
-                        ]}
-                        value={sessionForm.schoolType}
-                        onChange={(value) => setSessionForm((current) => ({ ...current, schoolType: value }))}
-                    />
-                    <FormField
-                        label="Use previous setup as default"
-                        type="checkbox"
-                        value={sessionForm.clonePrevious}
-                        onChange={(value) => setSessionForm((current) => ({ ...current, clonePrevious: value }))}
-                    />
-                    <button className="btn btn-primary" onClick={handleCreateSession} disabled={savingSession}>
-                        {savingSession ? 'Saving...' : 'Create Session'}
+    // Home view - No sessions
+    if (viewMode === 'home' && sessionGroups.length === 0) {
+        return (
+            <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                minHeight: '60vh',
+                padding: '40px'
+            }}>
+                <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+                    <div style={{
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        backgroundColor: '#EBF5FF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 24px'
+                    }}>
+                        <School size={40} color="#3B82F6" />
+                    </div>
+                    <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#1F2937', marginBottom: '12px' }}>
+                        Create Your First Academic Session
+                    </h2>
+                    <p style={{ fontSize: '16px', color: '#6B7280', marginBottom: '32px', lineHeight: 1.5 }}>
+                        Get started by setting up your first academic session. This will be the foundation for managing your school's academic structure.
+                    </p>
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => setViewMode('create')}
+                        style={{ padding: '14px 32px', fontSize: '16px', fontWeight: 500 }}
+                    >
+                        <Plus size={20} style={{ marginRight: '8px' }} />
+                        Create Academic Session
                     </button>
-                </LiquidGlassPanel>
+                </div>
+            </div>
+        );
+    }
 
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 12 }}>Existing Sessions</h3>
-                    <div style={{ display: 'grid', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
-                        {sessionGroups.map((item) => (
-                            <div key={item.session} style={{ padding: 10, borderRadius: 10, border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.65)' }}>
-                                <div style={{ fontWeight: 700 }}>{item.session}</div>
-                                <div style={{ fontSize: 12, color: 'var(--color-gray-600)' }}>{item.terms.join(', ')}</div>
+    // Home view - With sessions
+    if (viewMode === 'home') {
+        return (
+            <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+                {/* Header */}
+                <div style={{ marginBottom: '32px' }}>
+                    <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0, color: '#1F2937' }}>
+                        Academics Management
+                    </h1>
+                    <p style={{ fontSize: '16px', color: '#6B7280', margin: '8px 0 0 0' }}>
+                        Overview of your academic structure and settings.
+                    </p>
+                </div>
+
+                {/* KPI Cards */}
+                <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+                    gap: '20px', 
+                    marginBottom: '32px' 
+                }}>
+                    {kpiData.map((kpi, index) => (
+                        <LiquidGlassPanel key={index} hover={false} style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>
+                                        {kpi.label}
+                                    </div>
+                                    <div style={{ fontSize: '32px', fontWeight: 700, color: '#1F2937' }}>
+                                        {kpi.value}
+                                    </div>
+                                </div>
+                                <div style={{
+                                    width: '48px',
+                                    height: '48px',
+                                    borderRadius: '12px',
+                                    backgroundColor: `${kpi.color}20`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <kpi.icon size={24} color={kpi.color} />
+                                </div>
                             </div>
-                        ))}
-                        {sessionGroups.length === 0 && (
-                            <div style={{ fontSize: 13, color: 'var(--color-gray-500)' }}>No sessions created yet.</div>
+                        </LiquidGlassPanel>
+                    ))}
+                </div>
+
+                {/* Current Session Card */}
+                {currentSession && (
+                    <LiquidGlassPanel hover={false} style={{ padding: '32px', marginBottom: '32px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                                    <h3 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>
+                                        {currentSession.session}
+                                    </h3>
+                                    {currentSession.isCurrent && (
+                                        <span style={{
+                                            padding: '4px 12px',
+                                            backgroundColor: '#10B98120',
+                                            color: '#059669',
+                                            borderRadius: '20px',
+                                            fontSize: '12px',
+                                            fontWeight: 500
+                                        }}>
+                                            Current
+                                        </span>
+                                    )}
+                                </div>
+                                <div style={{ marginBottom: '24px' }}>
+                                    <p style={{ fontSize: '14px', color: '#6B7280', margin: '0 0 8px 0' }}>
+                                        <strong>Terms:</strong> {currentSession.terms.join(', ')}
+                                    </p>
+                                    <p style={{ fontSize: '14px', color: '#6B7280', margin: '0' }}>
+                                        <strong>Classes:</strong> {classNames.length} • <strong>Subjects:</strong> {subjects.length}
+                                    </p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px' }}>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={() => handleEditSession(currentSession)}
+                                        style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500 }}
+                                    >
+                                        <Edit2 size={16} style={{ marginRight: '6px' }} />
+                                        Edit Session
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </LiquidGlassPanel>
+                )}
+
+                {/* Create New Session Button */}
+                <div style={{ textAlign: 'center' }}>
+                    <button
+                        className="btn btn-outline"
+                        onClick={() => setViewMode('create')}
+                        style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
+                    >
+                        <Plus size={18} style={{ marginRight: '8px' }} />
+                        Create New Academic Session
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Create/Edit view
+    return (
+        <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+            {/* Header */}
+            <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    <h1 style={{ fontSize: '28px', fontWeight: 700, margin: 0, color: '#1F2937' }}>
+                        {viewMode === 'create' ? 'Create Academic Session' : `Edit ${editingSession?.session}`}
+                    </h1>
+                    <p style={{ fontSize: '16px', color: '#6B7280', margin: '8px 0 0 0' }}>
+                        {viewMode === 'create' 
+                            ? 'Set up your academic structure in three simple steps'
+                            : 'Modify your academic session settings'
+                        }
+                    </p>
+                </div>
+                <button
+                    className="btn btn-glass"
+                    onClick={handleCancelEdit}
+                    style={{ padding: '10px 20px', fontSize: '14px', fontWeight: 500 }}
+                >
+                    Cancel
+                </button>
+            </div>
+
+            {/* Progress Indicator */}
+            <div style={{ marginBottom: '32px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px' }}>
+                    {[
+                        { id: 'sessions', label: 'Session Setup' },
+                        { id: 'classes', label: 'Classes & Arms' },
+                        { id: 'subjects', label: 'Subjects & Mappings' },
+                    ].map((tab, index) => (
+                        <React.Fragment key={tab.id}>
+                            <button
+                                onClick={() => setActiveTab(tab.id)}
+                                style={{
+                                    padding: '12px 20px',
+                                    border: 'none',
+                                    background: activeTab === tab.id ? '#3B82F6' : '#F3F4F6',
+                                    color: activeTab === tab.id ? 'white' : '#6B7280',
+                                    borderRadius: '8px',
+                                    fontSize: '14px',
+                                    fontWeight: 500,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                {tab.label}
+                            </button>
+                            {index < 2 && (
+                                <ChevronRight size={16} color="#D1D5DB" />
+                            )}
+                        </React.Fragment>
+                    ))}
+                </div>
+            </div>
+
+            {/* Tab Content */}
+            <div style={{ minHeight: '500px' }}>
+                {/* Tab 1: Sessions & Terms */}
+                {activeTab === 'sessions' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                Academic Session Details
+                            </h3>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                <FormField
+                                    label="Academic Session"
+                                    type="select"
+                                    options={sessionOptions}
+                                    value={sessionForm.session}
+                                    onChange={(value) => setSessionForm((current) => ({ ...current, session: value }))}
+                                    disabled={viewMode === 'edit'}
+                                />
+                                <FormField
+                                    label="Number of Terms"
+                                    type="select"
+                                    options={[
+                                        { value: '2', label: '2 Terms' },
+                                        { value: '3', label: '3 Terms (Trimester)' },
+                                        { value: '4', label: '4 Terms' },
+                                    ]}
+                                    value={sessionForm.termsCount}
+                                    onChange={(value) => setSessionForm((current) => ({ ...current, termsCount: value }))}
+                                />
+                                <FormField
+                                    label="School Type"
+                                    type="select"
+                                    options={[
+                                        { value: 'primary', label: 'Primary School' },
+                                        { value: 'secondary', label: 'Secondary School' },
+                                        { value: 'combined', label: 'Combined (Primary + Secondary)' },
+                                    ]}
+                                    value={sessionForm.schoolType}
+                                    onChange={(value) => setSessionForm((current) => ({ ...current, schoolType: value }))}
+                                />
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={viewMode === 'create' ? handleCreateSession : () => setActiveTab('classes')} 
+                                    disabled={saving}
+                                    style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
+                                >
+                                    {saving ? 'Processing...' : viewMode === 'create' ? 'Create Session' : 'Next Step'}
+                                </button>
+                            </div>
+                        </LiquidGlassPanel>
+
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                Session Preview
+                            </h3>
+                            <div style={{ 
+                                padding: '20px', 
+                                backgroundColor: '#F9FAFB', 
+                                borderRadius: '12px',
+                                border: '1px solid #E5E7EB'
+                            }}>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <div style={{ fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>Session</div>
+                                    <div style={{ fontSize: '18px', fontWeight: 600, color: '#1F2937' }}>
+                                        {sessionForm.session || 'Not selected'}
+                                    </div>
+                                </div>
+                                <div style={{ marginBottom: '16px' }}>
+                                    <div style={{ fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>Terms</div>
+                                    <div style={{ fontSize: '14px', color: '#374151' }}>
+                                        {sessionForm.termsCount ? TERM_LABELS.slice(0, parseInt(sessionForm.termsCount)).join(', ') : 'Not set'}
+                                    </div>
+                                </div>
+                                <div>
+                                    <div style={{ fontSize: '14px', color: '#6B7280', marginBottom: '4px' }}>School Type</div>
+                                    <div style={{ fontSize: '14px', color: '#374151' }}>
+                                        {sessionForm.schoolType === 'primary' ? 'Primary School' : 
+                                         sessionForm.schoolType === 'secondary' ? 'Secondary School' : 
+                                         'Combined (Primary + Secondary)'}
+                                    </div>
+                                </div>
+                            </div>
+                        </LiquidGlassPanel>
+                    </div>
+                )}
+
+                {/* Tab 2: Classes & Arms */}
+                {activeTab === 'classes' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                Generate Class Arms
+                            </h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#374151' }}>
+                                        Base Classes
+                                    </label>
+                                    <TagInput
+                                        value={baseClasses}
+                                        onChange={setBaseClasses}
+                                        placeholder="Type class name and press Enter (e.g., JSS1)"
+                                        suggestions={SCHOOL_CLASS_TEMPLATES[sessionForm.schoolType]}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: '14px', fontWeight: 500, marginBottom: '8px', color: '#374151' }}>
+                                        Class Arms / Categories
+                                    </label>
+                                    <TagInput
+                                        value={classArms}
+                                        onChange={setClassArms}
+                                        placeholder="Type arm and press Enter (e.g., A)"
+                                        suggestions={['A', 'B', 'C', 'D', 'E', 'F']}
+                                    />
+                                </div>
+                            </div>
+                        </LiquidGlassPanel>
+
+                        {/* Preview */}
+                        {generatedClasses.length > 0 && (
+                            <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                                <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                    Class Preview ({generatedClasses.length} classes)
+                                </h3>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                                    gap: '12px',
+                                    maxHeight: '300px',
+                                    overflowY: 'auto',
+                                    marginBottom: '20px'
+                                }}>
+                                    {generatedClasses.map((className, index) => (
+                                        <div key={index} style={{
+                                            padding: '12px',
+                                            borderRadius: '8px',
+                                            backgroundColor: '#F3F4F6',
+                                            textAlign: 'center',
+                                            fontSize: '13px',
+                                            fontWeight: 500,
+                                            color: '#374151'
+                                        }}>
+                                            {className}
+                                        </div>
+                                    ))}
+                                </div>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={handleSaveClasses} 
+                                    disabled={saving}
+                                    style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
+                                >
+                                    {saving ? 'Saving...' : 'Save Classes'}
+                                </button>
+                            </LiquidGlassPanel>
                         )}
                     </div>
-                </LiquidGlassPanel>
-            </div>
+                )}
 
-            <div className="grid grid-2" style={{ gap: 20, marginBottom: 24 }}>
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 12 }}>2) Class + Category (Arm) Setup</h3>
-                    <FormField
-                        label="Base Classes"
-                        type="textarea"
-                        rows={6}
-                        value={classSetup.baseClasses}
-                        onChange={(value) => setClassSetup((current) => ({ ...current, baseClasses: value }))}
-                        placeholder="JSS1, JSS2, SS1"
-                    />
-                    <FormField
-                        label="Class Arms / Categories"
-                        value={classSetup.streams}
-                        onChange={(value) => setClassSetup((current) => ({ ...current, streams: value }))}
-                        placeholder="A, B, C"
-                    />
-                    <div style={{ fontSize: 12, color: 'var(--color-gray-500)', marginBottom: 12 }}>
-                        Example output: JSS1A, JSS1B, JSS1C.
-                    </div>
-                    <button className="btn btn-primary" onClick={handleCreateClasses} disabled={savingClasses}>
-                        {savingClasses ? 'Saving...' : 'Generate / Update Class Arms'}
-                    </button>
-                </LiquidGlassPanel>
-
-                <LiquidGlassPanel hover={false} style={{ padding: 20 }}>
-                    <h3 style={{ marginTop: 0, marginBottom: 12 }}>3) Subject Combination Templates</h3>
-                    <FormField
-                        label="Target Class Prefixes"
-                        value={comboClassTargets}
-                        onChange={setComboClassTargets}
-                        placeholder="SS1, SS2, SS3"
-                    />
-                    {combinationRows.map((row, index) => (
-                        <div key={row.name} style={{ border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: 10, marginBottom: 10 }}>
-                            <FormField
-                                label={`${row.name} - Class Prefix`}
-                                value={row.classPrefix}
-                                onChange={(value) => setCombinationRows((current) => current.map((item, idx) => idx === index ? { ...item, classPrefix: value } : item))}
-                                placeholder="SS"
+                {/* Tab 3: Subjects & Mappings */}
+                {activeTab === 'subjects' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        {/* Target Classes */}
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                Target Classes
+                            </h3>
+                            <TagInput
+                                value={comboClassTargets}
+                                onChange={setComboClassTargets}
+                                placeholder="Select classes to apply subjects to"
+                                suggestions={classNames}
                             />
-                            <FormField
-                                label={`${row.name} Subjects`}
-                                type="textarea"
-                                rows={3}
-                                value={row.subjects}
-                                onChange={(value) => setCombinationRows((current) => current.map((item, idx) => idx === index ? { ...item, subjects: value } : item))}
-                                placeholder="Mathematics, English Language, Physics"
-                            />
-                        </div>
-                    ))}
-                    <button className="btn btn-primary" onClick={handleApplyCombinations} disabled={savingCombos}>
-                        {savingCombos ? 'Applying...' : 'Apply Subject Combinations'}
-                    </button>
-                </LiquidGlassPanel>
+                        </LiquidGlassPanel>
+
+                        {/* Subject Templates */}
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                                <h3 style={{ marginTop: 0, fontSize: '18px', fontWeight: 600 }}>
+                                    Subject Templates
+                                </h3>
+                                <button
+                                    className="btn btn-outline btn-sm"
+                                    onClick={handleAddTemplate}
+                                    style={{ padding: '8px 16px', fontSize: '13px' }}
+                                >
+                                    <Plus size={16} style={{ marginRight: '4px' }} />
+                                    Add Template
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {templates.map((template, index) => (
+                                    <div key={index} style={{
+                                        border: '1px solid #E5E7EB',
+                                        borderRadius: '12px',
+                                        padding: '16px',
+                                        backgroundColor: index === 0 ? '#F0F9FF' : 'white'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <input
+                                                    type="text"
+                                                    value={template.name}
+                                                    onChange={(e) => handleUpdateTemplate(index, 'name', e.target.value)}
+                                                    style={{
+                                                        border: '1px solid #D1D5DB',
+                                                        borderRadius: '6px',
+                                                        padding: '6px 10px',
+                                                        fontSize: '14px',
+                                                        fontWeight: 500
+                                                    }}
+                                                />
+                                                {index === 0 && (
+                                                    <span style={{
+                                                        padding: '2px 8px',
+                                                        backgroundColor: '#3B82F6',
+                                                        color: 'white',
+                                                        borderRadius: '12px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 500
+                                                    }}>
+                                                        General
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {index > 0 && (
+                                                <button
+                                                    onClick={() => handleRemoveTemplate(index)}
+                                                    style={{
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: '#EF4444',
+                                                        cursor: 'pointer',
+                                                        padding: '4px'
+                                                    }}
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: '12px' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                                    Class Prefix (optional)
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={template.classPrefix}
+                                                    onChange={(e) => handleUpdateTemplate(index, 'classPrefix', e.target.value)}
+                                                    placeholder="e.g., SS"
+                                                    style={{
+                                                        border: '1px solid #D1D5DB',
+                                                        borderRadius: '6px',
+                                                        padding: '6px 10px',
+                                                        fontSize: '13px',
+                                                        width: '100%'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                                    Subjects
+                                                </label>
+                                                <TagInput
+                                                    value={template.subjects}
+                                                    onChange={(subjects) => handleUpdateTemplate(index, 'subjects', subjects)}
+                                                    placeholder="Add subjects..."
+                                                    suggestions={['English Language', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Literature in English', 'Government', 'Economics', 'Commerce', 'CRS', 'Civic Education', 'Basic Science', 'Social Studies', 'Further Mathematics']}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={handleApplyTemplates} 
+                                    disabled={saving}
+                                    style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
+                                >
+                                    {saving ? 'Applying...' : 'Apply Templates'}
+                                </button>
+                                {viewMode === 'edit' && (
+                                    <button 
+                                        className="btn btn-success" 
+                                        onClick={handleSaveChanges} 
+                                        disabled={saving}
+                                        style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
+                                    >
+                                        {saving ? 'Saving...' : 'Save All Changes'}
+                                    </button>
+                                )}
+                            </div>
+                        </LiquidGlassPanel>
+                    </div>
+                )}
             </div>
-
-            <LiquidGlassPanel hover={false} style={{ padding: 20, marginBottom: 24 }}>
-                <h3 style={{ marginTop: 0, marginBottom: 12 }}>Single Subject (Manual)</h3>
-                <div className="grid grid-2" style={{ gap: 12 }}>
-                    <FormField label="Subject Name" value={subjectForm.name} onChange={(value) => setSubjectForm((current) => ({ ...current, name: value }))} placeholder="Mathematics" />
-                    <FormField label="Subject Code" value={subjectForm.code} onChange={(value) => setSubjectForm((current) => ({ ...current, code: value.toUpperCase() }))} placeholder="MTH" />
-                    <FormField label="Class" type="select" options={classNames.map((item) => ({ value: item, label: item }))} value={subjectForm.className} onChange={(value) => setSubjectForm((current) => ({ ...current, className: value }))} />
-                    <FormField label="Teacher" type="select" options={staff.map((item) => ({ value: item.$id, label: `${item.firstName} ${item.lastName}` }))} value={subjectForm.staffId} onChange={(value) => setSubjectForm((current) => ({ ...current, staffId: value }))} />
-                </div>
-                <button className="btn btn-primary" onClick={handleCreateSubject} disabled={savingSubject}>
-                    {savingSubject ? 'Saving...' : 'Create Subject'}
-                </button>
-            </LiquidGlassPanel>
-
-            <DataTable columns={subjectColumns} data={subjects} />
-
-            {/* Edit Subject Modal */}
-            <Modal
-                open={editModalOpen}
-                onClose={() => setEditModalOpen(false)}
-                title="Edit Subject"
-                footer={
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                        <button
-                            className="btn btn-glass btn-sm"
-                            onClick={() => setEditModalOpen(false)}
-                            disabled={processingAction}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="btn btn-primary btn-sm"
-                            onClick={handleSaveEdit}
-                            disabled={processingAction}
-                        >
-                            {processingAction ? 'Saving...' : 'Save Changes'}
-                        </button>
-                    </div>
-                }
-            >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    <FormField
-                        label="Subject Name"
-                        value={editForm.name}
-                        onChange={(value) => setEditForm((prev) => ({ ...prev, name: value }))}
-                        placeholder="Mathematics"
-                        required
-                    />
-                    <FormField
-                        label="Subject Code"
-                        value={editForm.code}
-                        onChange={(value) => setEditForm((prev) => ({ ...prev, code: value.toUpperCase() }))}
-                        placeholder="MTH"
-                        required
-                    />
-                    <FormField
-                        label="Class"
-                        type="select"
-                        options={classNames.map((item) => ({ value: item, label: item }))}
-                        value={editForm.className}
-                        onChange={(value) => setEditForm((prev) => ({ ...prev, className: value }))}
-                        required
-                    />
-                    <FormField
-                        label="Teacher"
-                        type="select"
-                        options={staff.map((item) => ({ value: item.$id, label: `${item.firstName} ${item.lastName}` }))}
-                        value={editForm.staffId}
-                        onChange={(value) => setEditForm((prev) => ({ ...prev, staffId: value }))}
-                    />
-                </div>
-            </Modal>
-
-            {/* Delete Confirmation Modal */}
-            <Modal
-                open={deleteModalOpen}
-                onClose={() => setDeleteModalOpen(false)}
-                title="Delete Subject"
-                footer={
-                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                        <button
-                            className="btn btn-glass btn-sm"
-                            onClick={() => setDeleteModalOpen(false)}
-                            disabled={processingAction}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="btn btn-danger btn-sm"
-                            onClick={handleConfirmDelete}
-                            disabled={processingAction}
-                        >
-                            {processingAction ? 'Deleting...' : 'Delete'}
-                        </button>
-                    </div>
-                }
-            >
-                <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-                    <p style={{ fontSize: 16, marginBottom: 8 }}>
-                        Are you sure you want to delete this subject?
-                    </p>
-                    <p style={{ fontSize: 14, color: 'var(--color-gray-600)' }}>
-                        <strong>{selectedSubject?.name}</strong> ({selectedSubject?.code}) for {selectedSubject?.className}
-                    </p>
-                    <p style={{ fontSize: 12, color: 'var(--color-gray-500)', marginTop: 16 }}>
-                        This action cannot be undone.
-                    </p>
-                </div>
-            </Modal>
         </div>
     );
 }

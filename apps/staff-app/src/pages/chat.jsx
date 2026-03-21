@@ -339,15 +339,15 @@ export default function StaffChat() {
                                 position: 'absolute',
                                 left: 20,
                                 width: 240,
-                                background: 'rgba(30,30,40,0.95)',
+                                background: 'rgba(255,255,255,0.97)',
                                 borderRadius: 12,
-                                border: '1px solid rgba(255,255,255,0.1)',
+                                border: '1px solid rgba(0,0,0,0.08)',
                                 padding: 12,
                                 zIndex: 100,
-                                boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+                                boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                                    <Search size={14} color="rgba(255,255,255,0.5)" />
+                                    <Search size={14} color="rgba(0,0,0,0.45)" />
                                     <input
                                         type="text"
                                         placeholder="Search staff/admin..."
@@ -357,19 +357,19 @@ export default function StaffChat() {
                                             flex: 1,
                                             background: 'transparent',
                                             border: 'none',
-                                            color: '#fff',
+                                            color: '#111827',
                                             fontSize: 13,
                                             outline: 'none',
                                         }}
                                         autoFocus
                                     />
-                                    <button onClick={() => setShowStaffPicker(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}>
+                                    <button onClick={() => setShowStaffPicker(false)} style={{ background: 'none', border: 'none', color: 'rgba(0,0,0,0.45)', cursor: 'pointer' }}>
                                         <X size={14} />
                                     </button>
                                 </div>
                                 <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                                     {filteredContacts.length === 0 ? (
-                                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', padding: 8, textAlign: 'center' }}>
+                                        <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.5)', padding: 8, textAlign: 'center' }}>
                                             No contacts found
                                         </div>
                                     ) : (
@@ -389,8 +389,8 @@ export default function StaffChat() {
                                                     padding: '8px',
                                                     borderRadius: 6,
                                                     border: 'none',
-                                                    background: selectedRecipient?.$id === item.$id ? 'rgba(59,130,246,0.3)' : 'transparent',
-                                                    color: '#fff',
+                                                    background: selectedRecipient?.$id === item.$id ? 'rgba(29,78,216,0.12)' : 'transparent',
+                                                    color: '#111827',
                                                     cursor: 'pointer',
                                                     fontSize: 13,
                                                     width: '100%',
@@ -414,7 +414,7 @@ export default function StaffChat() {
                                                 </div>
                                                 <div style={{ overflow: 'hidden' }}>
                                                     <div style={{ fontWeight: 500 }}>{item.firstName} {item.lastName}</div>
-                                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{item.role === 'super_admin' ? 'Platform Admin' : item.role}</div>
+                                                    <div style={{ fontSize: 11, color: 'rgba(0,0,0,0.45)' }}>{item.role === 'super_admin' ? 'Platform Admin' : item.role}</div>
                                                 </div>
                                             </button>
                                         ))

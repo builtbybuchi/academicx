@@ -15,6 +15,7 @@ const COLLECTIONS = {
     USERS: { id: 'users' },
     STUDENTS: { id: 'students' },
     STAFF: { id: 'staff' },
+    ACADEMIC_SESSIONS: { id: 'academic_sessions' },
     CLASSES: { id: 'classes' },
     SUBJECTS: { id: 'subjects' },
     RESULTS: { id: 'results' },
@@ -418,7 +419,14 @@ async function canMarkClassAttendance(db, actor, schoolId, className) {
 
     const staffDoc = await getStaffDocByUser(db, actor.$id);
     if (!staffDoc || staffDoc.schoolId !== schoolId) return false;
-    return String(staffDoc.formTeacherClass || '').trim() === String(className || '').trim();
+
+    const classNameNormalized = String(className || '').trim();
+    if (!classNameNormalized) return false;
+
+    const multi = parseJsonArray(staffDoc.formTeacherClasses, []);
+    if (multi.includes(classNameNormalized)) return true;
+
+    return String(staffDoc.formTeacherClass || '').trim() === classNameNormalized;
 }
 
 const actions = {
@@ -565,29 +573,28 @@ const actions = {
             }
 
             if (classDoc.formTeacherId && classDoc.formTeacherId !== staffDoc.$id) {
-                await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, classDoc.formTeacherId, {
-                    formTeacherClass: '',
-                }).catch(() => null);
-            }
-
-            if (staffDoc.formTeacherClass && staffDoc.formTeacherClass !== classDoc.name) {
-                const previousClass = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
-                    Query.equal('schoolId', payload.schoolId),
-                    Query.equal('name', staffDoc.formTeacherClass),
-                    Query.limit(1),
-                ]);
-                if (previousClass.total > 0) {
-                    await db.updateDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, previousClass.documents[0].$id, {
-                        formTeacherId: '',
-                    });
+                const previousStaff = await db.getDocument(DATABASE_ID, COLLECTIONS.STAFF.id, classDoc.formTeacherId).catch(() => null);
+                if (previousStaff) {
+                    const previousClasses = parseJsonArray(previousStaff.formTeacherClasses, []);
+                    const updatedPreviousClasses = previousClasses.filter((name) => name !== classDoc.name);
+                    await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, classDoc.formTeacherId, {
+                        formTeacherClass: updatedPreviousClasses[0] || '',
+                        formTeacherClasses: JSON.stringify(updatedPreviousClasses),
+                    }).catch(() => null);
                 }
             }
+
+            const currentClasses = parseJsonArray(staffDoc.formTeacherClasses, []);
+            const mergedClasses = currentClasses.includes(classDoc.name)
+                ? currentClasses
+                : [...currentClasses, classDoc.name];
 
             const updatedClass = await db.updateDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, classDoc.$id, {
                 formTeacherId: staffDoc.$id,
             });
             const updatedStaff = await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, staffDoc.$id, {
-                formTeacherClass: classDoc.name,
+                formTeacherClass: mergedClasses[0] || classDoc.name,
+                formTeacherClasses: JSON.stringify(mergedClasses),
             });
 
             return { success: true, data: { class: updatedClass, staff: updatedStaff } };
@@ -672,11 +679,14 @@ const actions = {
                 dateOfBirth: payload.dateOfBirth || '',
                 gender: payload.gender || 'male',
                 profileImage: '',
-                department: payload.department || '',
+                department: Array.isArray(payload.department)
+                    ? payload.department.join(', ')
+                    : (payload.department || ''),
                 staffType: payload.staffType || 'academic',
                 assignedClasses: JSON.stringify(payload.assignedClasses || []),
                 assignedSubjects: JSON.stringify(payload.assignedSubjects || []),
                 formTeacherClass: payload.formTeacherClass || '',
+                formTeacherClasses: JSON.stringify(payload.formTeacherClasses || (payload.formTeacherClass ? [payload.formTeacherClass] : [])),
                 canMarkStaffAttendance: Boolean(payload.canMarkStaffAttendance),
                 attendanceRole: payload.canMarkStaffAttendance ? 'officer' : 'none',
                 attendanceAssignedBy: payload.canMarkStaffAttendance ? (payload.attendanceAssignedBy || '') : '',
@@ -1843,10 +1853,40 @@ const actions = {
             const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
             const staff = await getStaffDocByUser(db, user.$id);
             const assignedClasses = parseJsonArray(staff?.assignedClasses, []);
+            const formTeacherClasses = (() => {
+                const multi = parseJsonArray(staff?.formTeacherClasses, []);
+                if (multi.length > 0) return multi;
+                const single = String(staff?.formTeacherClass || '').trim();
+                return single ? [single] : [];
+            })();
+            const assignedSubjectsRaw = parseJsonArray(staff?.assignedSubjects, []);
+
+            const subjects = await db.listDocuments(DATABASE_ID, COLLECTIONS.SUBJECTS.id, [
+                Query.equal('schoolId', user.schoolId),
+                Query.limit(300),
+            ]);
+            const subjectList = subjects.documents;
+
+            const assignedSubjectValues = assignedSubjectsRaw.map((value) => String(value || '').trim()).filter(Boolean);
+            const assignedSubjectById = new Set(assignedSubjectValues.filter((value) => /^[a-z0-9]{10,}$/i.test(value)));
+            const assignedSubjectByName = new Set(assignedSubjectValues.map((value) => value.toLowerCase()));
+
+            const filteredSubjects = assignedSubjectValues.length === 0
+                ? subjectList
+                : subjectList.filter((subject) => (
+                    assignedSubjectById.has(String(subject.$id || ''))
+                    || assignedSubjectByName.has(String(subject.name || '').toLowerCase())
+                ));
+
+            const allowedClasses = new Set([
+                ...assignedClasses,
+                ...formTeacherClasses,
+                ...filteredSubjects.map((item) => item.className).filter(Boolean),
+            ]);
 
             let classStudents = [];
-            if (assignedClasses.length > 0) {
-                const studentPromises = assignedClasses.map((className) => db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+            if (allowedClasses.size > 0) {
+                const studentPromises = Array.from(allowedClasses).map((className) => db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
                     Query.equal('schoolId', user.schoolId),
                     Query.equal('className', className),
                     Query.limit(200),
@@ -1855,14 +1895,17 @@ const actions = {
                 classStudents = responses.flatMap((r) => r.documents);
             }
 
-            const subjects = await db.listDocuments(DATABASE_ID, COLLECTIONS.SUBJECTS.id, [
-                Query.equal('schoolId', user.schoolId),
-                Query.limit(300),
-            ]);
             const results = await db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
                 Query.equal('schoolId', user.schoolId),
                 Query.limit(500),
             ]);
+
+            const filteredResults = results.documents.filter((row) => {
+                const classAllowed = allowedClasses.size === 0 || allowedClasses.has(String(row.className || ''));
+                const subjectAllowed = filteredSubjects.length === 0 || filteredSubjects.some((subject) => subject.$id === row.subjectId);
+                return classAllowed && subjectAllowed;
+            });
+
             const staffAttendance = await db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF_ATTENDANCE.id, [
                 Query.equal('staffDocId', staff?.$id || ''),
                 Query.limit(60),
@@ -1876,9 +1919,11 @@ const actions = {
                     school,
                     staff,
                     assignedClasses,
+                    formTeacherClasses,
+                    assignedSubjects: assignedSubjectsRaw,
                     students: classStudents,
-                    subjects: subjects.documents,
-                    results: results.documents,
+                    subjects: filteredSubjects,
+                    results: filteredResults,
                     staffAttendance: staffAttendance.documents,
                     currentTerm: school.currentTerm || '',
                     currentSession: school.currentSession || '',

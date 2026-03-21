@@ -171,6 +171,14 @@ export async function createAcademicSession(data) {
     return databases.createDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, ID.unique(), data);
 }
 
+export async function updateAcademicSession(docId, data) {
+    return databases.updateDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, docId, data);
+}
+
+export async function deleteAcademicSession(docId) {
+    return databases.deleteDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, docId);
+}
+
 export async function createClass(data) {
     return databases.createDocument(DATABASE_ID, COLLECTIONS.CLASSES, ID.unique(), data);
 }
@@ -178,7 +186,7 @@ export async function createClass(data) {
 // ── Subjects ──────────────────────────────────────────────
 
 export async function listSubjects(schoolId, className) {
-    const q = [Query.equal('schoolId', schoolId), Query.limit(50)];
+    const q = [Query.equal('schoolId', schoolId), Query.limit(500)];
     if (className) q.push(Query.equal('className', className));
     return databases.listDocuments(DATABASE_ID, COLLECTIONS.SUBJECTS, q);
 }
