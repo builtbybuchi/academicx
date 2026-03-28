@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, LogOut, Download } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, LogOut, Download, Globe } from 'lucide-react';
 import Sidebar from '../../../shared/components/Sidebar.jsx';
 import { useAuth } from '../../../shared/utils/auth.jsx';
 import AuthPage from '../../../shared/components/AuthPage.jsx';
@@ -13,6 +13,7 @@ import Results from './pages/results.jsx';
 import Communication from './pages/communication.jsx';
 import Chat from './pages/chat.jsx';
 import Downloads from './pages/downloads.jsx';
+import Website from './pages/website.jsx';
 
 export default function App() {
     const navigate = useNavigate();
@@ -33,6 +34,7 @@ export default function App() {
                 { id: '/profile', label: 'Profile', icon: <Users size={20} /> },
                 { id: '/academics', label: 'Academics', icon: <BookOpen size={20} /> },
                 { id: '/grading', label: 'Grading Schemes', icon: <Settings size={20} /> },
+                { id: '/website', label: 'School website', icon: <Globe size={20} /> },
             ],
         },
         {
@@ -123,6 +125,7 @@ export default function App() {
                     <Route path="/enrollment" element={<Enrollment />} />
                     <Route path="/academics" element={<Academics />} />
                     <Route path="/grading" element={<Grading />} />
+                    <Route path="/website" element={<Website />} />
                     <Route path="/results" element={<Results />} />
                     <Route path="/communication" element={<Communication />} />
                     <Route path="/chat" element={<Chat />} />

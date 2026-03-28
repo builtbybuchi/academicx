@@ -25,6 +25,7 @@ const COLLECTIONS = {
     PAYMENTS: { id: 'payments' },
     CHAT_MESSAGES: { id: 'chat_messages' },
     EMAIL_SENDS: { id: 'email_sends' },
+    CONTACT_MESSAGES: { id: 'contact_messages' },
 };
 
 function getClient() {
@@ -2006,6 +2007,46 @@ const actions = {
                     results: results.documents,
                 },
             };
+        },
+    },
+
+    /** Public: school website contact form → contact_messages (validated server-side). */
+    submitContactMessage: {
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const schoolId = String(payload.schoolId || '').trim();
+            if (!schoolId) {
+                return { success: false, error: 'schoolId is required.' };
+            }
+
+            const name = String(payload.name || '').trim().slice(0, 150);
+            const message = String(payload.message || '').trim().slice(0, 5000);
+            if (!name || !message) {
+                return { success: false, error: 'name and message are required.' };
+            }
+
+            try {
+                await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId);
+            } catch {
+                return { success: false, error: 'School not found.' };
+            }
+
+            const email = String(payload.email || '').trim().slice(0, 255);
+            const phone = String(payload.phone || '').trim().slice(0, 20);
+            const subject = String(payload.subject || '').trim().slice(0, 200);
+
+            const doc = await db.createDocument(DATABASE_ID, COLLECTIONS.CONTACT_MESSAGES.id, ID.unique(), {
+                schoolId,
+                name,
+                email: email || '',
+                phone: phone || '',
+                subject: subject || '',
+                message,
+                status: 'new',
+                createdAt: nowIso(),
+            });
+
+            return { success: true, data: { id: doc.$id } };
         },
     },
 };

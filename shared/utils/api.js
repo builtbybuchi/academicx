@@ -7,14 +7,14 @@ import { Client, Account, Databases, Storage, Realtime, ID, Query } from 'appwri
 // ── Appwrite Client ───────────────────────────────────────
 const client = new Client();
 client
-    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '');
+    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
+    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || 'fullacademicx');
 
 export const account = new Account(client);
 export const databases = new Databases(client);
 export const storage = new Storage(client);
 
-const FUNCTION_URL = import.meta.env.VITE_APPWRITE_FUNCTION_URL || '';
+const FUNCTION_URL = import.meta.env.VITE_APPWRITE_FUNCTION_URL || 'https://academicx.fly.dev';
 
 export const DATABASE_ID = 'academicx_db';
 export const BUCKET_ID = 'school_media';
@@ -36,6 +36,12 @@ export const COLLECTIONS = {
     PAYMENTS: 'payments',
     CHAT_MESSAGES: 'chat_messages',
     EMAIL_SENDS: 'email_sends',
+    EVENTS: 'events',
+    NEWS: 'news',
+    GALLERY_IMAGES: 'gallery_images',
+    TESTIMONIALS: 'testimonials',
+    ACCREDITATIONS: 'accreditations',
+    CONTACT_MESSAGES: 'contact_messages',
 };
 
 // ── Auth Helpers ──────────────────────────────────────────
@@ -116,6 +122,173 @@ export async function getSchool(schoolId) {
 
 export async function updateSchool(schoolId, data) {
     return databases.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS, schoolId, data);
+}
+
+/** Resolve school by public website slug (subdomain), e.g. demo → demo.buchis.site */
+export async function getSchoolByWebsiteSlug(slug) {
+    const normalized = String(slug || '').trim().toLowerCase();
+    if (!normalized) return null;
+    const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOLS, [
+        Query.equal('websiteSlug', normalized),
+        Query.limit(1),
+    ]);
+    return res.documents[0] || null;
+}
+
+export async function listSchoolEvents(schoolId, limit = 50) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.EVENTS, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('status', 'published'),
+        Query.orderDesc('createdAt'),
+        Query.limit(limit),
+    ]);
+}
+
+export async function listSchoolNews(schoolId, limit = 50) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.NEWS, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('status', 'published'),
+        Query.orderDesc('createdAt'),
+        Query.limit(limit),
+    ]);
+}
+
+export async function listSchoolGalleryImages(schoolId, limit = 100) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.GALLERY_IMAGES, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('status', 'visible'),
+        Query.orderAsc('sortOrder'),
+        Query.limit(limit),
+    ]);
+}
+
+export async function listSchoolTestimonials(schoolId, limit = 50) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.TESTIMONIALS, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('status', 'published'),
+        Query.orderAsc('sortOrder'),
+        Query.limit(limit),
+    ]);
+}
+
+/** @param {'accreditation'|'partnership'} kind */
+export async function listSchoolAccreditations(schoolId, kind = 'accreditation', limit = 50) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.ACCREDITATIONS, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('type', kind),
+        Query.equal('status', 'published'),
+        Query.orderAsc('sortOrder'),
+        Query.limit(limit),
+    ]);
+}
+
+/** Saves a contact form message via backend function (no client write permission needed). */
+export async function submitContactMessage(payload) {
+    return invokeBackendFunction('submitContactMessage', payload);
+}
+
+/** Inbox for school admin (requires Appwrite read on contact_messages). */
+export async function listContactMessages(schoolId, limit = 200) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.CONTACT_MESSAGES, [
+        Query.equal('schoolId', schoolId),
+        Query.orderDesc('createdAt'),
+        Query.limit(limit),
+    ]);
+}
+
+export async function updateContactMessage(docId, data) {
+    return databases.updateDocument(DATABASE_ID, COLLECTIONS.CONTACT_MESSAGES, docId, data);
+}
+
+export async function listAllSchoolEvents(schoolId, limit = 100) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.EVENTS, [
+        Query.equal('schoolId', schoolId),
+        Query.orderDesc('createdAt'),
+        Query.limit(limit),
+    ]);
+}
+
+export async function listAllSchoolNews(schoolId, limit = 100) {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.NEWS, [
+        Query.equal('schoolId', schoolId),
+        Query.orderDesc('createdAt'),
+        Query.limit(limit),
+    ]);
+}
+
+export async function createSchoolEvent(schoolId, data) {
+    const createdAt = new Date().toISOString();
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.EVENTS, ID.unique(), {
+        schoolId,
+        title: data.title,
+        date: data.date || createdAt.slice(0, 10),
+        time: data.time || '',
+        location: data.location || '',
+        description: data.description || '',
+        summary: data.summary || '',
+        image: data.image || '',
+        status: data.status || 'published',
+        createdAt,
+    });
+}
+
+export async function createSchoolNews(schoolId, data) {
+    const createdAt = new Date().toISOString();
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.NEWS, ID.unique(), {
+        schoolId,
+        title: data.title,
+        summary: data.summary || '',
+        body: data.body || '',
+        image: data.image || '',
+        status: data.status || 'published',
+        publishedAt: data.publishedAt || createdAt,
+        createdAt,
+    });
+}
+
+export async function createGalleryImage(schoolId, data) {
+    const createdAt = new Date().toISOString();
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.GALLERY_IMAGES, ID.unique(), {
+        schoolId,
+        fileId: data.fileId || '',
+        imageUrl: data.imageUrl || '',
+        caption: data.caption || '',
+        status: data.status || 'visible',
+        sortOrder: data.sortOrder ?? 0,
+        createdAt,
+    });
+}
+
+export async function createTestimonial(schoolId, data) {
+    const createdAt = new Date().toISOString();
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.TESTIMONIALS, ID.unique(), {
+        schoolId,
+        name: data.name,
+        role: data.role || '',
+        message: data.message,
+        avatar: data.avatar || '',
+        status: data.status || 'published',
+        sortOrder: data.sortOrder ?? 0,
+        createdAt,
+    });
+}
+
+export async function createAccreditation(schoolId, data) {
+    const createdAt = new Date().toISOString();
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.ACCREDITATIONS, ID.unique(), {
+        schoolId,
+        name: data.name,
+        type: data.type || 'accreditation',
+        logo: data.logo || '',
+        website: data.website || '',
+        status: data.status || 'published',
+        sortOrder: data.sortOrder ?? 0,
+        createdAt,
+    });
+}
+
+export async function deleteSchoolWebsiteDocument(collectionId, docId) {
+    return databases.deleteDocument(DATABASE_ID, collectionId, docId);
 }
 
 // ── Students ──────────────────────────────────────────────
@@ -601,6 +774,12 @@ export async function uploadImage(file) {
 
 export function getImageUrl(fileId) {
     return storage.getFilePreview(BUCKET_ID, fileId, 400, 400).toString();
+}
+
+/** Preview URL for gallery or hero images stored in school_media. */
+export function getSchoolMediaPreviewUrl(fileId, width = 1200, height = 800) {
+    if (!fileId) return '';
+    return storage.getFilePreview(BUCKET_ID, fileId, width, height).toString();
 }
 
 export { ID, Query, client };
