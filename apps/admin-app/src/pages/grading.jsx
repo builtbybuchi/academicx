@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../../../../shared/components/FormField.jsx';
-import Modal from '../../../../shared/components/Modal.jsx';
-import { useToast } from '../../../../shared/components/Toast.jsx';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
-import { DEFAULT_GRADING } from '../../../../shared/utils/index.js';
-import { getGradingScheme, saveGradingScheme } from '../../../../shared/utils/api.js';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import FormField from '../shared/components/FormField.jsx';
+import Modal from '../shared/components/Modal.jsx';
+import { useToast } from '../shared/components/Toast.jsx';
+import { useAuth } from '../shared/utils/auth.jsx';
+import { DEFAULT_GRADING } from '../shared/utils/index.js';
+import { getGradingScheme, saveGradingScheme } from '../shared/utils/api.js';
 
 export default function Grading() {
     const { schoolId } = useAuth();

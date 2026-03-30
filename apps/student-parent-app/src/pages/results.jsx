@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { getStudentPortalData, listSubjects } from '../../../../shared/utils/api.js';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { getStudentPortalData, listSubjects } from '../shared/utils/api.js';
 
 const gradeColors = { A: '#10B981', B: '#3B82F6', C: '#F59E0B', D: '#F97316', E: '#EF4444', F: '#DC2626' };
 

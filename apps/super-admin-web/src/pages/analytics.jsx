@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import StatsCard from '../../../../shared/components/StatsCard.jsx';
-import { getSuperAdminPortalData } from '../../../../shared/utils/api.js';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import StatsCard from '../shared/components/StatsCard.jsx';
+import { getSuperAdminPortalData } from '../shared/utils/api.js';
 
 export default function Analytics() {
     const [data, setData] = useState({ schools: [], users: [], payments: [] });

@@ -1,10 +1,10 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, LogOut, Download, Globe } from 'lucide-react';
-import Sidebar from '../../../shared/components/Sidebar.jsx';
-import { useAuth } from '../../../shared/utils/auth.jsx';
-import AuthPage from '../../../shared/components/AuthPage.jsx';
-import { registerSchool } from '../../../shared/utils/api.js';
+import Sidebar from 'shared/components/Sidebar.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
+import AuthPage from 'shared/components/AuthPage.jsx';
+import { registerSchool } from 'shared/utils/api.js';
 import Dashboard from './pages/dashboard.jsx';
 import Enrollment from './pages/enrollment.jsx';
 import Academics from './pages/academics.jsx';

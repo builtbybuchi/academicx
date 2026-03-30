@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../../../../shared/components/FormField.jsx';
-import { getStudentPortalData, verifyPin, listSubjects } from '../../../../shared/utils/api.js';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import FormField from '../shared/components/FormField.jsx';
+import { getStudentPortalData, verifyPin, listSubjects } from '../shared/utils/api.js';
 
 export default function PinAccess() {
     const [pin, setPin] = useState('');

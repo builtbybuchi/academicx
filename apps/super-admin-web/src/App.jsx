@@ -1,9 +1,9 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { BarChart, Building2, CreditCard, TrendingUp, Settings, LogOut } from 'lucide-react';
-import Sidebar from '../../../shared/components/Sidebar.jsx';
-import { useAuth } from '../../../shared/utils/auth.jsx';
-import AuthPage from '../../../shared/components/AuthPage.jsx';
+import Sidebar from 'shared/components/Sidebar.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
+import AuthPage from 'shared/components/AuthPage.jsx';
 import Dashboard from './pages/dashboard.jsx';
 import Schools from './pages/schools.jsx';
 import Payments from './pages/payments.jsx';

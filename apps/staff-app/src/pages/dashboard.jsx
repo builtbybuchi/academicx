@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Users, ClipboardList, CheckSquare, Edit3 } from 'lucide-react';
-import StatsCard from '../../../../shared/components/StatsCard.jsx';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { getStaffPortalData } from '../../../../shared/utils/api.js';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
+import StatsCard from '../shared/components/StatsCard.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { getStaffPortalData } from '../shared/utils/api.js';
+import { useAuth } from '../shared/utils/auth.jsx';
 
 export default function Dashboard() {
     const { profile } = useAuth();

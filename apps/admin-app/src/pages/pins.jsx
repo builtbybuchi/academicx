@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DataTable from '../../../../shared/components/DataTable.jsx';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import StatsCard from '../../../../shared/components/StatsCard.jsx';
-import FormField from '../../../../shared/components/FormField.jsx';
-import { useToast } from '../../../../shared/components/Toast.jsx';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
-import { formatDate } from '../../../../shared/utils/index.js';
-import { generateSchoolPins, getSchool, listPins, listStudents } from '../../../../shared/utils/api.js';
+import DataTable from '../shared/components/DataTable.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import StatsCard from '../shared/components/StatsCard.jsx';
+import FormField from '../shared/components/FormField.jsx';
+import { useToast } from '../shared/components/Toast.jsx';
+import { useAuth } from '../shared/utils/auth.jsx';
+import { formatDate } from '../shared/utils/index.js';
+import { generateSchoolPins, getSchool, listPins, listStudents } from '../shared/utils/api.js';
 
 export default function Pins() {
     const { schoolId } = useAuth();

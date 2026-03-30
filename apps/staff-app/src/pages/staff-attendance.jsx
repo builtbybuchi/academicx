@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Clock, LogIn, LogOut, CheckCircle } from 'lucide-react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { getStaffPortalData, staffCheckIn, staffCheckOut } from '../../../../shared/utils/api.js';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { getStaffPortalData, staffCheckIn, staffCheckOut } from '../shared/utils/api.js';
+import { useAuth } from '../shared/utils/auth.jsx';
 
 export default function StaffAttendance() {
     const { schoolId } = useAuth();

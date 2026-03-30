@@ -1,9 +1,9 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock, LogOut, UserCircle } from 'lucide-react';
-import Sidebar from '../../../shared/components/Sidebar.jsx';
-import { useAuth } from '../../../shared/utils/auth.jsx';
-import AuthPage from '../../../shared/components/AuthPage.jsx';
+import Sidebar from 'shared/components/Sidebar.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
+import AuthPage from 'shared/components/AuthPage.jsx';
 import Dashboard from './pages/dashboard.jsx';
 import ResultsEntry from './pages/results-entry.jsx';
 import Attendance from './pages/attendance.jsx';

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { markStudentAttendance, getStaffPortalData } from '../../../../shared/utils/api.js';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { markStudentAttendance, getStaffPortalData } from '../shared/utils/api.js';
+import { useAuth } from '../shared/utils/auth.jsx';
 
 const statusOptions = ['present', 'absent', 'late', 'excused'];
 const statusColors = { present: 'success', absent: 'danger', late: 'warning', excused: 'primary' };

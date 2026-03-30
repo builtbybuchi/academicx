@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DataTable from '../../../../shared/components/DataTable.jsx';
-import Modal from '../../../../shared/components/Modal.jsx';
-import FormField from '../../../../shared/components/FormField.jsx';
-import { createSchoolAdmin, getSuperAdminPortalData, registerSchool } from '../../../../shared/utils/api.js';
+import DataTable from '../shared/components/DataTable.jsx';
+import Modal from '../shared/components/Modal.jsx';
+import FormField from '../shared/components/FormField.jsx';
+import { createSchoolAdmin, getSuperAdminPortalData, registerSchool } from '../shared/utils/api.js';
 
 const baseColumns = [
     { key: 'name', label: 'School Name' },

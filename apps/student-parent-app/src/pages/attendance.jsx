@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { getStudentPortalData } from '../../../../shared/utils/api.js';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { getStudentPortalData } from '../shared/utils/api.js';
 
 const statusEmoji = { present: '✅', absent: '❌', late: '⏰', excused: '📝' };
 const statusColors = { present: '#10B981', absent: '#EF4444', late: '#F59E0B', excused: '#3B82F6' };

@@ -1,9 +1,9 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { Home, BarChart2, ClipboardList, KeySquare, UserCircle } from 'lucide-react';
-import Sidebar from '../../../shared/components/Sidebar.jsx';
-import { useAuth } from '../../../shared/utils/auth.jsx';
-import AuthPage from '../../../shared/components/AuthPage.jsx';
+import Sidebar from 'shared/components/Sidebar.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
+import AuthPage from 'shared/components/AuthPage.jsx';
 import Dashboard from './pages/dashboard.jsx';
 import Results from './pages/results.jsx';
 import AttendanceView from './pages/attendance.jsx';

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DataTable from '../../../../shared/components/DataTable.jsx';
-import Modal from '../../../../shared/components/Modal.jsx';
-import FormField from '../../../../shared/components/FormField.jsx';
-import { useToast } from '../../../../shared/components/Toast.jsx';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
+import DataTable from '../shared/components/DataTable.jsx';
+import Modal from '../shared/components/Modal.jsx';
+import FormField from '../shared/components/FormField.jsx';
+import { useToast } from '../shared/components/Toast.jsx';
+import { useAuth } from '../shared/utils/auth.jsx';
 import {
     addStaff,
     assignFormTeacher,
@@ -16,7 +16,7 @@ import {
     listUsers,
     setStaffAttendanceOfficer,
     updateProfile,
-} from '../../../../shared/utils/api.js';
+} from '../shared/utils/api.js';
 
 export default function Enrollment() {
     const { schoolId, profile } = useAuth();

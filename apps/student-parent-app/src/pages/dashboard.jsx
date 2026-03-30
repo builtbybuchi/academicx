@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart2, CheckSquare, BookOpen, Trophy, Bell } from 'lucide-react';
-import StatsCard from '../../../../shared/components/StatsCard.jsx';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { getStudentPortalData } from '../../../../shared/utils/api.js';
+import StatsCard from '../shared/components/StatsCard.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { getStudentPortalData } from '../shared/utils/api.js';
 
 const typeColors = { important: 'var(--color-danger)', info: 'var(--color-primary)', warning: 'var(--color-warning)' };
 

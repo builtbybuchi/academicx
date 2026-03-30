@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../../../../shared/components/FormField.jsx';
-import { useToast } from '../../../../shared/components/Toast.jsx';
-import { getStaffPortalData, updateProfile } from '../../../../shared/utils/api.js';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import FormField from '../shared/components/FormField.jsx';
+import { useToast } from '../shared/components/Toast.jsx';
+import { getStaffPortalData, updateProfile } from '../shared/utils/api.js';
+import { useAuth } from '../shared/utils/auth.jsx';
 
 export default function StaffProfile() {
     const toast = useToast();

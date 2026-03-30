@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Users, UserPlus, ClipboardList, KeySquare, FileText, Settings, UserCircle, Mail, PlusCircle } from 'lucide-react';
-import StatsCard from '../../../../shared/components/StatsCard.jsx';
-import LiquidGlassPanel from '../../../../shared/components/LiquidGlassPanel.jsx';
-import { useAuth } from '../../../../shared/utils/auth.jsx';
-import { formatDate } from '../../../../shared/utils/index.js';
-import { getSchool, listPins, listResults, listStaff, listStudents, listUsers } from '../../../../shared/utils/api.js';
+import StatsCard from '../shared/components/StatsCard.jsx';
+import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
+import { useAuth } from '../shared/utils/auth.jsx';
+import { formatDate } from '../shared/utils/index.js';
+import { getSchool, listPins, listResults, listStaff, listStudents, listUsers } from '../shared/utils/api.js';
 
 export default function Dashboard() {
     const { schoolId } = useAuth();
