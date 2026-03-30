@@ -1,6 +1,7 @@
 import { matchPath, Outlet, useLocation } from 'react-router-dom';
 import { SchoolSiteProvider } from '@/context/SchoolSiteContext';
 import { useHostSlug } from '@/hooks/useHostSlug';
+import { TemplateLayout } from '@/templates/TemplateLayout';
 
 export function SchoolLayout() {
     const { pathname } = useLocation();
@@ -25,7 +26,9 @@ export function SchoolLayout() {
 
     return (
         <SchoolSiteProvider slug={slug}>
-            <Outlet />
+            <TemplateLayout>
+                <Outlet />
+            </TemplateLayout>
         </SchoolSiteProvider>
     );
 }

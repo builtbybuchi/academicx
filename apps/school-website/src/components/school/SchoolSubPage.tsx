@@ -1,33 +1,24 @@
-import { SchoolNavBar, type NavVariant } from '@/components/school/SchoolNavBar';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
-import { useBasePath } from '@/hooks/useBasePath';
+import { SubPageHero } from '@/templates/SharedTemplateComponents';
 
 export function SchoolSubPage({
     title,
+    subtitle,
     children,
-    navVariant = 'classic',
 }: {
     title: string;
+    subtitle?: string;
     children: React.ReactNode;
-    navVariant?: NavVariant;
 }) {
     const { school, loading } = useSchoolSite();
-    const basePath = useBasePath();
-    if (loading) return <div className="flex min-h-[40vh] items-center justify-center">Loading…</div>;
+    if (loading) return null;
     if (!school) return null;
-    const name = String(school.name || 'School');
 
     return (
-        <div className="min-h-screen bg-school-background">
-            <SchoolNavBar
-                variant={navVariant}
-                schoolName={name}
-                logoUrl={school.logo ? String(school.logo) : undefined}
-                basePath={basePath}
-            />
-            <main className="mx-auto max-w-6xl px-4 py-12">
-                <h1 className="font-display text-4xl font-bold text-school-text">{title}</h1>
-                <div className="mt-8">{children}</div>
+        <div className="min-h-screen flex flex-col">
+            <SubPageHero title={title} subtitle={subtitle} />
+            <main className="container mx-auto px-4 pb-20 flex-1">
+                {children}
             </main>
         </div>
     );

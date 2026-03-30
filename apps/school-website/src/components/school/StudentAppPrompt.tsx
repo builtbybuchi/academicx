@@ -56,11 +56,6 @@ export function StudentAppPrompt({ schoolId }: { schoolId: string }) {
                         Google Play
                     </a>
                 </Button>
-                <Button size="sm" variant="outline" asChild>
-                    <a href={IOS} target="_blank" rel="noreferrer">
-                        App Store
-                    </a>
-                </Button>
                 <Button size="sm" variant="accent" asChild>
                     <a href={APK} target="_blank" rel="noreferrer">
                         Direct APK

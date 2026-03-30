@@ -17,6 +17,11 @@ import {
     createAccreditation,
 } from '../../../../shared/utils/api.js';
 
+const PLACEHOLDER_1 = 'https://res.cloudinary.com/dlvffw5wt/image/upload/v1774778057/emmanuel-ikwuegbu-VC6MGt9ZoBA-unsplash_lz8ghr.jpg';
+const PLACEHOLDER_2 = 'https://res.cloudinary.com/dlvffw5wt/image/upload/v1774778053/ben-white-83tkHLPgg2Q-unsplash_vj2fjt.jpg';
+const PLACEHOLDER_3 = 'https://res.cloudinary.com/dlvffw5wt/image/upload/v1774778053/topsphere-media-oOHBxlGADx4-unsplash_hsnsik.jpg';
+const DEFAULT_LOGO = 'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
+
 function defaultData() {
     return {
         colors: {
@@ -29,13 +34,13 @@ function defaultData() {
         hero: {
             headline: 'Welcome to our school',
             subheadline: 'Excellence in education',
-            imageUrl: '',
+            imageUrl: PLACEHOLDER_1,
             imageFileId: '',
         },
         about: {
             title: 'About Us',
             body: 'Tell your school story here.',
-            imageUrls: [],
+            imageUrls: [PLACEHOLDER_2, PLACEHOLDER_3],
             imageFileIds: [],
         },
         schoolAnthem: '',
@@ -66,11 +71,15 @@ function parseData(raw) {
     }
     return {
         colors: { ...d.colors, ...(o.colors || {}) },
-        hero: { ...d.hero, ...(o.hero || {}) },
+        hero: { 
+            ...d.hero, 
+            ...(o.hero || {}),
+            imageUrl: o.hero?.imageUrl || d.hero.imageUrl 
+        },
         about: {
             ...d.about,
             ...(o.about || {}),
-            imageUrls: Array.isArray(o.about?.imageUrls) ? o.about.imageUrls : d.about.imageUrls,
+            imageUrls: Array.isArray(o.about?.imageUrls) && o.about.imageUrls.length ? o.about.imageUrls : d.about.imageUrls,
             imageFileIds: Array.isArray(o.about?.imageFileIds) ? o.about.imageFileIds : d.about.imageFileIds,
         },
         schoolAnthem: o.schoolAnthem ?? d.schoolAnthem,
@@ -98,12 +107,16 @@ const TEMPLATES = [
     { id: 'template4', label: 'Geometric', hint: 'Bold angles' },
     { id: 'template5', label: 'Editorial', hint: 'Serif, airy' },
     { id: 'template6', label: 'Poster', hint: 'High-contrast borders' },
+    { id: 'template7', label: 'Minimal', hint: 'Modern & clean' },
+    { id: 'template8', label: 'Vibrant', hint: 'Playful community' },
+    { id: 'template9', label: 'Corporate', hint: 'Professional' },
+    { id: 'template10', label: 'Nature', hint: 'Serene & earthy' },
 ];
 
 export default function Website() {
     const { schoolId } = useAuth();
     const toast = useToast();
-    const [tab, setTab] = useState('setup');
+    const [tab, setTab] = useState('appearance');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [seeding, setSeeding] = useState(false);
@@ -133,8 +146,8 @@ export default function Website() {
                 setLogoStorage(logo);
                 setLogoPreview(getSchoolMediaPreviewUrl(logo, 200, 200));
             } else {
-                setLogoStorage('');
-                setLogoPreview('');
+                setLogoStorage(DEFAULT_LOGO);
+                setLogoPreview(DEFAULT_LOGO);
             }
             setData(parseData(school.data));
         } catch (e) {
@@ -305,11 +318,27 @@ export default function Website() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
                 <button
                     type="button"
-                    className={`btn ${tab === 'setup' ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setTab('setup')}
+                    className={`btn ${tab === 'appearance' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setTab('appearance')}
+                >
+                    <Sparkles size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    Appearance
+                </button>
+                <button
+                    type="button"
+                    className={`btn ${tab === 'content' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setTab('content')}
+                >
+                    <Sparkles size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    Content
+                </button>
+                <button
+                    type="button"
+                    className={`btn ${tab === 'contact' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setTab('contact')}
                 >
                     <Globe size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-                    Setup
+                    Contact & Social
                 </button>
                 <button
                     type="button"
@@ -317,13 +346,21 @@ export default function Website() {
                     onClick={() => setTab('messages')}
                 >
                     <MessageSquare size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-                    Contact messages
+                    Messages
+                </button>
+                <button
+                    type="button"
+                    className={`btn ${tab === 'tools' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setTab('tools')}
+                >
+                    <Sparkles size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                    Tools
                 </button>
             </div>
 
-            {tab === 'setup' && (
+            {tab === 'appearance' && (
                 <>
-                    <LiquidGlassPanel title="Public URL & testing" style={{ marginBottom: 20 }}>
+                    <LiquidGlassPanel title="Public URL & Preview" style={{ marginBottom: 20 }}>
                         <FormField
                             label="Website slug (subdomain)"
                             placeholder="e.g. demo"
@@ -331,19 +368,28 @@ export default function Website() {
                             onChange={(v) => setWebsiteSlug(String(v).toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                         />
                         <p style={{ fontSize: 13, opacity: 0.8, marginTop: -8 }}>
-                            Use in hosts file: <code>{slugHint}.buchis.site</code> → your dev server. Or test with{' '}
-                            <code>/site/{slugHint}</code> on the school-website app.
+                            Public URL: <code>{slugHint}.buchis.site</code>. Or test with{' '}
+                            <code>/site/{slugHint}</code>.
                         </p>
-                        <p style={{ fontSize: 13, opacity: 0.75 }}>
-                            Preview base (this admin origin): <code>{previewPath}</code>
-                        </p>
+                        <div style={{ marginTop: 16 }}>
+                            <a
+                                className="btn btn-secondary btn-sm"
+                                href={`https://${slugHint}.buchis.site`}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                Open website
+                                <ExternalLink size={14} />
+                            </a>
+                        </div>
                     </LiquidGlassPanel>
 
-                    <LiquidGlassPanel title="Template" style={{ marginBottom: 20 }}>
+                    <LiquidGlassPanel title="Visual Template" style={{ marginBottom: 20 }}>
                         <div
                             style={{
                                 display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
                                 gap: 12,
                             }}
                         >
@@ -353,115 +399,136 @@ export default function Website() {
                                     type="button"
                                     onClick={() => setTemplateId(t.id)}
                                     style={{
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        border: templateId === t.id ? '2px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.2)',
-                                        background: templateId === t.id ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.15)',
+                                        padding: 16,
+                                        borderRadius: 16,
+                                        border: templateId === t.id ? '2px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.1)',
+                                        background: templateId === t.id ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.2)',
                                         cursor: 'pointer',
                                         textAlign: 'left',
+                                        transition: 'all 0.2s',
                                     }}
                                 >
-                                    <div style={{ fontWeight: 700 }}>{t.label}</div>
-                                    <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{t.hint}</div>
-                                    <div style={{ fontSize: 10, opacity: 0.5, marginTop: 6 }}>{t.id}</div>
+                                    <div style={{ fontWeight: 800, fontSize: 15 }}>{t.label}</div>
+                                    <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>{t.hint}</div>
                                 </button>
                             ))}
                         </div>
                     </LiquidGlassPanel>
 
-                    <LiquidGlassPanel title="Brand & colours" style={{ marginBottom: 20 }}>
-                        <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-                            {logoPreview ? (
-                                <img src={logoPreview} alt="Logo" style={{ height: 56, objectFit: 'contain', borderRadius: 8 }} />
-                            ) : (
-                                <span style={{ opacity: 0.7 }}>No logo</span>
-                            )}
-                            <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-                                Upload logo
-                                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} />
-                            </label>
+                    <LiquidGlassPanel title="Brand Identity" style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'center', marginBottom: 24, flexWrap: 'wrap' }}>
+                            <div style={{ background: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {logoPreview ? (
+                                    <img src={logoPreview} alt="Logo" style={{ height: 64, width: 64, objectFit: 'contain' }} />
+                                ) : (
+                                    <div style={{ height: 64, width: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>No Logo</div>
+                                )}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <h4 style={{ margin: '0 0 8px 0', fontSize: 14 }}>School Logo</h4>
+                                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer' }}>
+                                    Upload new logo
+                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLogoUpload} />
+                                </label>
+                            </div>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+                        
+                        <h4 style={{ margin: '0 0 16px 0', fontSize: 14 }}>Theme Colors</h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 16 }}>
                             {['primary', 'secondary', 'accent', 'background', 'text'].map((key) => (
                                 <div key={key}>
-                                    <label className="input-label" style={{ textTransform: 'capitalize' }}>
+                                    <label className="input-label" style={{ textTransform: 'capitalize', fontSize: 12, marginBottom: 6 }}>
                                         {key}
                                     </label>
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                        <input
-                                            type="color"
-                                            value={data.colors[key] || '#000000'}
-                                            onChange={(e) => patch('colors', { [key]: e.target.value })}
-                                            style={{ width: 44, height: 36, padding: 0, border: 'none', cursor: 'pointer' }}
-                                        />
+                                        <div style={{ position: 'relative', width: 44, height: 36, borderRadius: 8, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)' }}>
+                                            <input
+                                                type="color"
+                                                value={data.colors[key] || '#000000'}
+                                                onChange={(e) => patch('colors', { [key]: e.target.value })}
+                                                style={{ position: 'absolute', top: -5, left: -5, width: 60, height: 50, cursor: 'pointer', border: 'none' }}
+                                            />
+                                        </div>
                                         <input
                                             className="input"
                                             value={data.colors[key] || ''}
                                             onChange={(e) => patch('colors', { [key]: e.target.value })}
-                                            style={{ flex: 1 }}
+                                            style={{ flex: 1, fontSize: 13, height: 36 }}
                                         />
                                     </div>
                                 </div>
                             ))}
                         </div>
                     </LiquidGlassPanel>
+                </>
+            )}
 
-                    <LiquidGlassPanel title="Hero" style={{ marginBottom: 20 }}>
-                        <FormField label="Headline" value={data.hero.headline} onChange={(v) => patch('hero', { headline: v })} />
-                        <FormField label="Subheadline" value={data.hero.subheadline} onChange={(v) => patch('hero', { subheadline: v })} />
-                        <FormField
-                            label="Hero image URL (optional, overrides upload)"
-                            value={data.hero.imageUrl || ''}
-                            onChange={(v) => patch('hero', { imageUrl: v, imageFileId: '' })}
-                        />
-                        {data.hero.imageFileId ? (
-                            <p style={{ fontSize: 13 }}>File ID set: {data.hero.imageFileId.slice(0, 12)}…</p>
-                        ) : null}
-                        <label className="btn btn-secondary" style={{ cursor: 'pointer', marginTop: 8 }}>
-                            Upload hero image
-                            <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleHeroUpload} />
-                        </label>
+            {tab === 'content' && (
+                <>
+                    <LiquidGlassPanel title="Hero Section" style={{ marginBottom: 20 }}>
+                        <FormField label="Main Headline" value={data.hero.headline} onChange={(v) => patch('hero', { headline: v })} />
+                        <FormField label="Subheadline / Description" value={data.hero.subheadline} onChange={(v) => patch('hero', { subheadline: v })} />
+                        <div style={{ marginTop: 16, display: 'flex', gap: 16, alignItems: 'start' }}>
+                            <div style={{ flex: 1 }}>
+                                <FormField
+                                    label="Hero Image URL"
+                                    placeholder="External URL"
+                                    value={data.hero.imageUrl || ''}
+                                    onChange={(v) => patch('hero', { imageUrl: v, imageFileId: '' })}
+                                />
+                            </div>
+                            <div style={{ width: 120 }}>
+                                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', width: '100%', marginTop: 28 }}>
+                                    Upload
+                                    <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleHeroUpload} />
+                                </label>
+                            </div>
+                        </div>
                     </LiquidGlassPanel>
 
-                    <LiquidGlassPanel title="About" style={{ marginBottom: 20 }}>
-                        <FormField label="Section title" value={data.about.title || ''} onChange={(v) => patch('about', { title: v })} />
+                    <LiquidGlassPanel title="About Us" style={{ marginBottom: 20 }}>
+                        <FormField label="Section Title" value={data.about.title || ''} onChange={(v) => patch('about', { title: v })} />
                         <FormField
-                            label="Body"
+                            label="About Story / Body"
                             type="textarea"
-                            rows={6}
+                            rows={8}
                             value={data.about.body || ''}
                             onChange={(v) => patch('about', { body: v })}
                         />
                     </LiquidGlassPanel>
 
-                    <LiquidGlassPanel title="Content" style={{ marginBottom: 20 }}>
+                    <LiquidGlassPanel title="Institutional Identity" style={{ marginBottom: 20 }}>
+                        <div style={{ display: 'grid', mdGridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                            <FormField
+                                label="School Anthem"
+                                type="textarea"
+                                rows={5}
+                                value={data.schoolAnthem}
+                                onChange={(v) => patch('schoolAnthem', v)}
+                            />
+                            <FormField
+                                label="School Pledge"
+                                type="textarea"
+                                rows={5}
+                                value={data.schoolPledge}
+                                onChange={(v) => patch('schoolPledge', v)}
+                            />
+                        </div>
                         <FormField
-                            label="School anthem"
-                            type="textarea"
-                            rows={4}
-                            value={data.schoolAnthem}
-                            onChange={(v) => patch('schoolAnthem', v)}
-                        />
-                        <FormField
-                            label="School pledge"
-                            type="textarea"
-                            rows={3}
-                            value={data.schoolPledge}
-                            onChange={(v) => patch('schoolPledge', v)}
-                        />
-                        <FormField
-                            label="Principal’s pledge"
+                            label="Principal’s Personal Pledge"
                             type="textarea"
                             rows={3}
                             value={data.principalsPledge}
                             onChange={(v) => patch('principalsPledge', v)}
                         />
-                        <FormField label="Vision" type="textarea" rows={3} value={data.vision} onChange={(v) => patch('vision', v)} />
-                        <FormField label="Mission" type="textarea" rows={3} value={data.mission} onChange={(v) => patch('mission', v)} />
+                        <div style={{ display: 'grid', mdGridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 20 }}>
+                            <FormField label="Vision Statement" type="textarea" rows={4} value={data.vision} onChange={(v) => patch('vision', v)} />
+                            <FormField label="Mission Statement" type="textarea" rows={4} value={data.mission} onChange={(v) => patch('mission', v)} />
+                        </div>
                         <FormField
-                            label="Core values (one per line)"
+                            label="Core Values (one per line)"
                             type="textarea"
-                            rows={4}
+                            rows={5}
                             value={(data.coreValues || []).join('\n')}
                             onChange={(v) =>
                                 patch(
@@ -474,26 +541,30 @@ export default function Website() {
                             }
                         />
                         <FormField
-                            label="Welcome address (principal)"
+                            label="Principal's Welcome Address"
                             type="textarea"
-                            rows={5}
+                            rows={8}
                             value={data.welcomeAddress}
                             onChange={(v) => patch('welcomeAddress', v)}
                         />
                     </LiquidGlassPanel>
+                </>
+            )}
 
-                    <LiquidGlassPanel title="Contact & social" style={{ marginBottom: 20 }}>
+            {tab === 'contact' && (
+                <LiquidGlassPanel title="Contact Information & Socials">
+                    <FormField
+                        label="Physical Address"
+                        type="textarea"
+                        rows={3}
+                        value={data.contact.address || ''}
+                        onChange={(v) => patch('contact', { address: v })}
+                    />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                         <FormField
-                            label="Address"
+                            label="Phone Numbers (one per line)"
                             type="textarea"
-                            rows={2}
-                            value={data.contact.address || ''}
-                            onChange={(v) => patch('contact', { address: v })}
-                        />
-                        <FormField
-                            label="Phone numbers (one per line)"
-                            type="textarea"
-                            rows={3}
+                            rows={4}
                             value={(data.contact.phones || []).join('\n')}
                             onChange={(v) =>
                                 patch('contact', {
@@ -505,9 +576,9 @@ export default function Website() {
                             }
                         />
                         <FormField
-                            label="Emails (one per line)"
+                            label="Email Addresses (one per line)"
                             type="textarea"
-                            rows={3}
+                            rows={4}
                             value={(data.contact.emails || []).join('\n')}
                             onChange={(v) =>
                                 patch('contact', {
@@ -518,100 +589,116 @@ export default function Website() {
                                 })
                             }
                         />
+                    </div>
+                    <FormField
+                        label="School Operating Hours"
+                        placeholder="e.g. Mon–Fri 8:00 – 16:00"
+                        value={data.contact.schoolHours || ''}
+                        onChange={(v) => patch('contact', { schoolHours: v })}
+                    />
+                    
+                    <h4 style={{ margin: '24px 0 16px 0', fontSize: 16, borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20 }}>Social Media Links</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                         <FormField
-                            label="School hours"
-                            value={data.contact.schoolHours || ''}
-                            onChange={(v) => patch('contact', { schoolHours: v })}
-                        />
-                        <FormField
-                            label="Facebook URL"
+                            label="Facebook"
                             value={data.contact.social?.facebook || ''}
                             onChange={(v) => patch('social', { facebook: v })}
                         />
                         <FormField
-                            label="Instagram URL"
+                            label="Instagram"
                             value={data.contact.social?.instagram || ''}
                             onChange={(v) => patch('social', { instagram: v })}
                         />
                         <FormField
-                            label="YouTube URL"
-                            value={data.contact.social?.youtube || ''}
-                            onChange={(v) => patch('social', { youtube: v })}
+                            label="Twitter / X"
+                            value={data.contact.social?.twitter || ''}
+                            onChange={(v) => patch('social', { twitter: v })}
                         />
                         <FormField
-                            label="LinkedIn URL"
+                            label="LinkedIn"
                             value={data.contact.social?.linkedin || ''}
                             onChange={(v) => patch('social', { linkedin: v })}
                         />
-                    </LiquidGlassPanel>
+                        <FormField
+                            label="YouTube"
+                            value={data.contact.social?.youtube || ''}
+                            onChange={(v) => patch('social', { youtube: v })}
+                        />
+                    </div>
+                </LiquidGlassPanel>
+            )}
 
-                    <LiquidGlassPanel title="Quick test content" style={{ marginBottom: 20 }}>
-                        <p style={{ fontSize: 14, opacity: 0.85, marginBottom: 12 }}>
-                            Adds sample events, news, a testimonial, and two accreditation/partnership rows so the public site has data to show.
+            {tab === 'tools' && (
+                <LiquidGlassPanel title="Developer Tools">
+                    <div style={{ spaceY: 12 }}>
+                        <h4 style={{ margin: '0 0 8px 0' }}>Quick Test Content</h4>
+                        <p style={{ fontSize: 14, opacity: 0.7, marginBottom: 16 }}>
+                            Generates sample events, news articles, testimonials, and accreditations to populate the public website for testing.
                         </p>
                         <button type="button" className="btn btn-secondary" disabled={seeding} onClick={seedDemoContent}>
                             <Sparkles size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-                            {seeding ? 'Adding…' : 'Seed sample content'}
+                            {seeding ? 'Generating...' : 'Seed Sample Content'}
                         </button>
-                    </LiquidGlassPanel>
-
-                    <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <button type="button" className="btn btn-primary" disabled={saving} onClick={handleSave}>
-                            <Save size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} />
-                            {saving ? 'Saving…' : 'Save website settings'}
-                        </button>
-                        <a
-                            className="btn btn-secondary"
-                            href={`https://${slugHint}.buchis.site`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                        >
-                            Try subdomain
-                            <ExternalLink size={14} />
-                        </a>
                     </div>
-                </>
+                </LiquidGlassPanel>
             )}
 
             {tab === 'messages' && (
-                <LiquidGlassPanel title="Contact form messages">
+                <LiquidGlassPanel title="Inbound Contact Messages">
                     {msgLoading ? (
-                        <p>Loading…</p>
+                        <p>Loading messages...</p>
                     ) : messages.length === 0 ? (
-                        <p style={{ opacity: 0.8 }}>No messages yet. They appear when visitors submit the Get In Touch form on the public site.</p>
+                        <p style={{ opacity: 0.6, textAlign: 'center', padding: '40px 0' }}>No messages received yet. When visitors use the contact form on your website, they will appear here.</p>
                     ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             {messages.map((m) => (
                                 <div
                                     key={m.$id}
                                     style={{
-                                        padding: 14,
-                                        borderRadius: 12,
-                                        background: 'rgba(0,0,0,0.2)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        padding: 20,
+                                        borderRadius: 16,
+                                        background: 'rgba(255,255,255,0.03)',
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        position: 'relative'
                                     }}
                                 >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                                        <strong>{m.name}</strong>
-                                        <span style={{ fontSize: 12, opacity: 0.7 }}>{m.createdAt}</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
+                                        <div>
+                                            <h4 style={{ margin: 0, fontSize: 16 }}>{m.name}</h4>
+                                            <div style={{ fontSize: 13, opacity: 0.5 }}>{new Date(m.$createdAt || m.createdAt).toLocaleString()}</div>
+                                        </div>
+                                        {m.status === 'new' ? (
+                                            <span style={{ background: 'var(--color-primary)', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase' }}>New</span>
+                                        ) : (
+                                            <span style={{ fontSize: 12, opacity: 0.4 }}>Read</span>
+                                        )}
                                     </div>
-                                    {m.email ? <div style={{ fontSize: 13, marginTop: 4 }}>{m.email}</div> : null}
-                                    {m.phone ? <div style={{ fontSize: 13 }}>{m.phone}</div> : null}
-                                    {m.subject ? <div style={{ fontSize: 13, marginTop: 4 }}>Subject: {m.subject}</div> : null}
-                                    <p style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{m.message}</p>
-                                    {m.status === 'new' ? (
-                                        <button type="button" className="btn btn-sm btn-secondary" style={{ marginTop: 8 }} onClick={() => markRead(m)}>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 16, fontSize: 13 }}>
+                                        {m.email && <div style={{ opacity: 0.8 }}><strong>Email:</strong> {m.email}</div>}
+                                        {m.phone && <div style={{ opacity: 0.8 }}><strong>Phone:</strong> {m.phone}</div>}
+                                    </div>
+                                    {m.subject && <div style={{ marginBottom: 8, fontSize: 14 }}><strong>Subject:</strong> {m.subject}</div>}
+                                    <p style={{ margin: 0, whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.6, opacity: 0.9 }}>{m.message}</p>
+                                    
+                                    {m.status === 'new' && (
+                                        <button type="button" className="btn btn-sm btn-secondary" style={{ marginTop: 20 }} onClick={() => markRead(m)}>
                                             Mark as read
                                         </button>
-                                    ) : (
-                                        <span style={{ fontSize: 12, opacity: 0.6 }}>Read</span>
                                     )}
                                 </div>
                             ))}
                         </div>
                     )}
                 </LiquidGlassPanel>
+            )}
+
+            {tab !== 'messages' && (
+                <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 100 }}>
+                    <button type="button" className="btn btn-primary" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.4)', height: 56, padding: '0 32px', borderRadius: 28, fontSize: 16, fontWeight: 700 }} disabled={saving} onClick={handleSave}>
+                        <Save size={20} style={{ marginRight: 10, verticalAlign: 'middle' }} />
+                        {saving ? 'Saving...' : 'Save All Changes'}
+                    </button>
+                </div>
             )}
         </div>
     );

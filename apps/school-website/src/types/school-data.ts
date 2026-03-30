@@ -3,7 +3,17 @@
  * templateFields holds template-specific admin keys (template1 … template6).
  */
 
-export type TemplateId = 'template1' | 'template2' | 'template3' | 'template4' | 'template5' | 'template6';
+export type TemplateId = 
+    | 'template1' 
+    | 'template2' 
+    | 'template3' 
+    | 'template4' 
+    | 'template5' 
+    | 'template6'
+    | 'template7'
+    | 'template8'
+    | 'template9'
+    | 'template10';
 
 export interface SchoolDataColors {
     primary: string;
@@ -11,6 +21,14 @@ export interface SchoolDataColors {
     accent: string;
     background: string;
     text: string;
+    card?: string;
+    border?: string;
+    button?: string;
+    buttonText?: string;
+    navBackground?: string;
+    navText?: string;
+    footerBackground?: string;
+    footerText?: string;
 }
 
 export interface SchoolDataHero {
@@ -52,7 +70,10 @@ export interface SchoolDataJson {
     principalsPledge: string;
     vision: string;
     mission: string;
-    coreValues: string[];
+    coreValues: {
+        text: string;
+        icon?: string;
+    }[];
     welcomeAddress: string;
     contact: SchoolDataContact;
     /** Optional keys per template for dynamic admin forms */
@@ -82,7 +103,11 @@ export const DEFAULT_SCHOOL_DATA: SchoolDataJson = {
     principalsPledge: '',
     vision: '',
     mission: '',
-    coreValues: ['Integrity', 'Excellence', 'Respect'],
+    coreValues: [
+        { text: 'Integrity', icon: 'Shield' },
+        { text: 'Excellence', icon: 'Star' },
+        { text: 'Respect', icon: 'Users' }
+    ],
     welcomeAddress: '',
     contact: {
         address: '',
@@ -95,30 +120,30 @@ export const DEFAULT_SCHOOL_DATA: SchoolDataJson = {
 };
 
 export function parseSchoolDataJson(raw: unknown): SchoolDataJson {
-    let obj: Record<string, unknown> = {};
+    let obj: Record<string, any> = {};
     if (typeof raw === 'string') {
         try {
-            obj = JSON.parse(raw || '{}') as Record<string, unknown>;
+            obj = JSON.parse(raw || '{}');
         } catch {
             obj = {};
         }
     } else if (raw && typeof raw === 'object') {
-        obj = raw as Record<string, unknown>;
+        obj = raw as Record<string, any>;
     }
-    return mergeDeep(DEFAULT_SCHOOL_DATA, obj) as SchoolDataJson;
+    return mergeDeep(DEFAULT_SCHOOL_DATA, obj) as unknown as SchoolDataJson;
 }
 
-function isPlainObject(x: unknown): x is Record<string, unknown> {
+function isPlainObject(x: unknown): x is Record<string, any> {
     return x !== null && typeof x === 'object' && !Array.isArray(x);
 }
 
-function mergeDeep<T extends Record<string, unknown>>(base: T, patch: Record<string, unknown>): T {
-    const out = { ...base } as Record<string, unknown>;
+function mergeDeep<T extends Record<string, any>>(base: T, patch: Record<string, any>): T {
+    const out = { ...base } as Record<string, any>;
     for (const key of Object.keys(patch)) {
         const pv = patch[key];
         const bv = out[key];
         if (isPlainObject(pv) && isPlainObject(bv as unknown)) {
-            out[key] = mergeDeep(bv as Record<string, unknown>, pv);
+            out[key] = mergeDeep(bv as Record<string, any>, pv);
         } else if (pv !== undefined) {
             out[key] = pv;
         }
