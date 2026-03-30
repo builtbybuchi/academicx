@@ -13,7 +13,7 @@ export default defineConfig({
         },
     },
     optimizeDeps: {
-        include: ['rxdb'],
+        include: ['shared'],
     },
     server: { port: 3001 },
 });
