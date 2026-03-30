@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Mail, Send, Users, Filter, Loader, CheckCircle, AlertCircle, ChevronDown, XCircle, Clock } from 'lucide-react';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import { useToast } from '../shared/components/Toast.jsx';
-import { useAuth } from '../shared/utils/auth.jsx';
-import { listClasses, sendBulkEmailToParents, sendSchoolAnnouncement } from '../shared/utils/api.js';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import { useToast } from 'shared/components/Toast.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
+import { listClasses, sendBulkEmailToParents, sendSchoolAnnouncement } from 'shared/utils/api.js';
 
 export default function Communication() {
     const { schoolId } = useAuth();

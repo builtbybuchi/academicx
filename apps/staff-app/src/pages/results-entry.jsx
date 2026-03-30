@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../shared/components/FormField.jsx';
-import { computeTotal, computeGrade, DEFAULT_GRADING } from '../shared/utils/index.js';
-import { getStaffPortalData, submitResult } from '../shared/utils/api.js';
-import { useAuth } from '../shared/utils/auth.jsx';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import FormField from 'shared/components/FormField.jsx';
+import { computeTotal, computeGrade, DEFAULT_GRADING } from 'shared/utils/index.js';
+import { getStaffPortalData, submitResult } from 'shared/utils/api.js';
+import { useAuth } from 'shared/utils/auth.jsx';
 
 export default function ResultsEntry() {
     const { schoolId } = useAuth();

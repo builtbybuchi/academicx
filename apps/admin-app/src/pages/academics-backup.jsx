@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Edit2, Trash2, BookOpen, Calendar, Users, ChevronRight, Check } from 'lucide-react';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../shared/components/FormField.jsx';
-import Modal from '../shared/components/Modal.jsx';
-import { useToast } from '../shared/components/Toast.jsx';
-import { useAuth } from '../shared/utils/auth.jsx';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import FormField from 'shared/components/FormField.jsx';
+import Modal from 'shared/components/Modal.jsx';
+import { useToast } from 'shared/components/Toast.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
 import {
     createAcademicSession,
     createSubject,
@@ -16,7 +16,7 @@ import {
     upsertSubjects,
     updateSubject,
     deleteSubject,
-} from '../shared/utils/api.js';
+} from 'shared/utils/api.js';
 
 const TERM_LABELS = ['First Term', 'Second Term', 'Third Term', 'Fourth Term'];
 

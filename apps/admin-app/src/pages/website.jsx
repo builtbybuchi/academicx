@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Globe, MessageSquare, Save, Sparkles, ExternalLink } from 'lucide-react';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../shared/components/FormField.jsx';
-import { useToast } from '../shared/components/Toast.jsx';
-import { useAuth } from '../shared/utils/auth.jsx';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import FormField from 'shared/components/FormField.jsx';
+import { useToast } from 'shared/components/Toast.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
 import {
     getSchool,
     updateSchool,
@@ -15,7 +15,7 @@ import {
     createSchoolNews,
     createTestimonial,
     createAccreditation,
-} from '../shared/utils/api.js';
+} from 'shared/utils/api.js';
 
 const PLACEHOLDER_1 = 'https://res.cloudinary.com/dlvffw5wt/image/upload/v1774778057/emmanuel-ikwuegbu-VC6MGt9ZoBA-unsplash_lz8ghr.jpg';
 const PLACEHOLDER_2 = 'https://res.cloudinary.com/dlvffw5wt/image/upload/v1774778053/ben-white-83tkHLPgg2Q-unsplash_vj2fjt.jpg';

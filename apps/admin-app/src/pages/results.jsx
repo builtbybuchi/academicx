@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DataTable from '../shared/components/DataTable.jsx';
-import Modal from '../shared/components/Modal.jsx';
-import { useToast } from '../shared/components/Toast.jsx';
-import { useAuth } from '../shared/utils/auth.jsx';
-import { approveResults, generateBroadsheet, getSchool, listResults, listStudents, listSubjects, invokeBackendFunction } from '../shared/utils/api.js';
+import DataTable from 'shared/components/DataTable.jsx';
+import Modal from 'shared/components/Modal.jsx';
+import { useToast } from 'shared/components/Toast.jsx';
+import { useAuth } from 'shared/utils/auth.jsx';
+import { approveResults, generateBroadsheet, getSchool, listResults, listStudents, listSubjects, invokeBackendFunction } from 'shared/utils/api.js';
 
 export default function Results() {
     const { schoolId } = useAuth();

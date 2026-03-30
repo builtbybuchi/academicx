@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import { useToast } from '../shared/components/Toast.jsx';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import { useToast } from 'shared/components/Toast.jsx';
 import {
     listChatMessages,
     listSchoolChatMessages,
@@ -8,8 +8,8 @@ import {
     subscribeToChatMessages,
     subscribeToSchoolChatMessages,
     listStaff,
-} from '../shared/utils/api.js';
-import { useAuth } from '../shared/utils/auth.jsx';
+} from 'shared/utils/api.js';
+import { useAuth } from 'shared/utils/auth.jsx';
 import { useRxDB } from '../utils/rxdb-hooks.jsx';
 import { upsertDocument } from '../utils/rxdb.js';
 import { Search, MessageSquare, X, Hash, User } from 'lucide-react';

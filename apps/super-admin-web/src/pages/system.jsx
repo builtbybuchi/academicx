@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import FormField from '../shared/components/FormField.jsx';
-import { getSuperAdminPortalData } from '../shared/utils/api.js';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import FormField from 'shared/components/FormField.jsx';
+import { getSuperAdminPortalData } from 'shared/utils/api.js';
 
 export default function System() {
     const [platformName, setPlatformName] = useState('AcademicX');

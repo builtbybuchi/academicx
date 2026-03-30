@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import DataTable from '../shared/components/DataTable.jsx';
-import StatsCard from '../shared/components/StatsCard.jsx';
-import { formatCurrency, formatDate } from '../shared/utils/index.js';
-import { getSuperAdminPortalData } from '../shared/utils/api.js';
+import DataTable from 'shared/components/DataTable.jsx';
+import StatsCard from 'shared/components/StatsCard.jsx';
+import { formatCurrency, formatDate } from 'shared/utils/index.js';
+import { getSuperAdminPortalData } from 'shared/utils/api.js';
 
 const columns = [
     { key: 'reference', label: 'Reference', render: (v) => <code style={{ color: '#93C5FD', fontSize: 12 }}>{v}</code> },

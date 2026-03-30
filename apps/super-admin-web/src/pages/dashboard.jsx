@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Users, CreditCard, KeySquare } from 'lucide-react';
-import StatsCard from '../shared/components/StatsCard.jsx';
-import LiquidGlassPanel from '../shared/components/LiquidGlassPanel.jsx';
-import { formatCurrency } from '../shared/utils/index.js';
-import { getSuperAdminPortalData } from '../shared/utils/api.js';
+import StatsCard from 'shared/components/StatsCard.jsx';
+import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
+import { formatCurrency } from 'shared/utils/index.js';
+import { getSuperAdminPortalData } from 'shared/utils/api.js';
 
 export default function Dashboard() {
     const [data, setData] = useState({ schools: [], users: [], payments: [], pins: [] });
