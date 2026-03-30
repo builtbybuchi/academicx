@@ -8,6 +8,9 @@ export default defineConfig({
         alias: {
             '@': path.resolve(__dirname, './src'),
             'shared': path.resolve(__dirname, '../../shared'),
+            'appwrite': path.resolve(__dirname, 'node_modules/appwrite'),
+            'framer-motion': path.resolve(__dirname, 'node_modules/framer-motion'),
+            'lucide-react': path.resolve(__dirname, 'node_modules/lucide-react'),
         },
     },
     server: {
