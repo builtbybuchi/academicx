@@ -311,8 +311,7 @@ export default function Website() {
                 <h1 style={{ margin: 0, fontSize: 28 }}>School website</h1>
             </div>
             <p style={{ opacity: 0.85, marginBottom: 24, maxWidth: 720 }}>
-                Configure the public school site (Vite app): subdomain slug, template, colours, and page copy. Save, then open the school website
-                with the same slug or <code style={{ background: 'rgba(0,0,0,0.08)', padding: '2px 6px', borderRadius: 4 }}>/site/{'{slug}'}</code>.
+                Setup and customize your school website with few clicks. 
             </p>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
@@ -368,13 +367,12 @@ export default function Website() {
                             onChange={(v) => setWebsiteSlug(String(v).toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                         />
                         <p style={{ fontSize: 13, opacity: 0.8, marginTop: -8 }}>
-                            Public URL: <code>{slugHint}.buchis.site</code>. Or test with{' '}
-                            <code>/site/{slugHint}</code>.
+                            Public URL: <code>{slugHint}.academicx.lexrunit.com</code>
                         </p>
                         <div style={{ marginTop: 16 }}>
                             <a
                                 className="btn btn-secondary btn-sm"
-                                href={`https://${slugHint}.buchis.site`}
+                                href={`https://${slugHint}.academicx.lexrunit.com`}
                                 target="_blank"
                                 rel="noreferrer"
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}

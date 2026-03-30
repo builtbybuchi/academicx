@@ -65,9 +65,9 @@ export default function WebAppDropdown({ style, className, variant = 'primary', 
                 opacity: isOpen ? 1 : 0,
                 transition: 'opacity 0.2s, transform 0.2s',
             }}>
-                <a href="https://academicx.ng/student" style={{ display: 'block', padding: '12px 16px', color: 'var(--color-gray-800)', textDecoration: 'none', fontSize: 14, borderBottom: '1px solid var(--color-gray-100)', fontWeight: 500 }} onMouseEnter={e => e.target.style.background = '#f9fafb'} onMouseLeave={e => e.target.style.background = 'transparent'}>Students & Parents</a>
-                <a href="https://academicx.ng/staff" style={{ display: 'block', padding: '12px 16px', color: 'var(--color-gray-800)', textDecoration: 'none', fontSize: 14, borderBottom: '1px solid var(--color-gray-100)', fontWeight: 500 }} onMouseEnter={e => e.target.style.background = '#f9fafb'} onMouseLeave={e => e.target.style.background = 'transparent'}>Staff</a>
-                <a href="https://academicx.ng/admin" style={{ display: 'block', padding: '12px 16px', color: 'var(--color-gray-800)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }} onMouseEnter={e => e.target.style.background = '#f9fafb'} onMouseLeave={e => e.target.style.background = 'transparent'}>Admins</a>
+                <a href="https://axstudent.lexrunit.com" style={{ display: 'block', padding: '12px 16px', color: 'var(--color-gray-800)', textDecoration: 'none', fontSize: 14, borderBottom: '1px solid var(--color-gray-100)', fontWeight: 500 }} onMouseEnter={e => e.target.style.background = '#f9fafb'} onMouseLeave={e => e.target.style.background = 'transparent'}>Students & Parents</a>
+                <a href="https://axstaff.lexrunit.com" style={{ display: 'block', padding: '12px 16px', color: 'var(--color-gray-800)', textDecoration: 'none', fontSize: 14, borderBottom: '1px solid var(--color-gray-100)', fontWeight: 500 }} onMouseEnter={e => e.target.style.background = '#f9fafb'} onMouseLeave={e => e.target.style.background = 'transparent'}>Staff</a>
+                <a href="https://axadmin.lexrunit.com" style={{ display: 'block', padding: '12px 16px', color: 'var(--color-gray-800)', textDecoration: 'none', fontSize: 14, fontWeight: 500 }} onMouseEnter={e => e.target.style.background = '#f9fafb'} onMouseLeave={e => e.target.style.background = 'transparent'}>Admins</a>
             </div>
         </div>
     );
