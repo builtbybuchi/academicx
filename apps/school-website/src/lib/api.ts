@@ -9,4 +9,4 @@ export {
     listSchoolAccreditations,
     submitContactMessage,
     getSchoolMediaPreviewUrl,
-} from '../../../../shared/utils/api.js';
+} from 'shared/utils/api.js';
