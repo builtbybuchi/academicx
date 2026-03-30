@@ -9,6 +9,7 @@ import {
     updateSchool,
     uploadImage,
     getSchoolMediaPreviewUrl,
+    getSchoolMediaViewUrl,
     listContactMessages,
     updateContactMessage,
     createSchoolEvent,
@@ -144,7 +145,7 @@ export default function Website() {
                 setLogoPreview(logo);
             } else if (logo) {
                 setLogoStorage(logo);
-                setLogoPreview(getSchoolMediaPreviewUrl(logo, 200, 200));
+                setLogoPreview(getSchoolMediaViewUrl(logo));
             } else {
                 setLogoStorage(DEFAULT_LOGO);
                 setLogoPreview(DEFAULT_LOGO);
@@ -213,9 +214,10 @@ export default function Website() {
         if (!file || !schoolId) return;
         try {
             const uploaded = await uploadImage(file);
-            setLogoStorage(uploaded.$id);
-            setLogoPreview(getSchoolMediaPreviewUrl(uploaded.$id, 400, 400));
-            await updateSchool(schoolId, { logo: uploaded.$id });
+            const viewUrl = getSchoolMediaViewUrl(uploaded.$id);
+            setLogoStorage(viewUrl);
+            setLogoPreview(viewUrl);
+            await updateSchool(schoolId, { logo: viewUrl });
             toast({ type: 'success', title: 'Logo uploaded', message: 'Logo file saved to storage.' });
         } catch (err) {
             toast({ type: 'error', title: 'Upload failed', message: err.message });
@@ -227,7 +229,8 @@ export default function Website() {
         if (!file) return;
         try {
             const uploaded = await uploadImage(file);
-            patch('hero', { imageFileId: uploaded.$id, imageUrl: '' });
+            const viewUrl = getSchoolMediaViewUrl(uploaded.$id);
+            patch('hero', { imageFileId: uploaded.$id, imageUrl: viewUrl });
             toast({ type: 'success', title: 'Hero image', message: 'Set in page data — click Save to persist.' });
         } catch (err) {
             toast({ type: 'error', title: 'Upload failed', message: err.message });

@@ -782,4 +782,10 @@ export function getSchoolMediaPreviewUrl(fileId, width = 1200, height = 800) {
     return storage.getFilePreview(BUCKET_ID, fileId, width, height).toString();
 }
 
+/** Direct view URL for files stored in school_media. */
+export function getSchoolMediaViewUrl(fileId) {
+    if (!fileId) return '';
+    return storage.getFileView(BUCKET_ID, fileId).toString();
+}
+
 export { ID, Query, client };
