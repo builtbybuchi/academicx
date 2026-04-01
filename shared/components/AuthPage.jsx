@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, EyeOff } from 'lucide-react';
 
 // Add responsive styles globally
 const styleSheet = typeof window !== 'undefined' ? document.createElement('style') : null;
@@ -80,6 +81,9 @@ export default function AuthPage({
     ));
     const [signupData, setSignupData] = useState({ firstName: '', lastName: '', email: '', password: '', organization: '', schoolCode: '' });
     const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 980 : false);
+    const [submittingMode, setSubmittingMode] = useState(null);
+    const [loginPasswordVisibility, setLoginPasswordVisibility] = useState({});
+    const [showSignupPassword, setShowSignupPassword] = useState(false);
 
     useEffect(() => {
         const onResize = () => setIsDesktop(window.innerWidth >= 980);
@@ -102,25 +106,55 @@ export default function AuthPage({
 
     async function submitLogin(event) {
         event.preventDefault();
+        if (submittingMode) return;
         setError('');
+        setSubmittingMode('login');
         try {
             await onLogin?.(loginData);
         } catch (err) {
             setError(err.message || 'Unable to sign in.');
+        } finally {
+            setSubmittingMode(null);
         }
     }
 
     async function submitSignup(event) {
         event.preventDefault();
+        if (submittingMode) return;
         if (disableSignup) {
             setError(disableSignupMessage);
             return;
         }
+
+        if (typeof signupData.schoolCode !== 'string') {
+            setError('School code must be a valid uppercase string (max 8 characters).');
+            return;
+        }
+
+        const normalizedSchoolCode = signupData.schoolCode.trim().toUpperCase();
+        if (!normalizedSchoolCode) {
+            setError('School code is required.');
+            return;
+        }
+
+        if (normalizedSchoolCode.length > 8) {
+            setError('School code must not exceed 8 characters.');
+            return;
+        }
+
+        if (normalizedSchoolCode !== signupData.schoolCode.trim()) {
+            setError('School code must be in uppercase.');
+            return;
+        }
+
         setError('');
+        setSubmittingMode('signup');
         try {
-            await onSignup?.(signupData);
+            await onSignup?.({ ...signupData, schoolCode: normalizedSchoolCode });
         } catch (err) {
             setError(err.message || 'Unable to create account.');
+        } finally {
+            setSubmittingMode(null);
         }
     }
 
@@ -334,6 +368,7 @@ export default function AuthPage({
                             <button
                                 type="button"
                                 style={{ ...styles.tabBtn, ...(tab === 'login' ? styles.tabBtnActive : {}) }}
+                                disabled={Boolean(submittingMode)}
                                 onClick={() => { setTab('login'); setError(''); }}
                             >
                                 Sign In
@@ -342,6 +377,7 @@ export default function AuthPage({
                                 <button
                                     type="button"
                                     style={{ ...styles.tabBtn, ...(tab === 'signup' ? styles.tabBtnActive : {}) }}
+                                    disabled={Boolean(submittingMode)}
                                     onClick={() => { setTab('signup'); setError(''); }}
                                 >
                                     Sign Up
@@ -354,19 +390,41 @@ export default function AuthPage({
                                 {normalizedLoginFields.map((field) => (
                                     <div key={field.name} style={styles.loginFieldWrap}>
                                         {field.label && <label style={styles.loginFieldLabel}>{field.label}</label>}
-                                        <input
-                                            style={styles.input}
-                                            type={field.type || 'text'}
-                                            placeholder={field.placeholder || ''}
-                                            autoComplete={field.autoComplete || 'off'}
-                                            value={loginData[field.name] || ''}
-                                            onChange={(event) => setLoginData((current) => ({ ...current, [field.name]: event.target.value }))}
-                                            required={field.required !== false}
-                                        />
+                                        {field.type === 'password' ? (
+                                            <div style={styles.passwordFieldWrap}>
+                                                <input
+                                                    style={styles.inputWithAction}
+                                                    type={loginPasswordVisibility[field.name] ? 'text' : 'password'}
+                                                    placeholder={field.placeholder || ''}
+                                                    autoComplete={field.autoComplete || 'off'}
+                                                    value={loginData[field.name] || ''}
+                                                    onChange={(event) => setLoginData((current) => ({ ...current, [field.name]: event.target.value }))}
+                                                    required={field.required !== false}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    style={styles.passwordToggleBtn}
+                                                    aria-label={loginPasswordVisibility[field.name] ? 'Hide password' : 'Show password'}
+                                                    onClick={() => setLoginPasswordVisibility((current) => ({ ...current, [field.name]: !current[field.name] }))}
+                                                >
+                                                    {loginPasswordVisibility[field.name] ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <input
+                                                style={styles.input}
+                                                type={field.type || 'text'}
+                                                placeholder={field.placeholder || ''}
+                                                autoComplete={field.autoComplete || 'off'}
+                                                value={loginData[field.name] || ''}
+                                                onChange={(event) => setLoginData((current) => ({ ...current, [field.name]: event.target.value }))}
+                                                required={field.required !== false}
+                                            />
+                                        )}
                                     </div>
                                 ))}
-                                <button disabled={loading} type="submit" style={styles.primaryBtn}>
-                                    {loading ? 'Loading...' : loginButtonText}
+                                <button disabled={loading || submittingMode === 'login'} type="submit" style={styles.primaryBtn}>
+                                    {loading || submittingMode === 'login' ? 'Loading...' : loginButtonText}
                                 </button>
                             </form>
                         )}
@@ -411,18 +469,33 @@ export default function AuthPage({
                                     type="text"
                                     placeholder="School Code"
                                     value={signupData.schoolCode}
-                                    onChange={(event) => setSignupData((current) => ({ ...current, schoolCode: event.target.value.toUpperCase() }))}
-                                />
-                                <input
-                                    style={styles.input}
-                                    type="password"
-                                    placeholder="Password"
-                                    value={signupData.password}
-                                    onChange={(event) => setSignupData((current) => ({ ...current, password: event.target.value }))}
+                                    onChange={(event) => setSignupData((current) => ({
+                                        ...current,
+                                        schoolCode: String(event.target.value || '').replace(/\s+/g, '').toUpperCase().slice(0, 8),
+                                    }))}
+                                    maxLength={8}
                                     required
                                 />
-                                <button disabled={loading || disableSignup} type="submit" style={styles.primaryBtn}>
-                                    {disableSignup ? 'Signup Disabled' : loading ? 'Loading...' : 'Create account'}
+                                <div style={styles.passwordFieldWrap}>
+                                    <input
+                                        style={styles.inputWithAction}
+                                        type={showSignupPassword ? 'text' : 'password'}
+                                        placeholder="Password"
+                                        value={signupData.password}
+                                        onChange={(event) => setSignupData((current) => ({ ...current, password: event.target.value }))}
+                                        required
+                                    />
+                                    <button
+                                        type="button"
+                                        style={styles.passwordToggleBtn}
+                                        aria-label={showSignupPassword ? 'Hide password' : 'Show password'}
+                                        onClick={() => setShowSignupPassword((current) => !current)}
+                                    >
+                                        {showSignupPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
+                                <button disabled={loading || disableSignup || submittingMode === 'signup'} type="submit" style={styles.primaryBtn}>
+                                    {disableSignup ? 'Signup Disabled' : loading || submittingMode === 'signup' ? 'Loading...' : 'Create account'}
                                 </button>
                                 {disableSignup && <div style={styles.note}>{disableSignupMessage}</div>}
                             </form>
@@ -580,6 +653,33 @@ const styles = {
     loginFieldWrap: {
         display: 'grid',
         gap: 6,
+    },
+    passwordFieldWrap: {
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+    },
+    inputWithAction: {
+        width: '100%',
+        border: '1px solid rgba(29,78,216,0.18)',
+        borderRadius: 12,
+        padding: '14px 44px 14px 16px',
+        outline: 'none',
+        fontSize: 14,
+        background: '#fff',
+        color: '#1f2937',
+    },
+    passwordToggleBtn: {
+        position: 'absolute',
+        right: 12,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: 'none',
+        background: 'transparent',
+        color: '#64748b',
+        cursor: 'pointer',
+        padding: 4,
     },
     loginFieldLabel: {
         fontSize: 12,

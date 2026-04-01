@@ -46,7 +46,7 @@ export default function App() {
                 ]}
                 loginFields={[
                     { name: 'studentId', type: 'text', label: 'Student ID', placeholder: 'e.g. SCH/2026/0042', autoComplete: 'username' },
-                    { name: 'password', type: 'text', label: 'Parent Phone or Parent Email', placeholder: 'Parent phone number or parent email', autoComplete: 'current-password' },
+                    { name: 'password', type: 'password', label: 'Parent Phone or Parent Email', placeholder: 'Parent phone number or parent email', autoComplete: 'current-password' },
                 ]}
                 loginButtonText="Sign in to Student Portal"
                 onLogin={({ studentId, password }) => login(studentId, password)}
