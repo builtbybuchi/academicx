@@ -2,13 +2,14 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { 
-    VisionMissionBlock, 
-    CoreValuesBlock, 
+import {
+    VisionMissionBlock,
+    CoreValuesBlock,
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template4Layout({ children }: { children: React.ReactNode }) {
@@ -161,6 +162,10 @@ export function Template4() {
 
             {/* Geometric Content */}
             <main className="py-32 space-y-40">
+                <section className="container mx-auto px-4">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+                </section>
+
                 {/* About - Geometric */}
                 <section className="container mx-auto px-4">
                     <div className="flex flex-col lg:flex-row gap-20 items-center">
@@ -176,7 +181,7 @@ export function Template4() {
                             </div>
                         </div>
                         <div className="lg:w-1/2 grid grid-cols-2 gap-8">
-                            {data.about.imageUrls?.slice(0, 2).map((url, i) => (
+                            {data.about.imageUrls?.slice(1, 3).map((url, i) => (
                                 <div key={i} className={`aspect-[3/4] bg-gray-200 skew-y-[6deg] overflow-hidden border-4 border-black shadow-xl ${i % 2 === 1 ? '-translate-y-12' : 'translate-y-12'}`}>
                                     <img src={url} alt={`About ${i}`} className="w-full h-full object-cover -skew-y-[6deg] scale-125" />
                                 </div>

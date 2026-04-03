@@ -8,7 +8,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template8Layout({ children }: { children: React.ReactNode }) {
@@ -152,6 +153,10 @@ export function Template8() {
 
             {/* Vibrant Content */}
             <main className="py-24 space-y-40">
+                <section className="container mx-auto px-6">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+                </section>
+
                 {/* About - Photo Heavy */}
                 <section className="container mx-auto px-6">
                     <div className="bg-white rounded-[4rem] p-12 lg:p-24 shadow-2xl shadow-amber-900/5 relative overflow-hidden border border-amber-100">
@@ -161,12 +166,9 @@ export function Template8() {
                                 <p className="text-lg leading-relaxed opacity-70 font-medium">
                                     {data.about.body}
                                 </p>
-                                <div className="bg-amber-50 p-8 rounded-3xl border-2 border-amber-100 italic font-bold text-[var(--school-primary)]">
-                                    "{data.welcomeAddress}"
-                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-6">
-                                {data.about.imageUrls?.slice(0, 4).map((url, i) => (
+                                {data.about.imageUrls?.slice(1, 5).map((url, i) => (
                                     <div key={i} className={`rounded-3xl overflow-hidden shadow-xl ${i % 2 === 1 ? 'translate-y-6' : '-translate-y-6'}`}>
                                         <img src={url} alt={`Gallery ${i}`} className="w-full aspect-square object-cover" />
                                     </div>

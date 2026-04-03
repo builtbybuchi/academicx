@@ -8,7 +8,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template3Layout({ children }: { children: React.ReactNode }) {
@@ -134,6 +135,10 @@ export function Template3() {
 
             {/* Magazine Sections */}
             <main className="py-20 space-y-32">
+                <div className="container mx-auto px-4">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+                </div>
+
                 <div className="container mx-auto px-4">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
                         <div className="lg:col-span-2 space-y-16">

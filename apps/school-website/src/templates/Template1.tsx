@@ -141,8 +141,8 @@ export function Template1() {
 
             {/* Content Sections */}
             <main className="space-y-20 py-20">
-                <div className="container mx-auto px-4 max-w-5xl">
-                    <WelcomeAddressBlock text={data.welcomeAddress} />
+                <div className="container mx-auto px-4">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
                 </div>
 
                 <div className="bg-[var(--school-primary)]/5 py-20">
@@ -157,7 +157,7 @@ export function Template1() {
                             </Button>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            {data.about.imageUrls?.slice(0, 2).map((url, i) => (
+                            {data.about.imageUrls?.slice(1, 3).map((url, i) => (
                                 <img key={i} src={url} alt={`About ${i}`} className="rounded-lg shadow-lg aspect-square object-cover" />
                             ))}
                         </div>

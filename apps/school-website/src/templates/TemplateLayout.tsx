@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { Template1Layout } from './Template1';
 import { Template2Layout } from './Template2';
@@ -15,6 +15,26 @@ import { Loader2 } from 'lucide-react';
 export function TemplateLayout({ children }: { children: React.ReactNode }) {
     const { school, loading, error, templateId } = useSchoolSite();
     
+    useEffect(() => {
+        if (school) {
+            // Update Title
+            const schoolName = String((school as any).name || 'School');
+            document.title = schoolName;
+
+            // Update Favicon
+            const logo = (school as any).logo;
+            if (logo) {
+                let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+                if (!link) {
+                    link = document.createElement('link');
+                    link.rel = 'icon';
+                    document.getElementsByTagName('head')[0].appendChild(link);
+                }
+                link.href = String(logo);
+            }
+        }
+    }, [school]);
+
     if (loading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-white">

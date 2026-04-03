@@ -2,13 +2,14 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { 
-    VisionMissionBlock, 
-    CoreValuesBlock, 
+import {
+    VisionMissionBlock,
+    CoreValuesBlock,
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template6Layout({ children }: { children: React.ReactNode }) {
@@ -137,6 +138,10 @@ export function Template6() {
 
             {/* Poster Content */}
             <main className="py-32 space-y-40">
+                <section className="container mx-auto px-4">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+                </section>
+
                 {/* Sections with thick borders */}
                 <section className="container mx-auto px-4">
                     <div className="border-8 border-black p-12 md:p-20 space-y-12 bg-white shadow-[16px_16px_0px_0px_var(--school-primary)]">
@@ -150,8 +155,12 @@ export function Template6() {
                             </p>
                             <div className="space-y-8">
                                 <div className="p-8 border-4 border-black bg-[var(--school-primary)] text-white">
-                                    <h3 className="text-2xl mb-4 uppercase">Principal's Address</h3>
-                                    <p className="text-lg opacity-90 leading-tight">"{data.welcomeAddress}"</p>
+                                    <h3 className="text-2xl mb-4 uppercase">Institutional Story</h3>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {data.about.imageUrls?.slice(1, 3).map((url: string, i: number) => (
+                                            <img key={i} src={url} alt={`About ${i}`} className="w-full h-32 object-cover border-2 border-black" />
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>

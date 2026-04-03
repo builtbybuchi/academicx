@@ -8,7 +8,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template9Layout({ children }: { children: React.ReactNode }) {
@@ -157,6 +158,10 @@ export function Template9() {
 
             {/* Corporate Content */}
             <main className="py-24 space-y-32">
+                <section className="container mx-auto px-6">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+                </section>
+
                 {/* Trust signals / Stats */}
                 <section className="container mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
                     {[
@@ -183,12 +188,9 @@ export function Template9() {
                             <p className="text-lg leading-relaxed text-slate-600">
                                 {data.about.body}
                             </p>
-                            <div className="p-6 bg-slate-50 border-l-4 border-blue-600 italic text-slate-700">
-                                "{data.welcomeAddress}"
-                            </div>
                         </div>
                         <div className="lg:w-1/2 relative bg-slate-100">
-                            {data.about.imageUrls?.[0] && <img src={data.about.imageUrls[0]} alt="About" className="w-full h-full object-cover" />}
+                            {data.about.imageUrls?.[1] && <img src={data.about.imageUrls[1]} alt="About" className="w-full h-full object-cover" />}
                         </div>
                     </div>
                 </section>

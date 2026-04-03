@@ -8,7 +8,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template7Layout({ children }: { children: React.ReactNode }) {
@@ -138,17 +139,8 @@ export function Template7() {
 
             {/* Minimal Content */}
             <main className="space-y-40 pb-40">
-                {/* Welcome Address - Focused Single Column */}
-                <section className="container mx-auto px-6 max-w-3xl">
-                    <div className="space-y-10">
-                        <div className="flex items-center gap-4 text-[var(--school-primary)] font-bold tracking-widest text-xs uppercase">
-                            <div className="w-8 h-px bg-current" />
-                            Welcome Message
-                        </div>
-                        <p className="text-2xl leading-[1.8] text-slate-600 font-medium italic">
-                            {data.welcomeAddress}
-                        </p>
-                    </div>
+                <section className="container mx-auto px-6">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
                 </section>
 
                 {/* About - Clean Cards */}
@@ -163,7 +155,7 @@ export function Template7() {
                         </Button>
                     </div>
                     <div className="grid grid-cols-2 gap-6">
-                        {data.about.imageUrls?.slice(0, 2).map((url, i) => (
+                        {data.about.imageUrls?.slice(1, 3).map((url, i) => (
                             <div key={i} className="rounded-[2rem] overflow-hidden shadow-xl shadow-slate-100 border border-slate-50">
                                 <img src={url} alt={`About ${i}`} className="w-full h-full object-cover" />
                             </div>

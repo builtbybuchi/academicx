@@ -59,7 +59,7 @@ export function SchoolNavBar({
                         </Link>
                     ))}
                     <Button variant={variant === 'split' ? 'secondary' : 'outline'} size="sm" asChild>
-                        <Link to={`${basePath}/results`}>
+                        <Link to={`${basePath}/login`}>
                             <LogIn className="mr-1 h-4 w-4" />
                             Student
                         </Link>
@@ -79,7 +79,7 @@ export function SchoolNavBar({
                                 {l.label}
                             </Link>
                         ))}
-                        <Link to={`${basePath}/results`} onClick={() => setOpen(false)}>
+                        <Link to={`${basePath}/login`} onClick={() => setOpen(false)}>
                             Student login
                         </Link>
                     </div>

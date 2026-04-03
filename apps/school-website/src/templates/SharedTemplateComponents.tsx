@@ -183,15 +183,22 @@ export function CoreValuesBlock({ values }: { values: { text: string; icon?: str
     );
 }
 
-export function WelcomeAddressBlock({ text }: { text: string }) {
+export function WelcomeAddressBlock({ text, imageUrl }: { text: string; imageUrl?: string }) {
     if (!text) return null;
     return (
-        <div className="text-center space-y-8 max-w-4xl mx-auto">
-            <h2 className="text-4xl md:text-5xl font-bold text-[var(--school-primary)]">Welcome to our School</h2>
-            <div className="w-24 h-1 bg-[var(--school-secondary)] mx-auto" />
-            <p className="text-xl leading-relaxed opacity-80 italic">
-                {text}
-            </p>
+        <div className="grid md:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
+            <div className="space-y-8 text-left">
+                <h2 className="text-4xl md:text-5xl font-bold text-[var(--school-primary)]">Welcome to our School</h2>
+                <div className="w-24 h-1 bg-[var(--school-secondary)]" />
+                <p className="text-xl leading-relaxed opacity-80 italic">
+                    {text}
+                </p>
+            </div>
+            {imageUrl && (
+                <div className="relative aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl">
+                    <img src={imageUrl} alt="Welcome" className="w-full h-full object-cover" />
+                </div>
+            )}
         </div>
     );
 }

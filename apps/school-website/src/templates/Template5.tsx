@@ -8,7 +8,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template5Layout({ children }: { children: React.ReactNode }) {
@@ -110,20 +111,8 @@ export function Template5() {
 
             {/* Editorial Content */}
             <main className="py-40 space-y-60">
-                {/* Welcome Address - Editorial */}
-                <section className="container mx-auto px-6 max-w-4xl">
-                    <div className="space-y-16">
-                        <div className="flex flex-col items-center text-center space-y-4">
-                            <span className="text-[10px] uppercase tracking-[0.4em] opacity-40">A Message from the Office</span>
-                            <h2 className="text-4xl md:text-5xl font-light">From the Principal's Desk</h2>
-                        </div>
-                        <div className="relative">
-                            <span className="absolute -left-12 -top-8 text-9xl font-serif opacity-5 text-[var(--school-primary)]">"</span>
-                            <p className="text-2xl md:text-3xl leading-[1.6] font-light opacity-80 first-letter:text-7xl first-letter:font-light first-letter:float-left first-letter:mr-4 first-letter:mt-2">
-                                {data.welcomeAddress}
-                            </p>
-                        </div>
-                    </div>
+                <section className="container mx-auto px-6">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
                 </section>
 
                 {/* About - Two Column Editorial */}
@@ -142,7 +131,7 @@ export function Template5() {
                     </div>
                     <div className="relative">
                         <div className="aspect-[4/5] bg-gray-100 overflow-hidden shadow-2xl">
-                            {data.about.imageUrls?.[0] && <img src={data.about.imageUrls[0]} alt="About" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-1000" />}
+                            {data.about.imageUrls?.[1] && <img src={data.about.imageUrls[1]} alt="About" className="w-full h-full object-cover grayscale hover:grayscale-0 transition-all duration-1000" />}
                         </div>
                         <div className="absolute -bottom-12 -left-12 w-64 h-80 bg-[#F4F1EA] -z-10 shadow-lg" />
                     </div>

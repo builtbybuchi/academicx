@@ -31,8 +31,8 @@ const COLLECTIONS = {
 function getClient() {
     const client = new Client();
     client
-        .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://cloud.appwrite.io/v1')
-        .setProject(process.env.APPWRITE_PROJECT_ID || '')
+        .setEndpoint(process.env.APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
+        .setProject(process.env.APPWRITE_PROJECT_ID || '69b314920018940d98b4')
         .setKey(process.env.APPWRITE_API_KEY || '');
     return client;
 }
@@ -444,13 +444,18 @@ const actions = {
             const existing = await safeGetSchoolByCode(db, schoolCode);
             if (existing) return { success: false, error: 'School code already exists.' };
 
+            console.log('Registering school:', payload.schoolName, payload.adminEmail);
             const authUser = await usersApi.create(
                 ID.unique(),
                 payload.adminEmail,
                 undefined,
                 payload.adminPassword,
                 `${payload.firstName || 'School'} ${payload.lastName || 'Admin'}`.trim()
-            );
+            ).catch(e => {
+                console.error('Appwrite user creation failed:', e.message);
+                throw e;
+            });
+            console.log('Auth user created:', authUser.$id);
 
             const schoolDoc = await db.createDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, ID.unique(), {
                 schoolCode,

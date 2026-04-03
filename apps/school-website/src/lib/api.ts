@@ -9,4 +9,7 @@ export {
     listSchoolAccreditations,
     submitContactMessage,
     getSchoolMediaPreviewUrl,
+    resolveStudentLogin,
+    listAcademicSessions,
+    getStudentResults,
 } from 'shared/utils/api.js';

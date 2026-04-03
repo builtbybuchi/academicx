@@ -8,13 +8,20 @@ import { Client, Account, Databases, Storage, Realtime, ID, Query } from 'appwri
 const client = new Client();
 client
     .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
-    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || 'fullacademicx');
+    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '69b314920018940d98b4');
 
 export const account = new Account(client);
 export const databases = new Databases(client);
 export const storage = new Storage(client);
 
-const FUNCTION_URL = import.meta.env.VITE_APPWRITE_FUNCTION_URL || 'https://academicx.fly.dev';
+// The Appwrite function is deleted, we use the backend on fly.io instead.
+const FLY_BACKEND_URL = 'https://academicx.fly.dev';
+let FUNCTION_URL = import.meta.env.VITE_APPWRITE_FUNCTION_URL || FLY_BACKEND_URL;
+
+// If the configured URL is known to be the deleted Appwrite function, override it.
+if (FUNCTION_URL.includes('appwrite.run')) {
+    FUNCTION_URL = FLY_BACKEND_URL;
+}
 
 export const DATABASE_ID = 'academicx_db';
 export const BUCKET_ID = 'school_media';

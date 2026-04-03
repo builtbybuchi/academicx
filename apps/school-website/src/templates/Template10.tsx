@@ -9,7 +9,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template10Layout({ children }: { children: React.ReactNode }) {
@@ -140,6 +141,10 @@ export function Template10() {
 
             {/* Nature Content */}
             <main className="py-24 space-y-40">
+                <section className="container mx-auto px-6">
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+                </section>
+
                 {/* About - Organic Layout */}
                 <section className="container mx-auto px-6 grid lg:grid-cols-2 gap-20 items-center">
                     <div className="space-y-8 relative">
@@ -153,22 +158,16 @@ export function Template10() {
                         <p className="text-lg leading-relaxed text-[#5C5A54]">
                             {data.about.body}
                         </p>
-                        <div className="bg-[#F4EFE6] p-8 rounded-3xl border-2 border-[#E8DFD0] italic text-[#4A6741] relative">
-                            <span className="absolute -top-4 left-6 bg-[#4A6741] text-white p-2 rounded-full">
-                                <Leaf size={16} />
-                            </span>
-                            "{data.welcomeAddress}"
-                        </div>
                     </div>
                     <div className="relative grid grid-cols-2 gap-4">
                         <div className="space-y-4">
                             <div className="rounded-t-full rounded-b-3xl overflow-hidden shadow-lg aspect-[3/4]">
-                                {data.about.imageUrls?.[0] && <img src={data.about.imageUrls[0]} alt="About 1" className="w-full h-full object-cover" />}
+                                {data.about.imageUrls?.[1] && <img src={data.about.imageUrls[1]} alt="About 1" className="w-full h-full object-cover" />}
                             </div>
                         </div>
                         <div className="space-y-4 pt-12">
                             <div className="rounded-b-full rounded-t-3xl overflow-hidden shadow-lg aspect-[3/4]">
-                                {data.about.imageUrls?.[1] && <img src={data.about.imageUrls[1]} alt="About 2" className="w-full h-full object-cover" />}
+                                {data.about.imageUrls?.[2] && <img src={data.about.imageUrls[2]} alt="About 2" className="w-full h-full object-cover" />}
                             </div>
                         </div>
                     </div>

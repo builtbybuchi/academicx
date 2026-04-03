@@ -28,6 +28,17 @@ function createResponse(res) {
 }
 
 const server = http.createServer((req, res) => {
+    // Handle CORS preflight
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-AcademicX-Auth-Id');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
     const chunks = [];
 
     req.on('data', (chunk) => chunks.push(chunk));

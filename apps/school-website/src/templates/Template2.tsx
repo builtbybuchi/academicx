@@ -10,7 +10,8 @@ import {
     EventsSection,
     NewsSection,
     GallerySection,
-    ContactSection
+    ContactSection,
+    WelcomeAddressBlock
 } from './SharedTemplateComponents';
 
 export function Template2Layout({ children }: { children: React.ReactNode }) {
@@ -170,6 +171,9 @@ export function Template2() {
             {/* Alternating Sections */}
             <main className="py-20">
                 <div className="container mx-auto px-4 space-y-32">
+                    {/* Welcome Address */}
+                    <WelcomeAddressBlock text={data.welcomeAddress} imageUrl={data.about.imageUrls?.[0]} />
+
                     {/* About - Split */}
                     <div className="flex flex-col lg:flex-row items-center gap-16">
                         <div className="lg:w-1/2 space-y-6">
@@ -185,7 +189,7 @@ export function Template2() {
                             </div>
                         </div>
                         <div className="lg:w-1/2 grid grid-cols-2 gap-4">
-                            {data.about.imageUrls?.slice(0, 2).map((url, i) => (
+                            {data.about.imageUrls?.slice(1, 3).map((url, i) => (
                                 <div key={i} className={`overflow-hidden rounded-none shadow-2xl ${i % 2 === 1 ? 'mt-12' : ''}`}>
                                     <img src={url} alt={`About ${i}`} className="w-full aspect-[3/4] object-cover" />
                                 </div>
