@@ -8,6 +8,7 @@ import { StaffPage } from '@/pages/StaffPage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { FeesPage } from '@/pages/FeesPage';
 import { StudentLoginPage } from '@/pages/StudentLoginPage';
+import { StudentDashboardPage } from '@/pages/StudentDashboardPage';
 
 export default function App() {
     return (
@@ -19,6 +20,7 @@ export default function App() {
                 <Route path="news" element={<NewsPage />} />
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="login" element={<StudentLoginPage />} />
+                <Route path="dashboard" element={<StudentDashboardPage />} />
                 <Route path="results" element={<ResultsPage />} />
                 <Route path="fees" element={<FeesPage />} />
             </Route>
@@ -30,6 +32,7 @@ export default function App() {
                 <Route path="news" element={<NewsPage />} />
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="login" element={<StudentLoginPage />} />
+                <Route path="dashboard" element={<StudentDashboardPage />} />
                 <Route path="results" element={<ResultsPage />} />
                 <Route path="fees" element={<FeesPage />} />
             </Route>

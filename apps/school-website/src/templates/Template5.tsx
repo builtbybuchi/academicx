@@ -2,6 +2,7 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SchoolNavBar } from '@/components/school/SchoolNavBar';
 import { 
     VisionMissionBlock, 
     CoreValuesBlock, 
@@ -13,59 +14,29 @@ import {
 } from './SharedTemplateComponents';
 
 export function Template5Layout({ children }: { children: React.ReactNode }) {
-    const { school } = useSchoolSite();
+    const { school, data } = useSchoolSite();
     const basePath = useBasePath();
     
     if (!school) return null;
-    const name = String((school as any).name || 'School');
 
     return (
-        <div className="min-h-screen bg-[#FDFCF9] font-serif text-[#2D2D2D]">
-            {/* Minimal Editorial Header */}
-            <header className="py-10">
-                <div className="container mx-auto px-6 flex flex-col items-center gap-8">
-                    <Link to={basePath} className="flex flex-col items-center text-center space-y-2 group">
-                        {(school as any).logo && (
-                            <img src={String((school as any).logo)} alt={name} className="h-16 w-auto mb-4 opacity-80 transition-opacity group-hover:opacity-100" />
-                        )}
-                        <h1 className="text-3xl tracking-[0.2em] font-light uppercase">{name}</h1>
-                        <div className="w-12 h-px bg-black/20" />
-                    </Link>
-                    <nav className="flex flex-wrap justify-center gap-x-10 gap-y-4 text-[10px] uppercase tracking-[0.3em] font-medium">
-                        <Link to={basePath} className="hover:opacity-50 transition-opacity">Journal</Link>
-                        <Link to={`${basePath}/events`} className="hover:opacity-50 transition-opacity">Calendar</Link>
-                        <Link to={`${basePath}/news`} className="hover:opacity-50 transition-opacity">Dispatch</Link>
-                        <Link to={`${basePath}/gallery`} className="hover:opacity-50 transition-opacity">Archives</Link>
-                        <Link to={`${basePath}/staff`} className="hover:opacity-50 transition-opacity">Faculty</Link>
-                        <Link to={`${basePath}/results`} className="hover:opacity-50 transition-opacity">Portal</Link>
-                    </nav>
-                </div>
-            </header>
-
+        <div 
+            className="min-h-screen bg-[var(--school-background)] text-[var(--school-text)] font-[var(--school-font-body)]"
+            style={{ 
+                '--school-primary': data.colors.primary,
+                '--school-secondary': data.colors.secondary,
+                '--school-accent': data.colors.accent,
+                '--school-background': data.colors.background,
+                '--school-text': data.colors.text,
+            } as React.CSSProperties}
+        >
+            <SchoolNavBar 
+                schoolName={String((school as any).name || 'School')} 
+                logoUrl={(school as any).logo} 
+                basePath={basePath} 
+                variant="classic"
+            />
             {children}
-
-            {/* Minimalist Footer */}
-            <footer className="py-20 border-t border-black/5">
-                <div className="container mx-auto px-6 text-center space-y-12">
-                    <div className="space-y-4">
-                        <h3 className="text-2xl font-light tracking-[0.2em] uppercase">{name}</h3>
-                        <p className="text-[10px] opacity-40 tracking-[0.2em] uppercase max-w-md mx-auto leading-relaxed">
-                            Location: Global Campus
-                        </p>
-                    </div>
-                    <div className="flex justify-center gap-12 text-[10px] uppercase tracking-[0.4em] font-bold opacity-60">
-                        <Link to={basePath} className="hover:opacity-100">Home</Link>
-                        <Link to={`${basePath}/about`} className="hover:opacity-100">Legacy</Link>
-                        <Link to={`${basePath}/contact`} className="hover:opacity-100">Inquiry</Link>
-                    </div>
-                    <div className="flex justify-center gap-8 opacity-30">
-                        <span className="text-[10px] uppercase tracking-widest">Powered by AcademicX</span>
-                    </div>
-                    <div className="text-[10px] uppercase tracking-[0.5em] opacity-20">
-                        © {new Date().getFullYear()}
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }

@@ -8,6 +8,8 @@ import {
     listSchoolGalleryImages,
     listSchoolNews,
     listSchoolTestimonials,
+    getSystemConfig,
+    listAcademicSessions,
 } from '@/lib/api';
 
 const FONT_PRESETS: Record<
@@ -68,6 +70,8 @@ export interface SchoolSiteState {
     testimonials: Models.Document[];
     accreditations: Models.Document[];
     partnerships: Models.Document[];
+    sessions: Models.Document[];
+    systemConfig: Models.Document | null;
     assets: {
         logo: string;
         placeholders: string[];
@@ -97,6 +101,8 @@ export function SchoolSiteProvider({ slug, children }: { slug: string; children:
     const [testimonials, setTestimonials] = useState<Models.Document[]>([]);
     const [accreditations, setAccreditations] = useState<Models.Document[]>([]);
     const [partnerships, setPartnerships] = useState<Models.Document[]>([]);
+    const [sessions, setSessions] = useState<Models.Document[]>([]);
+    const [systemConfig, setSystemConfig] = useState<Models.Document | null>(null);
 
     const templateId = useMemo(() => {
         const rawTid = (school as any)?.templateId;
@@ -149,13 +155,15 @@ export function SchoolSiteProvider({ slug, children }: { slug: string; children:
             applyTheme(parsed, tid);
 
             const schoolId = doc.$id;
-            const [ev, nw, gal, test, acc, part] = await Promise.all([
+            const [ev, nw, gal, test, acc, part, sess, sys] = await Promise.all([
                 listSchoolEvents(schoolId, 12),
                 listSchoolNews(schoolId, 12),
                 listSchoolGalleryImages(schoolId, 24),
                 listSchoolTestimonials(schoolId, 20),
                 listSchoolAccreditations(schoolId, 'accreditation', 40),
                 listSchoolAccreditations(schoolId, 'partnership', 40),
+                listAcademicSessions(schoolId),
+                getSystemConfig(),
             ]);
             setEvents(ev.documents);
             setNews(nw.documents);
@@ -163,6 +171,8 @@ export function SchoolSiteProvider({ slug, children }: { slug: string; children:
             setTestimonials(test.documents);
             setAccreditations(acc.documents);
             setPartnerships(part.documents);
+            setSessions(sess.documents);
+            setSystemConfig(sys);
         } catch (e) {
             console.error('Error loading school:', e);
             setError(e instanceof Error ? e.message : 'Failed to load school.');
@@ -190,6 +200,8 @@ export function SchoolSiteProvider({ slug, children }: { slug: string; children:
             testimonials,
             accreditations,
             partnerships,
+            sessions,
+            systemConfig,
             assets,
             refresh: load,
         }),
@@ -206,6 +218,8 @@ export function SchoolSiteProvider({ slug, children }: { slug: string; children:
             testimonials,
             accreditations,
             partnerships,
+            sessions,
+            systemConfig,
             assets,
             load,
         ],

@@ -2,6 +2,7 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SchoolNavBar } from '@/components/school/SchoolNavBar';
 import {
     VisionMissionBlock,
     CoreValuesBlock,
@@ -17,94 +18,25 @@ export function Template4Layout({ children }: { children: React.ReactNode }) {
     const basePath = useBasePath();
     
     if (!school) return null;
-    const name = String((school as any).name || 'School');
 
     return (
-        <div className="min-h-screen bg-white font-sans text-gray-900 overflow-x-hidden">
-            {/* Geometric Header */}
-            <header className="relative z-50">
-                <div className="bg-black text-white py-2 px-4 text-[10px] font-bold uppercase tracking-widest">
-                    <div className="container mx-auto flex justify-between items-center">
-                        <span>Portal: 24/7 Access</span>
-                        <div className="flex gap-6">
-                            <span>{data.contact.phones[0]}</span>
-                            <span>{data.contact.emails[0]}</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="container mx-auto px-4 py-6 flex items-center justify-between">
-                    <Link to={basePath} className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-[var(--school-primary)] flex items-center justify-center transform rotate-45 shadow-xl">
-                            {(school as any).logo ? (
-                                <img src={String((school as any).logo)} alt={name} className="w-8 h-8 -rotate-45 object-contain invert" />
-                            ) : (
-                                <span className="text-white font-black -rotate-45 text-xl">{name[0]}</span>
-                            )}
-                        </div>
-                        <span className="text-2xl font-black tracking-tighter uppercase italic">{name}</span>
-                    </Link>
-                    <nav className="hidden lg:flex items-center gap-1">
-                        {['Home', 'Events', 'News', 'Gallery', 'Staff'].map((item) => (
-                            <Link 
-                                key={item} 
-                                to={item === 'Home' ? basePath : `${basePath}/${item.toLowerCase()}`}
-                                className="px-6 py-2 font-black uppercase text-xs tracking-widest hover:bg-[var(--school-primary)] hover:text-white transition-all skew-x-[-12deg]"
-                            >
-                                <span className="inline-block skew-x-[12deg]">{item}</span>
-                            </Link>
-                        ))}
-                    </nav>
-                    <Link to={`${basePath}/results`}>
-                        <Button className="bg-[var(--school-secondary)] text-black font-black uppercase text-xs tracking-widest rounded-none skew-x-[-12deg] px-8 py-6 hover:translate-x-1 transition-transform shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                            <span className="inline-block skew-x-[12deg]">Student Login</span>
-                        </Button>
-                    </Link>
-                </div>
-            </header>
-
+        <div 
+            className="min-h-screen bg-[var(--school-background)] text-[var(--school-text)] font-[var(--school-font-body)]"
+            style={{ 
+                '--school-primary': data.colors.primary,
+                '--school-secondary': data.colors.secondary,
+                '--school-accent': data.colors.accent,
+                '--school-background': data.colors.background,
+                '--school-text': data.colors.text,
+            } as React.CSSProperties}
+        >
+            <SchoolNavBar 
+                schoolName={String((school as any).name || 'School')} 
+                logoUrl={(school as any).logo} 
+                basePath={basePath} 
+                variant="classic"
+            />
             {children}
-
-            {/* Geometric Footer */}
-            <footer className="bg-black text-white py-20 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-4 bg-[var(--school-primary)] skew-y-[-1deg] origin-left" />
-                <div className="container mx-auto px-4 grid md:grid-cols-4 gap-16 relative z-10">
-                    <div className="space-y-8">
-                        <h3 className="text-3xl font-black uppercase italic tracking-tighter">{name}</h3>
-                        <p className="text-sm opacity-50 font-medium leading-relaxed">
-                            {data.principalsPledge}
-                        </p>
-                    </div>
-                    <div>
-                        <h4 className="text-xs font-black uppercase tracking-[0.3em] text-[var(--school-secondary)] mb-8">Directory</h4>
-                        <ul className="space-y-4 text-sm font-bold uppercase tracking-widest">
-                            <li><Link to={basePath} className="hover:text-[var(--school-primary)] transition-colors">Home</Link></li>
-                            <li><Link to={`${basePath}/events`} className="hover:text-[var(--school-primary)] transition-colors">Events</Link></li>
-                            <li><Link to={`${basePath}/admission`} className="hover:text-[var(--school-primary)] transition-colors">Admission</Link></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="text-xs font-black uppercase tracking-[0.3em] text-[var(--school-secondary)] mb-8">Support</h4>
-                        <ul className="space-y-4 text-sm font-bold uppercase tracking-widest">
-                            <li>{data.contact.emails[0]}</li>
-                            <li>{data.contact.phones[0]}</li>
-                            <li>{data.contact.address}</li>
-                        </ul>
-                    </div>
-                    <div className="flex flex-col justify-between">
-                        <div className="bg-white/5 p-6 border-l-4 border-[var(--school-primary)]">
-                            <p className="text-[10px] font-black uppercase tracking-widest mb-4 opacity-40">System Powered By</p>
-                            <span className="text-xl font-black tracking-tighter uppercase italic text-[var(--school-primary)]">AcademicX</span>
-                        </div>
-                    </div>
-                </div>
-                <div className="container mx-auto px-4 mt-20 pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] font-black uppercase tracking-[0.4em] opacity-30">
-                    <span>© {new Date().getFullYear()} Global Operations</span>
-                    <div className="flex gap-12">
-                        <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }

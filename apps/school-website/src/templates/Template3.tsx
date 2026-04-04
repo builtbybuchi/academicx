@@ -2,6 +2,7 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SchoolNavBar } from '@/components/school/SchoolNavBar';
 import { 
     VisionMissionBlock, 
     CoreValuesBlock, 
@@ -17,73 +18,25 @@ export function Template3Layout({ children }: { children: React.ReactNode }) {
     const basePath = useBasePath();
     
     if (!school) return null;
-    const name = String((school as any).name || 'School');
 
     return (
-        <div className="min-h-screen bg-[#fafafa] font-serif text-gray-900">
-            {/* Magazine Header */}
-            <header className="border-b-4 border-black">
-                <div className="bg-black text-white py-1 px-4 text-[10px] uppercase tracking-[0.4em] text-center font-sans font-bold">
-                    The Official Portal of {name} • Est. {new Date().getFullYear() - 40}
-                </div>
-                <div className="container mx-auto px-4 py-8 text-center">
-                    <Link to={basePath}>
-                        <h1 className="text-6xl md:text-8xl font-black tracking-tighter uppercase mb-4">{name}</h1>
-                    </Link>
-                    <nav className="flex flex-wrap items-center justify-center gap-x-12 gap-y-4 text-xs font-bold uppercase tracking-widest font-sans border-t border-black/10 pt-6">
-                        <Link to={basePath} className="hover:text-[var(--school-primary)] transition-colors">Home</Link>
-                        <Link to={`${basePath}/events`} className="hover:text-[var(--school-primary)] transition-colors">Events</Link>
-                        <Link to={`${basePath}/news`} className="hover:text-[var(--school-primary)] transition-colors">News</Link>
-                        <Link to={`${basePath}/gallery`} className="hover:text-[var(--school-primary)] transition-colors">Gallery</Link>
-                        <Link to={`${basePath}/staff`} className="hover:text-[var(--school-primary)] transition-colors">Staff</Link>
-                    </nav>
-                </div>
-            </header>
-
+        <div 
+            className="min-h-screen bg-[var(--school-background)] text-[var(--school-text)] font-[var(--school-font-body)]"
+            style={{ 
+                '--school-primary': data.colors.primary,
+                '--school-secondary': data.colors.secondary,
+                '--school-accent': data.colors.accent,
+                '--school-background': data.colors.background,
+                '--school-text': data.colors.text,
+            } as React.CSSProperties}
+        >
+            <SchoolNavBar 
+                schoolName={String((school as any).name || 'School')} 
+                logoUrl={(school as any).logo} 
+                basePath={basePath} 
+                variant="classic"
+            />
             {children}
-
-            {/* Magazine Footer */}
-            <footer className="bg-white border-t-8 border-black pt-20 pb-10">
-                <div className="container mx-auto px-4">
-                    <div className="flex flex-col md:flex-row justify-between items-start gap-12 mb-20">
-                        <div className="max-w-md">
-                            <h2 className="text-4xl font-black uppercase tracking-tighter mb-6">{name}</h2>
-                            <p className="text-sm opacity-60 leading-relaxed italic">
-                                "{data.principalsPledge}"
-                            </p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-12 font-sans font-bold uppercase tracking-widest text-[10px]">
-                            <div className="space-y-4">
-                                <h4 className="text-gray-400">Sections</h4>
-                                <ul className="space-y-2">
-                                    <li><Link to={basePath}>Home</Link></li>
-                                    <li><Link to={`${basePath}/events`}>Events</Link></li>
-                                    <li><Link to={`${basePath}/staff`}>Staff</Link></li>
-                                </ul>
-                            </div>
-                            <div className="space-y-4">
-                                <h4 className="text-gray-400">Connect</h4>
-                                <ul className="space-y-2">
-                                    <li>{data.contact.emails[0]}</li>
-                                    <li>{data.contact.phones[0]}</li>
-                                </ul>
-                            </div>
-                            <div className="space-y-4">
-                                <h4 className="text-gray-400">Powered By</h4>
-                                <a href="#" className="text-[var(--school-primary)]">AcademicX</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex flex-col md:flex-row justify-between items-center pt-10 border-t border-black/10 gap-4 font-sans font-bold uppercase tracking-[0.3em] text-[10px]">
-                        <span>© {new Date().getFullYear()} All Rights Reserved</span>
-                        <div className="flex gap-8">
-                            <a href="#">Twitter</a>
-                            <a href="#">Facebook</a>
-                            <a href="#">Instagram</a>
-                        </div>
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }

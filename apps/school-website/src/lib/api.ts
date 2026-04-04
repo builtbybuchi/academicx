@@ -12,4 +12,5 @@ export {
     resolveStudentLogin,
     listAcademicSessions,
     getStudentResults,
+    getSystemConfig,
 } from 'shared/utils/api.js';

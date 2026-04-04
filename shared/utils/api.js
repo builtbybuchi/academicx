@@ -8,7 +8,7 @@ import { Client, Account, Databases, Storage, Realtime, ID, Query } from 'appwri
 const client = new Client();
 client
     .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
-    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || '69b314920018940d98b4');
+    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || 'fullacademicx');
 
 export const account = new Account(client);
 export const databases = new Databases(client);
@@ -49,6 +49,7 @@ export const COLLECTIONS = {
     TESTIMONIALS: 'testimonials',
     ACCREDITATIONS: 'accreditations',
     CONTACT_MESSAGES: 'contact_messages',
+    SYSTEM_CONFIG: 'system_config',
 };
 
 // ── Auth Helpers ──────────────────────────────────────────
@@ -793,6 +794,19 @@ export function getSchoolMediaPreviewUrl(fileId, width = 1200, height = 800) {
 export function getSchoolMediaViewUrl(fileId) {
     if (!fileId) return '';
     return storage.getFileView(BUCKET_ID, fileId).toString();
+}
+
+export async function getSystemConfig() {
+    try {
+        const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SYSTEM_CONFIG, [
+            Query.limit(1),
+        ]);
+        return res.documents[0] || null;
+    } catch (e) {
+        // Return null while backend setup catches up instead of breaking school website load.
+        if (e?.code === 404) return null;
+        throw e;
+    }
 }
 
 export { ID, Query, client };

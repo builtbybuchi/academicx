@@ -11,9 +11,10 @@ import { Template8Layout } from './Template8';
 import { Template9Layout } from './Template9';
 import { Template10Layout } from './Template10';
 import { Loader2 } from 'lucide-react';
+import { Footer } from './SharedTemplateComponents';
 
 export function TemplateLayout({ children }: { children: React.ReactNode }) {
-    const { school, loading, error, templateId } = useSchoolSite();
+    const { school, loading, error, templateId, data } = useSchoolSite();
     
     useEffect(() => {
         if (school) {
@@ -63,17 +64,28 @@ export function TemplateLayout({ children }: { children: React.ReactNode }) {
         );
     }
 
+    const content = (
+        <>
+            {children}
+            <Footer 
+                schoolName={String((school as any).name || 'School')} 
+                logoUrl={(school as any).logo} 
+                contact={data.contact}
+            />
+        </>
+    );
+
     switch (templateId) {
-        case 'template1': return <Template1Layout>{children}</Template1Layout>;
-        case 'template2': return <Template2Layout>{children}</Template2Layout>;
-        case 'template3': return <Template3Layout>{children}</Template3Layout>;
-        case 'template4': return <Template4Layout>{children}</Template4Layout>;
-        case 'template5': return <Template5Layout>{children}</Template5Layout>;
-        case 'template6': return <Template6Layout>{children}</Template6Layout>;
-        case 'template7': return <Template7Layout>{children}</Template7Layout>;
-        case 'template8': return <Template8Layout>{children}</Template8Layout>;
-        case 'template9': return <Template9Layout>{children}</Template9Layout>;
-        case 'template10': return <Template10Layout>{children}</Template10Layout>;
-        default: return <Template1Layout>{children}</Template1Layout>;
+        case 'template1': return <Template1Layout>{content}</Template1Layout>;
+        case 'template2': return <Template2Layout>{content}</Template2Layout>;
+        case 'template3': return <Template3Layout>{content}</Template3Layout>;
+        case 'template4': return <Template4Layout>{content}</Template4Layout>;
+        case 'template5': return <Template5Layout>{content}</Template5Layout>;
+        case 'template6': return <Template6Layout>{content}</Template6Layout>;
+        case 'template7': return <Template7Layout>{content}</Template7Layout>;
+        case 'template8': return <Template8Layout>{content}</Template8Layout>;
+        case 'template9': return <Template9Layout>{content}</Template9Layout>;
+        case 'template10': return <Template10Layout>{content}</Template10Layout>;
+        default: return <Template1Layout>{content}</Template1Layout>;
     }
 }

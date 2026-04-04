@@ -1,66 +1,37 @@
-import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useIosDevice } from '@/hooks/useIosDevice';
-import { cn } from '@/lib/utils';
-
-const PLAY = 'https://play.google.com/store/apps/details?id=com.academicx.student';
-const IOS = 'https://apps.apple.com/';
-const APK = 'https://academicxlanding.onrender.com/downloads';
-
-function storageKey(schoolId: string) {
-    return `academicx_app_prompt_${schoolId}`;
-}
+import { useSchoolSite } from '@/context/SchoolSiteContext';
+import { Download, Smartphone } from 'lucide-react';
 
 export function StudentAppPrompt({ schoolId }: { schoolId: string }) {
-    const ios = useIosDevice();
-    const [open, setOpen] = useState(false);
-
-    useEffect(() => {
-        if (ios) return;
-        try {
-            if (sessionStorage.getItem(storageKey(schoolId))) return;
-        } catch {
-            /* ignore */
-        }
-        setOpen(true);
-    }, [schoolId, ios]);
-
-    function dismiss() {
-        setOpen(false);
-        try {
-            sessionStorage.setItem(storageKey(schoolId), '1');
-        } catch {
-            /* ignore */
-        }
-    }
-
-    if (ios || !open) return null;
+    const { systemConfig, school } = useSchoolSite();
+    const apkUrl = systemConfig?.apkUrl || '#';
+    const name = (school as any)?.name || 'the school';
 
     return (
-        <div
-            className={cn(
-                'fixed bottom-4 right-4 z-50 max-w-sm rounded-xl border border-black/10 bg-white p-4 shadow-xl',
-                'animate-in slide-in-from-bottom-4',
-            )}
-            role="dialog"
-            aria-label="Download mobile app"
-        >
-            <button type="button" className="absolute right-2 top-2 rounded p-1 hover:bg-black/5" onClick={dismiss} aria-label="Close">
-                <X className="h-4 w-4" />
-            </button>
-            <p className="pr-6 text-sm font-medium text-school-text">For the best experience, download our mobile app!</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" asChild>
-                    <a href={PLAY} target="_blank" rel="noreferrer">
-                        Google Play
-                    </a>
-                </Button>
-                <Button size="sm" variant="accent" asChild>
-                    <a href={APK} target="_blank" rel="noreferrer">
-                        Direct APK
-                    </a>
-                </Button>
+        <div className="relative overflow-hidden rounded-3xl bg-[var(--school-primary)] p-8 text-white shadow-2xl border border-white/10">
+            {/* Background pattern */}
+            <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-48 h-48 bg-white/5 rounded-full blur-2xl pointer-events-none" />
+
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center shrink-0">
+                    <Smartphone size={32} />
+                </div>
+                
+                <div className="flex-1 text-center md:text-left">
+                    <h3 className="text-2xl font-bold mb-2 tracking-tight">Download your school app</h3>
+                    <p className="opacity-80 max-w-md">For the best experience, stay connected with all school activities directly from your mobile device.</p>
+                </div>
+
+                <div className="flex flex-col gap-3 min-w-[200px]">
+                    <Button size="lg" className="bg-white text-[var(--school-primary)] hover:bg-white/90 rounded-xl font-bold px-8 h-14" asChild>
+                        <a href={apkUrl} target="_blank" rel="noreferrer">
+                            <Download className="mr-2 h-5 w-5" />
+                            Download APK
+                        </a>
+                    </Button>
+                    <p className="text-[10px] uppercase tracking-widest text-center opacity-60">Direct Download • Secure APK</p>
+                </div>
             </div>
         </div>
     );

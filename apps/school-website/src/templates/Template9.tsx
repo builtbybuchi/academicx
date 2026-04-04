@@ -59,7 +59,7 @@ export function Template9Layout({ children }: { children: React.ReactNode }) {
                                 <span className="text-xl font-bold tracking-tight">{name}</span>
                             </div>
                             <p className="text-sm opacity-50 leading-relaxed">
-                                {data.principalsPledge}
+                                Dedicated to academic excellence and character building.
                             </p>
                         </div>
                         <div className="space-y-6">

@@ -28,7 +28,7 @@ export function StudentLoginPage() {
             
             // Store basic student info for session
             sessionStorage.setItem('student_id', studentId);
-            navigate(`${basePath}/results`);
+            navigate(`${basePath}/dashboard`);
         } catch (err: any) {
             setError(err.message || "Invalid student ID or parent credential.");
         } finally {

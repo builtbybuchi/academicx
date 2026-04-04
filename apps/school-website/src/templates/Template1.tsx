@@ -2,6 +2,7 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SchoolNavBar } from '@/components/school/SchoolNavBar';
 import { 
     SchoolAnthemBlock, 
     SchoolPledgeBlock, 
@@ -15,83 +16,28 @@ import {
 } from './SharedTemplateComponents';
 
 export function Template1Layout({ children }: { children: React.ReactNode }) {
-    const { school, data } = useSchoolSite();
+    const { data, school } = useSchoolSite();
     const basePath = useBasePath();
     if (!school) return null;
-    const name = String(school.name || 'School');
 
     return (
-        <div className="min-h-screen bg-[var(--school-background)] font-serif text-[var(--school-text)]">
-            {/* Header */}
-            <header className="sticky top-0 z-50 bg-[var(--school-nav-bg,var(--school-background))] shadow-sm border-b border-[var(--school-primary)]/10">
-                <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-                    <Link to={basePath} className="flex items-center gap-3">
-                        {school.logo && (
-                            <img src={String(school.logo)} alt={name} className="h-12 w-auto" />
-                        )}
-                        <span className="text-2xl font-bold tracking-tight text-[var(--school-primary)]">{name}</span>
-                    </Link>
-                    <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
-                        <Link to={basePath} className="hover:text-[var(--school-primary)] transition-colors">Home</Link>
-                        <Link to={`${basePath}/events`} className="hover:text-[var(--school-primary)] transition-colors">Events</Link>
-                        <Link to={`${basePath}/news`} className="hover:text-[var(--school-primary)] transition-colors">News</Link>
-                        <Link to={`${basePath}/gallery`} className="hover:text-[var(--school-primary)] transition-colors">Gallery</Link>
-                        <Link to={`${basePath}/staff`} className="hover:text-[var(--school-primary)] transition-colors">Staff</Link>
-                    </nav>
-                    <div className="flex items-center gap-4">
-                        <Link to={`${basePath}/results`}>
-                            <Button variant="outline" size="sm" className="hidden sm:inline-flex border-[var(--school-primary)] text-[var(--school-primary)]">
-                                Student Portal
-                            </Button>
-                        </Link>
-                        <Button size="sm" className="bg-[var(--school-primary)] text-white hover:opacity-90">
-                            Apply Now
-                        </Button>
-                    </div>
-                </div>
-            </header>
-
+        <div 
+            className="min-h-screen bg-[var(--school-background)] text-[var(--school-text)] font-[var(--school-font-body)]"
+            style={{ 
+                '--school-primary': data.colors.primary,
+                '--school-secondary': data.colors.secondary,
+                '--school-accent': data.colors.accent,
+                '--school-background': data.colors.background,
+                '--school-text': data.colors.text,
+            } as React.CSSProperties}
+        >
+            <SchoolNavBar 
+                schoolName={String((school as any).name || 'School')} 
+                logoUrl={(school as any).logo} 
+                basePath={basePath} 
+                variant="classic"
+            />
             {children}
-
-            {/* Footer */}
-            <footer className="bg-[var(--school-primary)] text-white py-16">
-                <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-12">
-                    <div className="space-y-6">
-                        <h3 className="text-2xl font-bold">{name}</h3>
-                        <p className="opacity-70 text-sm leading-relaxed">
-                            Providing quality education and fostering excellence in a supportive environment.
-                        </p>
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-bold mb-6">Quick Links</h4>
-                        <ul className="space-y-3 opacity-70 text-sm">
-                            <li><Link to={basePath}>Home</Link></li>
-                            <li><Link to={`${basePath}/events`}>Events</Link></li>
-                            <li><Link to={`${basePath}/news`}>News</Link></li>
-                            <li><Link to={`${basePath}/gallery`}>Gallery</Link></li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-bold mb-6">Contact Us</h4>
-                        <ul className="space-y-3 opacity-70 text-sm">
-                            <li>{data.contact.address}</li>
-                            <li>{data.contact.phones.join(', ')}</li>
-                            <li>{data.contact.emails.join(', ')}</li>
-                            <li>{data.contact.schoolHours}</li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-bold mb-6">AcademicX</h4>
-                        <p className="opacity-70 text-sm mb-4">
-                            Powered by AcademicX - The complete school management system.
-                        </p>
-                        <a href="https://academicx.onrender.com" className="text-[var(--school-secondary)] font-bold">Visit AcademicX</a>
-                    </div>
-                </div>
-                <div className="container mx-auto px-4 mt-16 pt-8 border-t border-white/10 text-center opacity-50 text-xs">
-                    © {new Date().getFullYear()} {name}. All rights reserved.
-                </div>
-            </footer>
         </div>
     );
 }
@@ -105,7 +51,7 @@ export function Template1() {
     const basePath = useBasePath();
     
     if (!school) return null;
-    const name = String(school.name || 'School');
+    const name = String((school as any).name || 'School');
 
     return (
         <>
@@ -170,11 +116,9 @@ export function Template1() {
                         <CoreValuesBlock values={data.coreValues} />
                     </div>
                     <aside className="space-y-8">
-                        <SchoolAnthemBlock text={data.schoolAnthem} />
-                        <SchoolPledgeBlock text={data.schoolPledge} />
-                        <div className="bg-[var(--school-secondary)]/10 p-8 rounded-lg border-l-4 border-[var(--school-secondary)]">
-                            <h3 className="text-2xl font-bold mb-4">Principal's Pledge</h3>
-                            <p className="italic opacity-80 leading-relaxed">"{data.principalsPledge}"</p>
+                        <div className="bg-[var(--school-primary)]/5 p-8 rounded-2xl border border-[var(--school-primary)]/10">
+                            <h3 className="text-xl font-bold mb-4 text-[var(--school-primary)]">About Us</h3>
+                            <p className="text-sm opacity-70 leading-relaxed italic">Dedicated to excellence in education and holistic development of our students since our foundation.</p>
                         </div>
                     </aside>
                 </div>

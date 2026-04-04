@@ -1576,6 +1576,28 @@ const COLLECTIONS = {
         { key: 'idx_school_status_createdAt', type: 'key', attributes: ["schoolId","status","createdAt"] }
         ],
     },
+
+    // System Config
+    SYSTEM_CONFIG: {
+        id: 'system_config',
+        name: 'System Config',
+        attributes: [
+        {
+            key: 'apkUrl',
+            required: false,
+            type: 'string',
+            size: 2000,
+        },
+        {
+            key: 'updatedAt',
+            required: false,
+            type: 'datetime',
+        }
+        ],
+        indexes: [
+        { key: 'idx_updatedAt', type: 'key', attributes: ["updatedAt"] }
+        ],
+    },
 };
 
 module.exports = { DATABASE_ID, BUCKET_ID, COLLECTIONS };

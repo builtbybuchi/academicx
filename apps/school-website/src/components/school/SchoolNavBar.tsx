@@ -44,6 +44,9 @@ export function SchoolNavBar({
         variant === 'split' ? 'text-white' : 'text-school-text',
     );
 
+    const isLoggedIn = !!sessionStorage.getItem('student_id');
+    const portalLink = isLoggedIn ? `${basePath}/dashboard` : `${basePath}/login`;
+
     return (
         <header className={bar}>
             <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
@@ -59,9 +62,9 @@ export function SchoolNavBar({
                         </Link>
                     ))}
                     <Button variant={variant === 'split' ? 'secondary' : 'outline'} size="sm" asChild>
-                        <Link to={`${basePath}/login`}>
+                        <Link to={portalLink}>
                             <LogIn className="mr-1 h-4 w-4" />
-                            Student
+                            {isLoggedIn ? 'Portal' : 'Student'}
                         </Link>
                     </Button>
                 </nav>
@@ -79,8 +82,8 @@ export function SchoolNavBar({
                                 {l.label}
                             </Link>
                         ))}
-                        <Link to={`${basePath}/login`} onClick={() => setOpen(false)}>
-                            Student login
+                        <Link to={portalLink} onClick={() => setOpen(false)}>
+                            {isLoggedIn ? 'Dashboard' : 'Student login'}
                         </Link>
                     </div>
                 </div>

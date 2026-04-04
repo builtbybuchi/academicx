@@ -238,6 +238,52 @@ export function EventsSection({ events, basePath }: { events: Models.Document[];
     );
 }
 
+export function Footer({ schoolName, logoUrl, contact }: { schoolName: string; logoUrl?: string; contact: any }) {
+    return (
+        <footer className="bg-slate-50 border-t border-slate-100 py-20">
+            <div className="container mx-auto px-4 grid md:grid-cols-4 gap-12">
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 font-display text-xl font-bold">
+                        {logoUrl ? <img src={logoUrl} alt="" className="h-10 w-auto" /> : null}
+                        <span>{schoolName}</span>
+                    </div>
+                    <p className="text-slate-500 text-sm leading-relaxed">
+                        Dedicated to academic excellence and character building.
+                    </p>
+                </div>
+                <div className="space-y-6">
+                    <h4 className="font-bold text-slate-900 uppercase tracking-widest text-xs">Navigation</h4>
+                    <nav className="flex flex-col gap-3 text-slate-500 text-sm">
+                        <Link to="/" className="hover:text-[var(--school-primary)] transition-colors">Home</Link>
+                        <Link to="/news" className="hover:text-[var(--school-primary)] transition-colors">News</Link>
+                        <Link to="/events" className="hover:text-[var(--school-primary)] transition-colors">Events</Link>
+                        <Link to="/gallery" className="hover:text-[var(--school-primary)] transition-colors">Gallery</Link>
+                    </nav>
+                </div>
+                <div className="space-y-6 md:col-span-2">
+                    <h4 className="font-bold text-slate-900 uppercase tracking-widest text-xs">Contact Us</h4>
+                    <div className="text-slate-500 text-sm space-y-4">
+                        <p>{contact.address}</p>
+                        <p>{contact.phones?.join(', ')}</p>
+                        <p>{contact.emails?.join(', ')}</p>
+                    </div>
+                </div>
+            </div>
+            <div className="container mx-auto px-4 mt-20 pt-8 border-t border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-400 text-xs">
+                <div className="flex items-center gap-2">
+                    <p>© {new Date().getFullYear()} {schoolName}. All rights reserved.</p>
+                    <span className="text-[10px] opacity-30">| Powered by AcademicX</span>
+                </div>
+                <div className="flex gap-6">
+                    {contact.social?.facebook && <a href={contact.social.facebook} className="hover:text-slate-600 transition-colors">Facebook</a>}
+                    {contact.social?.twitter && <a href={contact.social.twitter} className="hover:text-slate-600 transition-colors">Twitter</a>}
+                    {contact.social?.instagram && <a href={contact.social.instagram} className="hover:text-slate-600 transition-colors">Instagram</a>}
+                </div>
+            </div>
+        </footer>
+    );
+}
+
 export function NewsSection({ news, basePath }: { news: Models.Document[]; basePath: string }) {
     if (news.length === 0) return null;
     return (

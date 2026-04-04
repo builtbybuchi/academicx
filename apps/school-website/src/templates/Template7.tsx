@@ -62,7 +62,7 @@ export function Template7Layout({ children }: { children: React.ReactNode }) {
                         <div className="space-y-6 max-w-xs">
                             <h3 className="text-2xl font-bold tracking-tight">{name}</h3>
                             <p className="text-slate-500 text-sm leading-relaxed">
-                                {data.principalsPledge}
+                                Dedicated to academic excellence and character building.
                             </p>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-12">

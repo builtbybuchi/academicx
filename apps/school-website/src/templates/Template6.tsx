@@ -2,6 +2,7 @@ import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { useBasePath } from '@/hooks/useBasePath';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { SchoolNavBar } from '@/components/school/SchoolNavBar';
 import {
     VisionMissionBlock,
     CoreValuesBlock,
@@ -17,82 +18,25 @@ export function Template6Layout({ children }: { children: React.ReactNode }) {
     const basePath = useBasePath();
     
     if (!school) return null;
-    const name = String((school as any).name || 'School');
 
     return (
-        <div className="min-h-screen bg-white font-black text-black">
-            {/* Poster Header */}
-            <header className="bg-black text-white border-b-8 border-black">
-                <div className="container mx-auto px-4 py-8 flex items-center justify-between">
-                    <Link to={basePath} className="flex items-center gap-6">
-                        <div className="bg-white p-2 border-4 border-white">
-                            {(school as any).logo ? (
-                                <img src={String((school as any).logo)} alt={name} className="h-12 w-auto invert" />
-                            ) : (
-                                <span className="text-black text-4xl leading-none">{name[0]}</span>
-                            )}
-                        </div>
-                        <span className="text-4xl uppercase tracking-tighter">{name}</span>
-                    </Link>
-                    <nav className="hidden lg:flex items-center gap-2">
-                        {['Home', 'Events', 'News', 'Gallery', 'Staff'].map((item) => (
-                            <Link 
-                                key={item} 
-                                to={item === 'Home' ? basePath : `${basePath}/${item.toLowerCase()}`}
-                                className="px-6 py-2 border-4 border-transparent hover:border-white transition-all uppercase text-sm tracking-tighter"
-                            >
-                                {item}
-                            </Link>
-                        ))}
-                    </nav>
-                    <Link to={`${basePath}/results`}>
-                        <Button className="bg-white text-black hover:bg-gray-200 rounded-none border-4 border-white px-8 py-6 uppercase text-sm tracking-tighter">
-                            Portal
-                        </Button>
-                    </Link>
-                </div>
-            </header>
-
+        <div 
+            className="min-h-screen bg-[var(--school-background)] text-[var(--school-text)] font-[var(--school-font-body)]"
+            style={{ 
+                '--school-primary': data.colors.primary,
+                '--school-secondary': data.colors.secondary,
+                '--school-accent': data.colors.accent,
+                '--school-background': data.colors.background,
+                '--school-text': data.colors.text,
+            } as React.CSSProperties}
+        >
+            <SchoolNavBar 
+                schoolName={String((school as any).name || 'School')} 
+                logoUrl={(school as any).logo} 
+                basePath={basePath} 
+                variant="classic"
+            />
             {children}
-
-            {/* Poster Footer */}
-            <footer className="bg-black text-white pt-20 pb-10 border-t-8 border-black">
-                <div className="container mx-auto px-4">
-                    <div className="grid md:grid-cols-2 gap-20 mb-20">
-                        <div className="space-y-12">
-                            <h2 className="text-6xl uppercase tracking-tighter">{name}</h2>
-                            <div className="p-8 border-4 border-white inline-block">
-                                <h4 className="text-xl uppercase mb-4 text-[var(--school-primary)]">The Pledge</h4>
-                                <p className="opacity-60 max-w-sm uppercase text-sm leading-tight">{data.schoolPledge}</p>
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-12">
-                            <div className="space-y-6">
-                                <h4 className="text-xs uppercase tracking-[0.3em] text-gray-500">Navigation</h4>
-                                <ul className="space-y-3 uppercase text-sm tracking-tighter">
-                                    <li><Link to={basePath}>Home</Link></li>
-                                    <li><Link to={`${basePath}/events`}>Events</Link></li>
-                                    <li><Link to={`${basePath}/staff`}>Staff</Link></li>
-                                </ul>
-                            </div>
-                            <div className="space-y-6">
-                                <h4 className="text-xs uppercase tracking-[0.3em] text-gray-500">Contact</h4>
-                                <ul className="space-y-3 uppercase text-sm tracking-tighter">
-                                    <li>{data.contact.phones[0]}</li>
-                                    <li>{data.contact.emails[0]}</li>
-                                    <li>{data.contact.address}</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="pt-10 border-t-4 border-white/10 flex flex-col md:flex-row justify-between items-center gap-6 uppercase text-xs tracking-tighter font-bold">
-                        <span>© {new Date().getFullYear()} {name} Posterity</span>
-                        <div className="flex gap-12">
-                            <a href="#" className="text-[var(--school-primary)]">AcademicX Powered</a>
-                        </div>
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }
