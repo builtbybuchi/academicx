@@ -183,10 +183,57 @@ function getSquadModalConfig(params) {
     };
 }
 
+/**
+ * Handle school fee payment webhook
+ */
+async function handleSchoolFeeWebhook(payload) {
+    const { event, data } = payload;
+    
+    if (event === 'charge_successful' && data.metadata?.type === 'school_fee') {
+        const { feeId, studentId, schoolId } = data.metadata;
+        const { Client, Databases, Query } = require('node-appwrite');
+        
+        const client = new Client();
+        client.setEndpoint(process.env.APPWRITE_ENDPOINT).setProject(process.env.APPWRITE_PROJECT_ID).setKey(process.env.APPWRITE_API_KEY);
+        const db = new Databases(client);
+        
+        try {
+            // Update fee record
+            await db.updateDocument('academicx_db', 'school_fees', feeId, {
+                status: 'paid',
+                paidAt: new Date().toISOString(),
+                paymentReference: data.transaction_ref
+            });
+            
+            // Get student and school details for WhatsApp notification
+            const student = await db.getDocument('academicx_db', 'students', studentId);
+            const school = await db.getDocument('academicx_db', 'schools', schoolId);
+            
+            // Send WhatsApp confirmation
+            if (student.parentPhone) {
+                const reminderService = require('../whatsapp/reminder-service');
+                await reminderService.handlePaymentSuccess({
+                    feeId,
+                    transactionRef: data.transaction_ref,
+                    metadata: data.metadata
+                });
+            }
+            
+            return { success: true };
+        } catch (error) {
+            console.error('School fee webhook error:', error);
+            return { success: false, error: error.message };
+        }
+    }
+    
+    return { success: true }; // Acknowledge other events
+}
+
 module.exports = {
     initiateTransaction,
     verifyTransaction,
     handleWebhook,
+    handleSchoolFeeWebhook,
     initiateSchoolPinPurchase,
     initiateStudentPinPurchase,
     getSquadModalConfig,

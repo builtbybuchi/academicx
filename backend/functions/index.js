@@ -26,6 +26,8 @@ const COLLECTIONS = {
     CHAT_MESSAGES: { id: 'chat_messages' },
     EMAIL_SENDS: { id: 'email_sends' },
     CONTACT_MESSAGES: { id: 'contact_messages' },
+    SCHOOL_FEES: { id: 'school_fees' },
+    WHATSAPP_REMINDERS: { id: 'whatsapp_reminders' },
 };
 
 function getClient() {
@@ -1952,7 +1954,7 @@ const actions = {
             const term = school.currentTerm || '';
             const session = school.currentSession || '';
 
-            const [results, attendance, pins] = await Promise.all([
+            const [results, attendance, pins, fees] = await Promise.all([
                 db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
                     Query.equal('studentId', student.$id),
                     ...(term ? [Query.equal('term', term)] : []),
@@ -1971,6 +1973,11 @@ const actions = {
                     Query.limit(50),
                     Query.orderDesc('createdAt'),
                 ]),
+                db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                    Query.equal('studentId', student.$id),
+                    Query.limit(100),
+                    Query.orderDesc('createdAt'),
+                ]),
             ]);
 
             return {
@@ -1984,6 +1991,7 @@ const actions = {
                     results: results.documents,
                     attendance: attendance.documents,
                     pins: pins.documents,
+                    fees: fees.documents,
                     hasVerifiedPin: pins.documents.some((item) => item.used),
                 },
             };
@@ -2013,6 +2021,294 @@ const actions = {
                 },
             };
         },
+    },
+
+    /** Create school fee payment */
+    createSchoolFeePayment: {
+        auth: true,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { studentId, amount, term, session, platformFee } = payload;
+
+            if (!studentId || !amount || !term || !session) {
+                return { success: false, error: 'Missing required fields' };
+            }
+
+            try {
+                // Get student and school info
+                const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
+                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
+
+                // Calculate total amount with platform fee
+                const platformFeeAmount = Math.min(amount * 0.019, 2500);
+                const totalAmount = amount + platformFeeAmount;
+
+                // Check if fee record already exists
+                const existingFees = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                    Query.equal('schoolId', school.$id),
+                    Query.equal('studentId', studentId),
+                    Query.equal('term', term),
+                    Query.equal('session', session),
+                    Query.limit(1)
+                ]);
+
+                if (existingFees.total > 0) {
+                    return { success: false, error: 'Fee record already exists for this term/session' };
+                }
+
+                // Create fee record
+                const feeRecord = await db.createDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, ID.unique(), {
+                    schoolId: school.$id,
+                    studentId,
+                    term,
+                    session,
+                    amount,
+                    platformFee: platformFeeAmount,
+                    totalAmount,
+                    status: 'pending',
+                    paymentMethod: 'online',
+                    createdAt: nowIso()
+                });
+
+                // Initiate payment with Squad
+                const squad = require('../payment/squad');
+                const paymentResult = await squad.initiateTransaction({
+                    email: student.parentEmail || user.email,
+                    amount: totalAmount,
+                    callbackUrl: `${process.env.FRONTEND_URL}/school-fees/payment-success`,
+                    metadata: {
+                        type: 'school_fee',
+                        feeId: feeRecord.$id,
+                        studentId,
+                        schoolId: school.$id
+                    }
+                });
+
+                if (!paymentResult.success) {
+                    return { success: false, error: paymentResult.error };
+                }
+
+                // Update fee record with payment reference
+                await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeRecord.$id, {
+                    paymentReference: paymentResult.data.transactionRef
+                });
+
+                return {
+                    success: true,
+                    data: {
+                        feeId: feeRecord.$id,
+                        checkoutUrl: paymentResult.data.checkoutUrl,
+                        transactionRef: paymentResult.data.transactionRef
+                    }
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+    },
+
+    /** Get school fees report */
+    getSchoolFeesReport: {
+        auth: true,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { term, session } = payload;
+
+            if (!term || !session) {
+                return { success: false, error: 'Term and session are required' };
+            }
+
+            try {
+                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                
+                // Get all fees for the term/session
+                const fees = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                    Query.equal('schoolId', user.schoolId),
+                    Query.equal('term', term),
+                    Query.equal('session', session),
+                    Query.limit(1000)
+                ]);
+
+                // Get student details
+                const studentIds = [...new Set(fees.documents.map(f => f.studentId))];
+                const students = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                    Query.equal('schoolId', user.schoolId),
+                    Query.limit(1000)
+                ]);
+
+                const studentMap = students.documents.reduce((acc, student) => {
+                    acc[student.$id] = student;
+                    return acc;
+                }, {});
+
+                // Separate paid and unpaid students
+                const paidStudents = [];
+                const unpaidStudents = [];
+
+                fees.documents.forEach(fee => {
+                    const student = studentMap[fee.studentId];
+                    if (student) {
+                        const studentWithFee = {
+                            ...student,
+                            amount: fee.amount,
+                            paidAt: fee.paidAt,
+                            paymentMethod: fee.paymentMethod
+                        };
+
+                        if (fee.status === 'paid') {
+                            paidStudents.push(studentWithFee);
+                        } else {
+                            unpaidStudents.push(studentWithFee);
+                        }
+                    }
+                });
+
+                // Group by class
+                const groupByClass = (students) => {
+                    return students.reduce((acc, student) => {
+                        if (!acc[student.className]) {
+                            acc[student.className] = [];
+                        }
+                        acc[student.className].push(student);
+                        return acc;
+                    }, {});
+                };
+
+                return {
+                    success: true,
+                    data: {
+                        paidStudents: groupByClass(paidStudents),
+                        unpaidStudents: groupByClass(unpaidStudents),
+                        summary: {
+                            totalStudents: students.documents.length,
+                            paidCount: paidStudents.length,
+                            unpaidCount: unpaidStudents.length,
+                            totalCollected: fees.documents
+                                .filter(f => f.status === 'paid')
+                                .reduce((sum, f) => sum + f.amount, 0)
+                        }
+                    }
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+    },
+
+    /** Initiate student fee payment */
+    initiateStudentFeePayment: {
+        auth: true,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { feeId, studentId, amount, term, session } = payload;
+
+            if (!feeId || !studentId || !amount || !term || !session) {
+                return { success: false, error: 'Missing required fields' };
+            }
+
+            try {
+                // Verify the fee belongs to the authenticated student
+                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
+                
+                if (student.userId !== user.$id) {
+                    return { success: false, error: 'Unauthorized: Fee does not belong to this student' };
+                }
+
+                // Get fee record
+                const fee = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId);
+                
+                if (fee.studentId !== studentId) {
+                    return { success: false, error: 'Invalid fee record' };
+                }
+
+                if (fee.status === 'paid') {
+                    return { success: false, error: 'Fee already paid' };
+                }
+
+                // Calculate platform fee
+                const platformFeeAmount = Math.min(amount * 0.019, 2500);
+                const totalAmount = amount + platformFeeAmount;
+
+                // Initiate payment with Squad
+                const squad = require('../payment/squad');
+                const paymentResult = await squad.initiateTransaction({
+                    email: student.parentEmail || user.email,
+                    amount: totalAmount,
+                    callbackUrl: `${process.env.FRONTEND_URL}/school-fees/payment-success`,
+                    metadata: {
+                        type: 'school_fee',
+                        feeId: fee.$id,
+                        studentId: student.$id,
+                        schoolId: fee.schoolId
+                    }
+                });
+
+                if (!paymentResult.success) {
+                    return { success: false, error: paymentResult.error };
+                }
+
+                // Update fee record with payment reference
+                await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, fee.$id, {
+                    paymentReference: paymentResult.data.transactionRef
+                });
+
+                return {
+                    success: true,
+                    data: {
+                        feeId: fee.$id,
+                        checkoutUrl: paymentResult.data.checkoutUrl,
+                        transactionRef: paymentResult.data.transactionRef
+                    }
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+    },
+
+    /** Handle Squad webhook for school fee payments */
+    handleSchoolFeeWebhook: {
+        auth: false,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const { event, data } = payload;
+            
+            try {
+                if (event === 'charge_successful' && data.metadata?.type === 'school_fee') {
+                    const { feeId, studentId, schoolId } = data.metadata;
+                    
+                    // Update fee record
+                    await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId, {
+                        status: 'paid',
+                        paidAt: nowIso(),
+                        paymentReference: data.transaction_ref
+                    });
+                    
+                    // Get student and school details
+                    const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
+                    const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId);
+                    
+                    // Send WhatsApp confirmation
+                    if (student.parentPhone) {
+                        const reminderService = require('../whatsapp/reminder-service');
+                        await reminderService.handlePaymentSuccess({
+                            feeId,
+                            transactionRef: data.transaction_ref,
+                            metadata: data.metadata
+                        });
+                    }
+                    
+                    return { success: true };
+                }
+                
+                return { success: true }; // Acknowledge other events
+            } catch (error) {
+                console.error('Webhook error:', error);
+                return { success: false, error: error.message };
+            }
+        }
     },
 
     /** Public: school website contact form → contact_messages (validated server-side). */

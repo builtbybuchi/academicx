@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, LogOut, Download, Globe } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, LogOut, Download, Globe, CreditCard } from 'lucide-react';
 import Sidebar from 'shared/components/Sidebar.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
 import AuthPage from 'shared/components/AuthPage.jsx';
@@ -14,6 +14,7 @@ import Communication from './pages/communication.jsx';
 import Chat from './pages/chat.jsx';
 import Downloads from './pages/downloads.jsx';
 import Website from './pages/website.jsx';
+import SchoolFees from './pages/school-fees.jsx';
 
 export default function App() {
     const navigate = useNavigate();
@@ -41,6 +42,7 @@ export default function App() {
             section: 'Operations',
             items: [
                 { id: '/results', label: 'Results', icon: <ClipboardList size={20} /> },
+                { id: '/school-fees', label: 'School Fees', icon: <CreditCard size={20} /> },
                 { id: '/communication', label: 'Communication', icon: <MessageSquare size={20} /> },
                 { id: '/chat', label: 'Chat', icon: <MessageSquare size={20} /> },
             ],
@@ -127,6 +129,7 @@ export default function App() {
                     <Route path="/grading" element={<Grading />} />
                     <Route path="/website" element={<Website />} />
                     <Route path="/results" element={<Results />} />
+                    <Route path="/school-fees" element={<SchoolFees />} />
                     <Route path="/communication" element={<Communication />} />
                     <Route path="/chat" element={<Chat />} />
                     {effectiveRole === 'super_admin' && (

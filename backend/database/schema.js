@@ -117,6 +117,12 @@ const COLLECTIONS = {
             size: 100,
         },
         {
+            key: 'schoolFeeAmount',
+            required: false,
+            type: 'float',
+            default: 0,
+        },
+        {
             key: 'data',
             required: false,
             type: 'string',
@@ -1574,6 +1580,209 @@ const COLLECTIONS = {
         ],
         indexes: [
         { key: 'idx_school_status_createdAt', type: 'key', attributes: ["schoolId","status","createdAt"] }
+        ],
+    },
+
+    // School Fees
+    SCHOOL_FEES: {
+        id: 'school_fees',
+        name: 'School Fees',
+        attributes: [
+        {
+            key: 'schoolId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'studentId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'term',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'session',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'amount',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'platformFee',
+            required: false,
+            type: 'float',
+            default: 0,
+        },
+        {
+            key: 'totalAmount',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'status',
+            required: false,
+            type: 'enum',
+            elements: ["pending","paid","failed","refunded"],
+            default: 'pending',
+        },
+        {
+            key: 'paymentReference',
+            required: false,
+            type: 'string',
+            size: 100,
+        },
+        {
+            key: 'paymentMethod',
+            required: false,
+            type: 'enum',
+            elements: ["online","manual","bank_transfer"],
+            default: 'online',
+        },
+        {
+            key: 'paidAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'paidBy',
+            required: false,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'notes',
+            required: false,
+            type: 'string',
+            size: 1000,
+        },
+        {
+            key: 'reminderSent',
+            required: false,
+            type: 'boolean',
+            default: false,
+        },
+        {
+            key: 'lastReminderAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'createdAt',
+            required: true,
+            type: 'datetime',
+        },
+        {
+            key: 'updatedAt',
+            required: false,
+            type: 'datetime',
+        }
+        ],
+        indexes: [
+        { key: 'idx_school_student_term', type: 'unique', attributes: ["schoolId","studentId","term","session"] },
+        { key: 'idx_school_status', type: 'key', attributes: ["schoolId","status"] },
+        { key: 'idx_school_term_session', type: 'key', attributes: ["schoolId","term","session"] },
+        { key: 'idx_student_term', type: 'key', attributes: ["studentId","term","session"] },
+        { key: 'idx_payment_ref', type: 'key', attributes: ["paymentReference"] }
+        ],
+    },
+
+    // WhatsApp Reminders
+    WHATSAPP_REMINDERS: {
+        id: 'whatsapp_reminders',
+        name: 'WhatsApp Reminders',
+        attributes: [
+        {
+            key: 'schoolId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'studentId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'parentPhone',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'messageType',
+            required: true,
+            type: 'enum',
+            elements: ["fee_reminder","payment_confirmation","overdue_notice"],
+        },
+        {
+            key: 'message',
+            required: true,
+            type: 'string',
+            size: 2000,
+        },
+        {
+            key: 'status',
+            required: false,
+            type: 'enum',
+            elements: ["pending","sent","failed"],
+            default: 'pending',
+        },
+        {
+            key: 'sentAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'errorMessage',
+            required: false,
+            type: 'string',
+            size: 1000,
+        },
+        {
+            key: 'retryCount',
+            required: false,
+            type: 'integer',
+            default: 0,
+        },
+        {
+            key: 'nextRetryAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'term',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'session',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'createdAt',
+            required: true,
+            type: 'datetime',
+        }
+        ],
+        indexes: [
+        { key: 'idx_school_status', type: 'key', attributes: ["schoolId","status"] },
+        { key: 'idx_student_term', type: 'key', attributes: ["studentId","term","session"] },
+        { key: 'idx_next_retry', type: 'key', attributes: ["nextRetryAt"] },
+        { key: 'idx_created_at', type: 'key', attributes: ["createdAt"] }
         ],
     },
 

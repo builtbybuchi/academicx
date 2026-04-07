@@ -49,6 +49,8 @@ export const COLLECTIONS = {
     TESTIMONIALS: 'testimonials',
     ACCREDITATIONS: 'accreditations',
     CONTACT_MESSAGES: 'contact_messages',
+    SCHOOL_FEES: 'school_fees',
+    WHATSAPP_REMINDERS: 'whatsapp_reminders',
     SYSTEM_CONFIG: 'system_config',
 };
 
@@ -807,6 +809,74 @@ export async function getSystemConfig() {
         if (e?.code === 404) return null;
         throw e;
     }
+}
+
+// ── School Fees ───────────────────────────────────────────
+
+export async function getCurrentSchool() {
+    const user = await getCurrentUser();
+    const profile = await getUserProfile(user.$id);
+    if (!profile?.schoolId) throw new Error('School not found');
+    return getSchool(profile.schoolId);
+}
+
+export async function getSchoolStudents() {
+    const school = await getCurrentSchool();
+    return listStudents(school.$id);
+}
+
+export async function getSchoolFees(term = '', session = '') {
+    const school = await getCurrentSchool();
+    const queries = [Query.equal('schoolId', school.$id), Query.limit(500)];
+    if (term) queries.push(Query.equal('term', term));
+    if (session) queries.push(Query.equal('session', session));
+    const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES, queries);
+    return result.documents;
+}
+
+export async function createSchoolFeePayment(payload) {
+    return invokeBackendFunction('createSchoolFeePayment', payload);
+}
+
+export async function getSchoolFeesReport(filters = {}) {
+    return invokeBackendFunction('getSchoolFeesReport', filters);
+}
+
+export async function updateSchoolFee(feeId, data) {
+    return databases.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES, feeId, data);
+}
+
+export async function createWhatsAppReminder(payload) {
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.WHATSAPP_REMINDERS, ID.unique(), {
+        ...payload,
+        createdAt: new Date().toISOString(),
+    });
+}
+
+export async function getPendingWhatsAppReminders() {
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.WHATSAPP_REMINDERS, [
+        Query.equal('status', 'pending'),
+        Query.lessThanEqual('nextRetryAt', new Date().toISOString()),
+        Query.limit(100),
+    ]);
+}
+
+export async function updateWhatsAppReminder(reminderId, data) {
+    return databases.updateDocument(DATABASE_ID, COLLECTIONS.WHATSAPP_REMINDERS, reminderId, data);
+}
+
+export async function getStudentFees() {
+    const user = await getCurrentUser();
+    const student = await getStudentByUserId(user.$id);
+    if (!student) throw new Error('Student not found');
+    
+    const queries = [Query.equal('studentId', student.$id), Query.limit(100)];
+    const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES, queries);
+    return result.documents;
+}
+
+export async function initiateSchoolFeePayment(payload) {
+    return invokeBackendFunction('initiateStudentFeePayment', payload);
 }
 
 export { ID, Query, client };

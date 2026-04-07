@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { Home, BarChart2, ClipboardList, KeySquare, UserCircle } from 'lucide-react';
+import { Home, BarChart2, ClipboardList, KeySquare, UserCircle, CreditCard } from 'lucide-react';
 import Sidebar from 'shared/components/Sidebar.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
 import AuthPage from 'shared/components/AuthPage.jsx';
@@ -9,6 +9,7 @@ import Results from './pages/results.jsx';
 import AttendanceView from './pages/attendance.jsx';
 import PinAccess from './pages/pin-access.jsx';
 import StudentProfile from './pages/profile.jsx';
+import SchoolFees from './pages/school-fees.jsx';
 
 const menuGroups = [
     { section: 'Overview', items: [{ id: '/', label: 'Dashboard', icon: <Home size={20} /> }] },
@@ -18,6 +19,7 @@ const menuGroups = [
             { id: '/attendance', label: 'Attendance', icon: <ClipboardList size={20} /> },
         ]
     },
+    { section: 'Payments', items: [{ id: '/school-fees', label: 'School Fees', icon: <CreditCard size={20} /> }] },
     { section: 'Account', items: [{ id: '/profile', label: 'My Profile', icon: <UserCircle size={20} /> }] },
     { section: 'Access', items: [{ id: '/pin-access', label: 'PIN Access', icon: <KeySquare size={20} /> }] },
 ];
@@ -87,6 +89,7 @@ export default function App() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/results" element={<Results />} />
                     <Route path="/attendance" element={<AttendanceView />} />
+                    <Route path="/school-fees" element={<SchoolFees />} />
                     <Route path="/profile" element={<StudentProfile />} />
                     <Route path="/pin-access" element={<PinAccess />} />
                 </Routes>

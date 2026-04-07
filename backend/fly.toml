@@ -1,0 +1,42 @@
+# fly.toml app configuration file for AcademicX WhatsApp Cron
+
+app = "academicx-whatsapp-cron"
+primary_region = "fra"
+
+[build]
+  builder = "heroku/buildpacks:20"
+
+[env]
+  NODE_ENV = "production"
+
+[[services]]
+  http_checks = []
+  internal_port = 8080
+
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
+
+# Cron job configuration
+# This will be handled by a separate process or external cron service
+# For now, we'll use a simple HTTP endpoint that can be called by external cron
+
+[deploy]
+  release_command = "npm run build"
+
+[processes]
+  app = "node backend/cron/whatsapp-cron.js"

@@ -15,15 +15,15 @@ export default function ContactPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                         <div>
                             <strong style={{ display: 'block', fontSize: 16, color: 'var(--color-gray-900)', marginBottom: 4 }}>Email</strong>
-                            <a href="mailto:support@academicx.com" style={{ fontSize: 16, color: 'var(--color-primary)' }}>support@academicx.com</a>
+                            <a href="mailto:info@lexrunit.com" style={{ fontSize: 16, color: 'var(--color-primary)' }}>info@lexrunit.com</a>
                         </div>
                         <div>
                             <strong style={{ display: 'block', fontSize: 16, color: 'var(--color-gray-900)', marginBottom: 4 }}>Phone</strong>
-                            <span style={{ fontSize: 16, color: 'var(--color-gray-600)' }}>+234 800 123 4567</span>
+                            <span style={{ fontSize: 16, color: 'var(--color-gray-600)' }}>+234 901 251 2401</span>
                         </div>
                         <div>
                             <strong style={{ display: 'block', fontSize: 16, color: 'var(--color-gray-900)', marginBottom: 4 }}>Office</strong>
-                            <span style={{ fontSize: 16, color: 'var(--color-gray-600)' }}>12 Innovation Drive, Tech District,<br />Lagos, Nigeria</span>
+                            <span style={{ fontSize: 16, color: 'var(--color-gray-600)' }}>C6 Lion Science Park, UNN,<br />Enugu, Nigeria</span>
                         </div>
                     </div>
                 </div>
@@ -32,15 +32,15 @@ export default function ContactPage() {
                     <form onSubmit={e => e.preventDefault()} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <div>
                             <label className="input-label">Full Name</label>
-                            <input type="text" className="input" placeholder="e.g. John Doe" />
+                            <input type="text" className="input" placeholder="e.g. Mmaduabuchi Onah" />
                         </div>
                         <div>
                             <label className="input-label">School Name</label>
-                            <input type="text" className="input" placeholder="e.g. Royal Hills College" />
+                            <input type="text" className="input" placeholder="e.g. academicX Model School X" />
                         </div>
                         <div>
                             <label className="input-label">Email Address</label>
-                            <input type="email" className="input" placeholder="john@example.com" />
+                            <input type="email" className="input" placeholder="buchi@lexrunit.com" />
                         </div>
                         <div>
                             <label className="input-label">Message</label>
