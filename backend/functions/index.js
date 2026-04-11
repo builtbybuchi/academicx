@@ -2208,7 +2208,7 @@ const actions = {
             }
 
             try {
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
                 
                 if (student.schoolId !== user.schoolId) {
@@ -2430,14 +2430,14 @@ const actions = {
         auth: true,
         handler: async ({ payload, authId }) => {
             const db = getDb();
-            const { schoolFeeAmount, currentSession, currentTerm } = payload;
+            const { schoolFeeAmount, currentSession, currentTerm, classFeeAmounts } = payload;
 
             if (!authId) {
                 return { success: false, error: 'Unauthorized' };
             }
 
             try {
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
                 if (!user.schoolId) {
                     return { success: false, error: 'School not found' };
                 }
@@ -2446,6 +2446,14 @@ const actions = {
                 if (schoolFeeAmount !== undefined) updateData.schoolFeeAmount = Number(schoolFeeAmount);
                 if (currentSession !== undefined) updateData.currentSession = currentSession;
                 if (currentTerm !== undefined) updateData.currentTerm = currentTerm;
+
+                // Store classFeeAmounts in school.data JSON field
+                if (classFeeAmounts !== undefined) {
+                    const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
+                    const existingData = typeof school.data === 'string' ? JSON.parse(school.data) : (school.data || {});
+                    existingData.classFeeAmounts = classFeeAmounts;
+                    updateData.data = JSON.stringify(existingData);
+                }
 
                 await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId, updateData);
                 return { success: true };

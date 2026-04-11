@@ -234,7 +234,7 @@ export default function Academics() {
     const [filterClass, setFilterClass] = useState('');
 
     // Term Details
-    const [termDetailsSchoolFeeAmount, setTermDetailsSchoolFeeAmount] = useState(0);
+    const [classFeeAmounts, setClassFeeAmounts] = useState({});
     const [termDetailsCurrentSession, setTermDetailsCurrentSession] = useState('');
     const [termDetailsCurrentTerm, setTermDetailsCurrentTerm] = useState('');
 
@@ -296,7 +296,8 @@ export default function Academics() {
         try {
             const schoolData = await getSchool(schoolId);
             if (schoolData) {
-                setTermDetailsSchoolFeeAmount(schoolData.schoolFeeAmount || 0);
+                const schoolDataParsed = typeof schoolData.data === 'string' ? JSON.parse(schoolData.data) : (schoolData.data || {});
+                setClassFeeAmounts(schoolDataParsed.classFeeAmounts || {});
                 setTermDetailsCurrentSession(schoolData.currentSession || '');
                 setTermDetailsCurrentTerm(schoolData.currentTerm || '');
             }
@@ -594,7 +595,7 @@ export default function Academics() {
         try {
             setSaving(true);
             await updateAcademicSession(sessionId, { [field]: value });
-            await loadSessions();
+            await loadData();
             toast({ type: 'success', title: 'Success', message: 'Term date updated successfully' });
         } catch (error) {
             console.error('Error updating session date:', error);
@@ -608,7 +609,7 @@ export default function Academics() {
         try {
             setSaving(true);
             await updateSchoolBackend({
-                schoolFeeAmount: termDetailsSchoolFeeAmount,
+                classFeeAmounts,
                 currentSession: termDetailsCurrentSession,
                 currentTerm: termDetailsCurrentTerm
             });
@@ -1375,27 +1376,35 @@ export default function Academics() {
 
                             <div style={{ marginTop: '24px', padding: '16px', background: '#F9FAFB', borderRadius: '8px' }}>
                                 <h4 style={{ margin: 0, marginBottom: '12px', fontSize: '14px', fontWeight: 600 }}>
-                                    School Fee Configuration
+                                    School Fee Configuration (Per Class)
                                 </h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
-                                            Default School Fee Amount (₦)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={termDetailsSchoolFeeAmount || ''}
-                                            onChange={(e) => setTermDetailsSchoolFeeAmount(Number(e.target.value))}
-                                            min="0"
-                                            style={{
-                                                border: '1px solid #D1D5DB',
-                                                borderRadius: '6px',
-                                                padding: '6px 10px',
-                                                fontSize: '13px',
-                                                width: '100%'
-                                            }}
-                                        />
-                                    </div>
+                                <p style={{ color: '#6B7280', fontSize: '13px', margin: '0 0 12px 0' }}>
+                                    Set the school fee amount for each class individually.
+                                </p>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+                                    {classNames.map(cls => (
+                                        <div key={cls}>
+                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                                {cls} (₦)
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={classFeeAmounts[cls] || ''}
+                                                onChange={(e) => setClassFeeAmounts(prev => ({ ...prev, [cls]: Number(e.target.value) }))}
+                                                min="0"
+                                                placeholder="0"
+                                                style={{
+                                                    border: '1px solid #D1D5DB',
+                                                    borderRadius: '6px',
+                                                    padding: '6px 10px',
+                                                    fontSize: '13px',
+                                                    width: '100%'
+                                                }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div style={{ marginTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
                                             Current Session

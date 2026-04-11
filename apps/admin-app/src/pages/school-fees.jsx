@@ -61,6 +61,15 @@ const SchoolFeesManagement = () => {
         });
     }, [fees, selectedTerm, selectedSession]);
 
+    const classFeeAmounts = useMemo(() => {
+        try {
+            const parsed = typeof school?.data === 'string' ? JSON.parse(school.data) : (school?.data || {});
+            return parsed.classFeeAmounts || {};
+        } catch { return {}; }
+    }, [school]);
+
+    const getClassFee = (className) => Number(classFeeAmounts[className]) || 0;
+
     const stats = useMemo(() => {
         const totalStudents = students.length || 0;
         const paidStudents = filteredFees.filter(fee => fee.status === 'paid').length;
@@ -68,8 +77,8 @@ const SchoolFeesManagement = () => {
         const totalCollected = filteredFees
             .filter(fee => fee.status === 'paid')
             .reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
-        const totalExpected = totalStudents * (Number(school?.schoolFeeAmount) || 0);
-        const platformFees = totalCollected * 0.019; // 1.9% platform fee
+        const totalExpected = students.reduce((sum, s) => sum + getClassFee(s.className), 0);
+        const platformFees = totalCollected * 0.019;
         const cappedPlatformFees = Math.min(platformFees, 2500);
 
         return {
@@ -82,11 +91,11 @@ const SchoolFeesManagement = () => {
             netRevenue: totalCollected - cappedPlatformFees,
             paymentRate: totalStudents > 0 ? (paidStudents / totalStudents) * 100 : 0
         };
-    }, [students, filteredFees, school]);
+    }, [students, filteredFees, classFeeAmounts]);
 
     const handlePaymentInitiation = async (student) => {
         setSelectedStudent(student);
-        setFeeAmount(school?.schoolFeeAmount || 0);
+        setFeeAmount(getClassFee(student.className));
         setShowPaymentModal(true);
     };
 
@@ -293,6 +302,11 @@ const SchoolFeesManagement = () => {
         { key: 'firstName', label: 'First Name' },
         { key: 'lastName', label: 'Last Name' },
         { key: 'className', label: 'Class' },
+        { 
+            key: 'feeAmount', 
+            label: 'Fee Amount',
+            render: (value, row) => formatCurrency(getClassFee(row.className))
+        },
         { key: 'parentEmail', label: 'Parent Email' },
         { key: 'parentPhone', label: 'Parent Phone' },
         { 
@@ -303,7 +317,7 @@ const SchoolFeesManagement = () => {
                 const status = feeRecord?.status || 'unpaid';
                 return (
                     <span className={`badge badge-${status === 'paid' ? 'success' : 'warning'}`}>
-                        {status === 'paid' ? `Paid (${formatCurrency(feeRecord.amount)})` : 'Unpaid'}
+                        {status === 'paid' ? `Paid (${formatCurrency(feeRecord.amount)})` : `Unpaid (${formatCurrency(getClassFee(row.className))})`}
                     </span>
                 );
             }
@@ -326,7 +340,7 @@ const SchoolFeesManagement = () => {
                             className="btn btn-secondary btn-sm"
                             onClick={() => {
                                 setSelectedStudent(row);
-                                setManualPaymentAmount(school?.schoolFeeAmount || 0);
+                                setManualPaymentAmount(getClassFee(row.className));
                                 setShowManualPaymentModal(true);
                             }}
                         >

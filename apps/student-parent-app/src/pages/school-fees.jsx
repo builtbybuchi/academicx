@@ -1,28 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { CreditCard, AlertCircle, CheckCircle, Clock } from 'lucide-react';
-import { getStudentFees, initiateSchoolFeePayment } from 'shared/utils/api.js';
+import { getStudentFees, initiateSchoolFeePayment, getStudentPortalData } from 'shared/utils/api.js';
 import { formatCurrency, formatDate } from 'shared/utils/index.js';
 
 export default function SchoolFees() {
     const [fees, setFees] = useState([]);
+    const [student, setStudent] = useState(null);
+    const [school, setSchool] = useState(null);
     const [loading, setLoading] = useState(true);
     const [processingPayment, setProcessingPayment] = useState(false);
 
     useEffect(() => {
-        loadFees();
+        loadData();
     }, []);
 
-    const loadFees = async () => {
+    const loadData = async () => {
         try {
-            const feesData = await getStudentFees();
+            const [feesData, portalData] = await Promise.all([
+                getStudentFees(),
+                getStudentPortalData()
+            ]);
             setFees(Array.isArray(feesData) ? feesData : []);
+            if (portalData?.success) {
+                setStudent(portalData.data?.student);
+                setSchool(portalData.data?.school);
+            }
         } catch (error) {
-            console.error('Error loading fees:', error);
+            console.error('Error loading data:', error);
             setFees([]);
         } finally {
             setLoading(false);
         }
     };
+
+    const classFeeAmounts = useMemo(() => {
+        try {
+            const parsed = typeof school?.data === 'string' ? JSON.parse(school.data) : (school?.data || {});
+            return parsed.classFeeAmounts || {};
+        } catch { return {}; }
+    }, [school]);
+
+    const getClassFee = (className) => Number(classFeeAmounts[className]) || 0;
 
     const handlePayment = async (fee) => {
         if (fee.status === 'paid') return;
@@ -102,6 +120,19 @@ export default function SchoolFees() {
                         <p style={{ color: 'var(--color-gray-500)' }}>
                             School fees for the current term will appear here once assigned by the school administration.
                         </p>
+                        {student?.className && getClassFee(student.className) > 0 && (
+                            <div style={{ marginTop: 24, padding: 16, background: '#F3F4F6', borderRadius: 8 }}>
+                                <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: '#374151' }}>
+                                    Expected Fee for {student.className}:
+                                </p>
+                                <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#3B82F6' }}>
+                                    {formatCurrency(getClassFee(student.className))}
+                                </p>
+                                <p style={{ margin: '8px 0 0 0', fontSize: 12, color: '#6B7280' }}>
+                                    This is the fee amount set for your class. Please contact your school if you have questions.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : (
