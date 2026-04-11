@@ -2,18 +2,23 @@ import React, { useEffect, useState, useMemo } from 'react';
 import DataTable from 'shared/components/DataTable.jsx';
 import StatsCard from 'shared/components/StatsCard.jsx';
 import { formatCurrency, formatDate } from 'shared/utils/index.js';
-import { getCurrentSchool, getSchoolStudents, getSchoolFees, createSchoolFeePayment, getSchoolFeesReport } from 'shared/utils/api.js';
+import { getCurrentSchool, getSchoolStudents, getSchoolFees, createSchoolFeePayment, getSchoolFeesReport, getAcademicSessions, recordManualSchoolFeePayment } from 'shared/utils/api.js';
 
 const SchoolFeesManagement = () => {
     const [school, setSchool] = useState(null);
     const [students, setStudents] = useState([]);
     const [fees, setFees] = useState([]);
+    const [academicSessions, setAcademicSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedTerm, setSelectedTerm] = useState('');
     const [selectedSession, setSelectedSession] = useState('');
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [showManualPaymentModal, setShowManualPaymentModal] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
     const [feeAmount, setFeeAmount] = useState(0);
+    const [manualPaymentAmount, setManualPaymentAmount] = useState(0);
+    const [paymentNotes, setPaymentNotes] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('manual');
     const [processingPayment, setProcessingPayment] = useState(false);
 
     useEffect(() => {
@@ -31,6 +36,9 @@ const SchoolFeesManagement = () => {
             const feesData = await getSchoolFees();
             setFees(Array.isArray(feesData) ? feesData : []);
             
+            const sessionsData = await getAcademicSessions();
+            setAcademicSessions(Array.isArray(sessionsData) ? sessionsData : []);
+            
             if (schoolData.currentTerm && schoolData.currentSession) {
                 setSelectedTerm(schoolData.currentTerm);
                 setSelectedSession(schoolData.currentSession);
@@ -39,6 +47,7 @@ const SchoolFeesManagement = () => {
             console.error('Error loading data:', error);
             setStudents([]);
             setFees([]);
+            setAcademicSessions([]);
         } finally {
             setLoading(false);
         }
@@ -107,6 +116,40 @@ const SchoolFeesManagement = () => {
         } catch (error) {
             console.error('Payment error:', error);
             alert('Payment processing failed');
+        } finally {
+            setProcessingPayment(false);
+        }
+    };
+
+    const handleManualPayment = async () => {
+        if (!selectedStudent || !manualPaymentAmount || !selectedTerm || !selectedSession) return;
+        
+        setProcessingPayment(true);
+        try {
+            const paymentData = {
+                studentId: selectedStudent.$id,
+                amount: manualPaymentAmount,
+                term: selectedTerm,
+                session: selectedSession,
+                paymentMethod,
+                notes: paymentNotes
+            };
+            
+            const result = await recordManualSchoolFeePayment(paymentData);
+            
+            if (result.success) {
+                alert('Payment recorded successfully');
+                setShowManualPaymentModal(false);
+                setManualPaymentAmount(0);
+                setPaymentNotes('');
+                setPaymentMethod('manual');
+                loadData(); // Refresh data
+            } else {
+                alert('Payment recording failed: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Manual payment error:', error);
+            alert('Payment recording failed');
         } finally {
             setProcessingPayment(false);
         }
@@ -260,7 +303,7 @@ const SchoolFeesManagement = () => {
                 const status = feeRecord?.status || 'unpaid';
                 return (
                     <span className={`badge badge-${status === 'paid' ? 'success' : 'warning'}`}>
-                        {status === 'paid' ? 'Paid' : 'Unpaid'}
+                        {status === 'paid' ? `Paid (${formatCurrency(feeRecord.amount)})` : 'Unpaid'}
                     </span>
                 );
             }
@@ -270,16 +313,26 @@ const SchoolFeesManagement = () => {
             label: 'Actions',
             render: (value, row) => {
                 const feeRecord = filteredFees.find(fee => fee.studentId === row.$id);
-                if (feeRecord?.status === 'paid') {
-                    return <span className="text-success">✓ Paid</span>;
-                }
                 return (
-                    <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={() => handlePaymentInitiation(row)}
-                    >
-                        Process Payment
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <button 
+                            className="btn btn-primary btn-sm"
+                            onClick={() => handlePaymentInitiation(row)}
+                            disabled={feeRecord?.status === 'paid'}
+                        >
+                            Initiate Payment
+                        </button>
+                        <button 
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => {
+                                setSelectedStudent(row);
+                                setManualPaymentAmount(school?.schoolFeeAmount || 0);
+                                setShowManualPaymentModal(true);
+                            }}
+                        >
+                            Record Payment
+                        </button>
+                    </div>
                 );
             }
         }
@@ -316,8 +369,9 @@ const SchoolFeesManagement = () => {
                                 onChange={(e) => setSelectedSession(e.target.value)}
                             >
                                 <option value="">Select Session</option>
-                                <option value="2024/2025">2024/2025</option>
-                                <option value="2023/2024">2023/2024</option>
+                                {[...new Set(academicSessions.map(s => s.session))].map(session => (
+                                    <option key={session} value={session}>{session}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -328,9 +382,9 @@ const SchoolFeesManagement = () => {
                                 onChange={(e) => setSelectedTerm(e.target.value)}
                             >
                                 <option value="">Select Term</option>
-                                <option value="First Term">First Term</option>
-                                <option value="Second Term">Second Term</option>
-                                <option value="Third Term">Third Term</option>
+                                {[...new Set(academicSessions.map(s => s.term))].map(term => (
+                                    <option key={term} value={term}>{term}</option>
+                                ))}
                             </select>
                         </div>
                         <div className="d-flex align-items-end">
@@ -339,7 +393,7 @@ const SchoolFeesManagement = () => {
                                 onClick={exportToPDF}
                                 disabled={!selectedTerm || !selectedSession}
                             >
-                                📄 Export PDF Report
+                                Export PDF Report
                             </button>
                         </div>
                     </div>
@@ -486,6 +540,45 @@ const SchoolFeesManagement = () => {
                                 disabled={processingPayment || feeAmount <= 0}
                             >
                                 {processingPayment ? 'Processing...' : 'Initiate Payment'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Manual Payment Modal */}
+            {showManualPaymentModal && selectedStudent && (
+                <div className="modal-backdrop">
+                    <div className="modal">
+                        <div className="modal-header">
+                            <h3>Record Manual Payment</h3>
+                            <button className="modal-close" onClick={() => setShowManualPaymentModal(false)}>×</button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="form-group">
+                                <label>Student</label>
+                                <input type="text" className="form-control" value={`${selectedStudent.firstName} ${selectedStudent.lastName}`} disabled />
+                            </div>
+                            <div className="form-group">
+                                <label>Amount Paid (₦)</label>
+                                <input type="number" className="form-control" value={manualPaymentAmount} onChange={(e) => setManualPaymentAmount(Number(e.target.value))} min="0" />
+                            </div>
+                            <div className="form-group">
+                                <label>Payment Method</label>
+                                <select className="form-control" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+                                    <option value="manual">Manual (Cash)</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Notes</label>
+                                <textarea className="form-control" value={paymentNotes} onChange={(e) => setPaymentNotes(e.target.value)} rows="3" />
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button className="btn btn-secondary" onClick={() => setShowManualPaymentModal(false)}>Cancel</button>
+                            <button className="btn btn-primary" onClick={handleManualPayment} disabled={processingPayment || manualPaymentAmount <= 0}>
+                                {processingPayment ? 'Recording...' : 'Record Payment'}
                             </button>
                         </div>
                     </div>

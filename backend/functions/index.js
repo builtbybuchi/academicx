@@ -2196,6 +2196,80 @@ const actions = {
         }
     },
 
+    /** Record manual school fee payment */
+    recordManualSchoolFeePayment: {
+        auth: true,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { studentId, amount, term, session, paymentMethod = 'manual', notes = '' } = payload;
+
+            if (!studentId || !amount || !term || !session) {
+                return { success: false, error: 'Missing required fields' };
+            }
+
+            try {
+                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
+                
+                if (student.schoolId !== user.schoolId) {
+                    return { success: false, error: 'Unauthorized: Student does not belong to your school' };
+                }
+
+                // Check if fee record already exists
+                const existingFees = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                    Query.equal('schoolId', user.schoolId),
+                    Query.equal('studentId', studentId),
+                    Query.equal('term', term),
+                    Query.equal('session', session),
+                    Query.limit(1)
+                ]);
+
+                if (existingFees.total > 0) {
+                    const existingFee = existingFees.documents[0];
+                    // Update existing fee record
+                    const updatedAmount = Number(existingFee.amount) + Number(amount);
+                    await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, existingFee.$id, {
+                        amount: updatedAmount,
+                        totalAmount: updatedAmount + (Number(existingFee.platformFee) || 0),
+                        status: 'paid',
+                        paidAt: nowIso(),
+                        paidBy: authId,
+                        paymentMethod,
+                        notes: existingFee.notes ? `${existingFee.notes}\n${notes}` : notes,
+                        updatedAt: nowIso()
+                    });
+                    
+                    return { success: true, data: { feeId: existingFee.$id, updatedAmount } };
+                }
+
+                // Create new fee record
+                const platformFeeAmount = Math.min(amount * 0.019, 2500);
+                const totalAmount = amount + platformFeeAmount;
+
+                const feeRecord = await db.createDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, ID.unique(), {
+                    schoolId: user.schoolId,
+                    studentId,
+                    term,
+                    session,
+                    amount,
+                    platformFee: platformFeeAmount,
+                    totalAmount,
+                    status: 'paid',
+                    paymentMethod,
+                    paidAt: nowIso(),
+                    paidBy: authId,
+                    notes,
+                    createdAt: nowIso(),
+                    updatedAt: nowIso()
+                });
+
+                return { success: true, data: { feeId: feeRecord.$id, amount } };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        }
+    },
+
     /** Initiate student fee payment */
     initiateStudentFeePayment: {
         auth: true,
@@ -2349,6 +2423,37 @@ const actions = {
 
             return { success: true, data: { id: doc.$id } };
         },
+    },
+
+    /** Update school details */
+    updateSchool: {
+        auth: true,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { schoolFeeAmount, currentSession, currentTerm } = payload;
+
+            if (!authId) {
+                return { success: false, error: 'Unauthorized' };
+            }
+
+            try {
+                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                if (!user.schoolId) {
+                    return { success: false, error: 'School not found' };
+                }
+
+                const updateData = {};
+                if (schoolFeeAmount !== undefined) updateData.schoolFeeAmount = Number(schoolFeeAmount);
+                if (currentSession !== undefined) updateData.currentSession = currentSession;
+                if (currentTerm !== undefined) updateData.currentTerm = currentTerm;
+
+                await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId, updateData);
+                return { success: true };
+            } catch (error) {
+                console.error('Update school error:', error);
+                return { success: false, error: error.message };
+            }
+        }
     },
 };
 

@@ -17,8 +17,10 @@ import {
     upsertClassNames,
     upsertSubjects,
     updateSchool,
+    updateSchoolBackend,
     updateSubject,
     deleteSubject,
+    getSchool,
 } from 'shared/utils/api.js';
 
 const TERM_LABELS = ['First Term', 'Second Term', 'Third Term', 'Fourth Term'];
@@ -231,6 +233,11 @@ export default function Academics() {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterClass, setFilterClass] = useState('');
 
+    // Term Details
+    const [termDetailsSchoolFeeAmount, setTermDetailsSchoolFeeAmount] = useState(0);
+    const [termDetailsCurrentSession, setTermDetailsCurrentSession] = useState('');
+    const [termDetailsCurrentTerm, setTermDetailsCurrentTerm] = useState('');
+
     // Session Form
     const [sessionForm, setSessionForm] = useState({
         session: '',
@@ -278,6 +285,25 @@ export default function Academics() {
     useEffect(() => {
         loadData();
     }, [schoolId]);
+
+    useEffect(() => {
+        if (schoolId) {
+            loadSchoolData();
+        }
+    }, [schoolId]);
+
+    async function loadSchoolData() {
+        try {
+            const schoolData = await getSchool(schoolId);
+            if (schoolData) {
+                setTermDetailsSchoolFeeAmount(schoolData.schoolFeeAmount || 0);
+                setTermDetailsCurrentSession(schoolData.currentSession || '');
+                setTermDetailsCurrentTerm(schoolData.currentTerm || '');
+            }
+        } catch (error) {
+            console.error('Error loading school data:', error);
+        }
+    }
 
     useEffect(() => {
         setBaseClasses(SCHOOL_CLASS_TEMPLATES[sessionForm.schoolType] || []);
@@ -561,8 +587,38 @@ export default function Academics() {
         const targetSession = String(sessionValue || '').trim();
         if (!targetSession) return;
         setPendingDeleteSession(targetSession);
-        setSessionDeleteInput('');
         setSessionDeleteModalOpen(true);
+    }
+
+    async function handleUpdateSessionDate(sessionId, field, value) {
+        try {
+            setSaving(true);
+            await updateAcademicSession(sessionId, { [field]: value });
+            await loadSessions();
+            toast({ type: 'success', title: 'Success', message: 'Term date updated successfully' });
+        } catch (error) {
+            console.error('Error updating session date:', error);
+            toast({ type: 'error', title: 'Error', message: 'Failed to update term date' });
+        } finally {
+            setSaving(false);
+        }
+    }
+
+    async function handleSaveTermDetails() {
+        try {
+            setSaving(true);
+            await updateSchoolBackend({
+                schoolFeeAmount: termDetailsSchoolFeeAmount,
+                currentSession: termDetailsCurrentSession,
+                currentTerm: termDetailsCurrentTerm
+            });
+            toast({ type: 'success', title: 'Success', message: 'Term details saved successfully' });
+        } catch (error) {
+            console.error('Error saving term details:', error);
+            toast({ type: 'error', title: 'Error', message: 'Failed to save term details' });
+        } finally {
+            setSaving(false);
+        }
     }
 
     async function handleDeleteSession(sessionValue) {
@@ -911,6 +967,7 @@ export default function Academics() {
                         { id: 'sessions', label: 'Session Setup' },
                         { id: 'classes', label: 'Classes & Arms' },
                         { id: 'subjects', label: 'Subjects & Mappings' },
+                        { id: 'terms-details', label: 'Terms Details' },
                     ].map((tab, index) => (
                         <React.Fragment key={tab.id}>
                             <button
@@ -929,7 +986,7 @@ export default function Academics() {
                             >
                                 {tab.label}
                             </button>
-                            {index < 2 && (
+                            {index < 3 && (
                                 <ChevronRight size={16} color="#D1D5DB" />
                             )}
                         </React.Fragment>
@@ -1233,6 +1290,162 @@ export default function Academics() {
                                     style={{ padding: '12px 24px', fontSize: '14px', fontWeight: 500 }}
                                 >
                                     {saving ? 'Saving...' : viewMode === 'create' ? 'Create Session' : 'Save Session'}
+                                </button>
+                            </div>
+                        </LiquidGlassPanel>
+                    </div>
+                )}
+
+                {/* Tab 4: Terms Details */}
+                {activeTab === 'terms-details' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                Term Dates & School Fees
+                            </h3>
+                            <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '16px' }}>
+                                Set start and end dates for each term and configure school fees.
+                            </p>
+                            
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                                {sessions.map(session => (
+                                    <div key={session.$id} style={{ 
+                                        border: '1px solid #E5E7EB', 
+                                        borderRadius: '8px', 
+                                        padding: '16px',
+                                        background: session.isCurrent ? '#EFF6FF' : '#FFFFFF'
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
+                                                {session.term} - {session.session}
+                                            </h4>
+                                            {session.isCurrent && (
+                                                <span style={{ 
+                                                    background: '#3B82F6', 
+                                                    color: 'white', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '4px', 
+                                                    fontSize: '12px', 
+                                                    fontWeight: 500 
+                                                }}>
+                                                    Current
+                                                </span>
+                                            )}
+                                        </div>
+                                        
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                                    Start Date
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={session.startDate || ''}
+                                                    onChange={(e) => handleUpdateSessionDate(session.$id, 'startDate', e.target.value)}
+                                                    style={{
+                                                        border: '1px solid #D1D5DB',
+                                                        borderRadius: '6px',
+                                                        padding: '6px 10px',
+                                                        fontSize: '13px',
+                                                        width: '100%'
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                                    End Date
+                                                </label>
+                                                <input
+                                                    type="date"
+                                                    value={session.endDate || ''}
+                                                    onChange={(e) => handleUpdateSessionDate(session.$id, 'endDate', e.target.value)}
+                                                    style={{
+                                                        border: '1px solid #D1D5DB',
+                                                        borderRadius: '6px',
+                                                        padding: '6px 10px',
+                                                        fontSize: '13px',
+                                                        width: '100%'
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div style={{ marginTop: '24px', padding: '16px', background: '#F9FAFB', borderRadius: '8px' }}>
+                                <h4 style={{ margin: 0, marginBottom: '12px', fontSize: '14px', fontWeight: 600 }}>
+                                    School Fee Configuration
+                                </h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                            Default School Fee Amount (₦)
+                                        </label>
+                                        <input
+                                            type="number"
+                                            value={termDetailsSchoolFeeAmount || ''}
+                                            onChange={(e) => setTermDetailsSchoolFeeAmount(Number(e.target.value))}
+                                            min="0"
+                                            style={{
+                                                border: '1px solid #D1D5DB',
+                                                borderRadius: '6px',
+                                                padding: '6px 10px',
+                                                fontSize: '13px',
+                                                width: '100%'
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                            Current Session
+                                        </label>
+                                        <select
+                                            value={termDetailsCurrentSession}
+                                            onChange={(e) => setTermDetailsCurrentSession(e.target.value)}
+                                            style={{
+                                                border: '1px solid #D1D5DB',
+                                                borderRadius: '6px',
+                                                padding: '6px 10px',
+                                                fontSize: '13px',
+                                                width: '100%'
+                                            }}
+                                        >
+                                            <option value="">Select Session</option>
+                                            {[...new Set(sessions.map(s => s.session))].map(session => (
+                                                <option key={session} value={session}>{session}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#6B7280' }}>
+                                            Current Term
+                                        </label>
+                                        <select
+                                            value={termDetailsCurrentTerm}
+                                            onChange={(e) => setTermDetailsCurrentTerm(e.target.value)}
+                                            style={{
+                                                border: '1px solid #D1D5DB',
+                                                borderRadius: '6px',
+                                                padding: '6px 10px',
+                                                fontSize: '13px',
+                                                width: '100%'
+                                            }}
+                                        >
+                                            <option value="">Select Term</option>
+                                            {[...new Set(sessions.map(s => s.term))].map(term => (
+                                                <option key={term} value={term}>{term}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+                                <button 
+                                    className="btn btn-primary" 
+                                    onClick={handleSaveTermDetails} 
+                                    disabled={saving}
+                                    style={{ marginTop: '16px', padding: '10px 20px', fontSize: '14px', fontWeight: 500 }}
+                                >
+                                    {saving ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
                         </LiquidGlassPanel>

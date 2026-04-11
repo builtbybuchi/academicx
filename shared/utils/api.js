@@ -835,6 +835,13 @@ export async function getSchoolFees(term = '', session = '') {
     return result.documents;
 }
 
+export async function getAcademicSessions() {
+    const school = await getCurrentSchool();
+    const queries = [Query.equal('schoolId', school.$id), Query.limit(100)];
+    const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, queries);
+    return result.documents;
+}
+
 export async function createSchoolFeePayment(payload) {
     return invokeBackendFunction('createSchoolFeePayment', payload);
 }
@@ -879,6 +886,14 @@ export async function getStudentFees() {
 
 export async function initiateSchoolFeePayment(payload) {
     return invokeBackendFunction('initiateStudentFeePayment', payload);
+}
+
+export async function recordManualSchoolFeePayment(payload) {
+    return invokeBackendFunction('recordManualSchoolFeePayment', payload);
+}
+
+export async function updateSchoolBackend(data) {
+    return invokeBackendFunction('updateSchool', data);
 }
 
 export { ID, Query, client };
