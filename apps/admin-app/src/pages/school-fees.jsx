@@ -26,10 +26,10 @@ const SchoolFeesManagement = () => {
             setSchool(schoolData);
             
             const studentsData = await getSchoolStudents();
-            setStudents(studentsData);
+            setStudents(Array.isArray(studentsData) ? studentsData : []);
             
             const feesData = await getSchoolFees();
-            setFees(feesData);
+            setFees(Array.isArray(feesData) ? feesData : []);
             
             if (schoolData.currentTerm && schoolData.currentSession) {
                 setSelectedTerm(schoolData.currentTerm);
@@ -37,6 +37,8 @@ const SchoolFeesManagement = () => {
             }
         } catch (error) {
             console.error('Error loading data:', error);
+            setStudents([]);
+            setFees([]);
         } finally {
             setLoading(false);
         }
@@ -51,13 +53,13 @@ const SchoolFeesManagement = () => {
     }, [fees, selectedTerm, selectedSession]);
 
     const stats = useMemo(() => {
-        const totalStudents = students.length;
+        const totalStudents = students.length || 0;
         const paidStudents = filteredFees.filter(fee => fee.status === 'paid').length;
         const unpaidStudents = totalStudents - paidStudents;
         const totalCollected = filteredFees
             .filter(fee => fee.status === 'paid')
-            .reduce((sum, fee) => sum + (fee.amount || 0), 0);
-        const totalExpected = totalStudents * (school?.schoolFeeAmount || 0);
+            .reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
+        const totalExpected = totalStudents * (Number(school?.schoolFeeAmount) || 0);
         const platformFees = totalCollected * 0.019; // 1.9% platform fee
         const cappedPlatformFees = Math.min(platformFees, 2500);
 
@@ -347,42 +349,42 @@ const SchoolFeesManagement = () => {
             {/* Statistics Cards */}
             <div className="grid grid-4" style={{ marginBottom: 32 }}>
                 <StatsCard 
-                    icon="👥" 
+                    icon="·" 
                     label="Total Students" 
-                    value={stats.totalStudents} 
+                    value={stats.totalStudents || 0} 
                     color="#3B82F6" 
                 />
                 <StatsCard 
-                    icon="✅" 
+                    icon="·" 
                     label="Paid Students" 
-                    value={stats.paidStudents} 
+                    value={stats.paidStudents || 0} 
                     color="#10B981" 
                 />
                 <StatsCard 
-                    icon="⏳" 
+                    icon="·" 
                     label="Unpaid Students" 
-                    value={stats.unpaidStudents} 
+                    value={stats.unpaidStudents || 0} 
                     color="#F59E0B" 
                 />
                 <StatsCard 
-                    icon="💰" 
+                    icon="·" 
                     label="Total Collected" 
-                    value={formatCurrency(stats.totalCollected)} 
+                    value={formatCurrency(stats.totalCollected || 0)} 
                     color="#8B5CF6" 
                 />
             </div>
 
             <div className="grid grid-2" style={{ marginBottom: 32 }}>
                 <StatsCard 
-                    icon="📊" 
+                    icon="·" 
                     label="Payment Rate" 
-                    value={`${stats.paymentRate.toFixed(1)}%`} 
+                    value={`${(stats.paymentRate || 0).toFixed(1)}%`} 
                     color="#06B6D4" 
                 />
                 <StatsCard 
-                    icon="💳" 
+                    icon="·" 
                     label="Platform Fees" 
-                    value={formatCurrency(stats.platformFees)} 
+                    value={formatCurrency(stats.platformFees || 0)} 
                     color="#EF4444" 
                 />
             </div>

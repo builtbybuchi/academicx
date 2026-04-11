@@ -822,7 +822,8 @@ export async function getCurrentSchool() {
 
 export async function getSchoolStudents() {
     const school = await getCurrentSchool();
-    return listStudents(school.$id);
+    const result = await listStudents(school.$id);
+    return result.documents || [];
 }
 
 export async function getSchoolFees(term = '', session = '') {
@@ -867,9 +868,10 @@ export async function updateWhatsAppReminder(reminderId, data) {
 
 export async function getStudentFees() {
     const user = await getCurrentUser();
-    const student = await getStudentByUserId(user.$id);
-    if (!student) throw new Error('Student not found');
+    const studentList = await getStudentByUserId(user.$id);
+    if (!studentList || studentList.total === 0) throw new Error('Student not found');
     
+    const student = studentList.documents[0];
     const queries = [Query.equal('studentId', student.$id), Query.limit(100)];
     const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES, queries);
     return result.documents;

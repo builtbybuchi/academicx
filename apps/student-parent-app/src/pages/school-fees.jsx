@@ -15,9 +15,10 @@ export default function SchoolFees() {
     const loadFees = async () => {
         try {
             const feesData = await getStudentFees();
-            setFees(feesData);
+            setFees(Array.isArray(feesData) ? feesData : []);
         } catch (error) {
             console.error('Error loading fees:', error);
+            setFees([]);
         } finally {
             setLoading(false);
         }
