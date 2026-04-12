@@ -2037,7 +2037,7 @@ const actions = {
             try {
                 // Get student and school info
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
                 const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
 
                 // Calculate total amount with platform fee
@@ -2120,7 +2120,7 @@ const actions = {
             }
 
             try {
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
                 
                 // Get all fees for the term/session
                 const fees = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
@@ -2283,7 +2283,7 @@ const actions = {
 
             try {
                 // Verify the fee belongs to the authenticated student
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
                 
                 if (student.userId !== user.$id) {
