@@ -2037,8 +2037,7 @@ const actions = {
             try {
                 // Get student and school info
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
-                const user = await getUserByAuthId(authId);
-                const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
+                const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, student.schoolId);
 
                 // Calculate total amount with platform fee
                 const platformFeeAmount = Math.min(amount * 0.019, 2500);
@@ -2053,26 +2052,40 @@ const actions = {
                     Query.limit(1)
                 ]);
 
+                let feeRecord;
                 if (existingFees.total > 0) {
-                    return { success: false, error: 'Fee record already exists for this term/session' };
+                    const existingFee = existingFees.documents[0];
+                    // If already paid, don't allow new payment
+                    if (existingFee.status === 'paid' || existingFee.status === 'completed') {
+                        return { success: false, error: 'Fee already paid for this term/session' };
+                    }
+                    // If pending or failed, reuse the existing record and update it
+                    feeRecord = await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, existingFee.$id, {
+                        amount,
+                        platformFee: platformFeeAmount,
+                        totalAmount,
+                        status: 'pending',
+                        paymentMethod: 'online',
+                        updatedAt: nowIso()
+                    });
+                } else {
+                    // Create new fee record
+                    feeRecord = await db.createDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, ID.unique(), {
+                        schoolId: school.$id,
+                        studentId,
+                        term,
+                        session,
+                        amount,
+                        platformFee: platformFeeAmount,
+                        totalAmount,
+                        status: 'pending',
+                        paymentMethod: 'online',
+                        createdAt: nowIso()
+                    });
                 }
 
-                // Create fee record
-                const feeRecord = await db.createDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, ID.unique(), {
-                    schoolId: school.$id,
-                    studentId,
-                    term,
-                    session,
-                    amount,
-                    platformFee: platformFeeAmount,
-                    totalAmount,
-                    status: 'pending',
-                    paymentMethod: 'online',
-                    createdAt: nowIso()
-                });
-
                 // Initiate payment with Squad
-                const squad = require('../payment/squad');
+                const squad = require('./payment-squad');
                 const paymentResult = await squad.initiateTransaction({
                     email: student.parentEmail || user.email,
                     amount: totalAmount,
@@ -2209,6 +2222,9 @@ const actions = {
 
             try {
                 const user = await getUserByAuthId(authId);
+                if (!user) {
+                    return { success: false, error: 'User profile not found' };
+                }
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
                 
                 if (student.schoolId !== user.schoolId) {
@@ -2284,6 +2300,9 @@ const actions = {
             try {
                 // Verify the fee belongs to the authenticated student
                 const user = await getUserByAuthId(authId);
+                if (!user) {
+                    return { success: false, error: 'User profile not found' };
+                }
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
                 
                 if (student.userId !== user.$id) {
@@ -2306,7 +2325,7 @@ const actions = {
                 const totalAmount = amount + platformFeeAmount;
 
                 // Initiate payment with Squad
-                const squad = require('../payment/squad');
+                const squad = require('./payment-squad');
                 const paymentResult = await squad.initiateTransaction({
                     email: student.parentEmail || user.email,
                     amount: totalAmount,
