@@ -2429,6 +2429,7 @@ const actions = {
                         studentId,
                         createdAt: nowIso(),
                         metadata: JSON.stringify({
+                            type: 'school_fee',
                             kind: 'school_fee',
                             stage: 'initiated',
                             feeId: feeRecord.$id,
@@ -2730,6 +2731,8 @@ const actions = {
                             kind: 'school_fee',
                             stage: 'initiated',
                             feeId: fee.$id,
+                            studentId: student.$id,
+                            schoolId: fee.schoolId,
                             term,
                             session,
                             paymentAmount: amountToPay,
@@ -2849,13 +2852,24 @@ const actions = {
                     const paymentRecord = paymentRows.documents[0];
                     const storedMeta = parseJson(paymentRecord.metadata || '{}', {});
                     metadata = storedMeta;
+                    console.log('Verified payment record found in DB:', { reference: transactionRef, metadata });
+                } else {
+                    console.warn('No payment record found in DB for reference:', transactionRef);
                 }
             } catch (err) {
+                console.error('Error looking up payment record:', err?.message || err);
                 // Fall back to verification response metadata if DB lookup fails
                 metadata = verification.data?.metadata || {};
             }
             
-            if (!metadata || metadata.type !== 'school_fee') {
+            // Check for either 'type' or 'kind' field for backwards compatibility
+            const isSchoolFeePayment = metadata?.type === 'school_fee' || metadata?.kind === 'school_fee';
+            if (!isSchoolFeePayment) {
+                console.error('Payment metadata validation failed:', { 
+                    reference: transactionRef,
+                    metadata,
+                    status
+                });
                 return { success: false, error: 'Verified transaction is not a school fee payment or metadata not found.' };
             }
 
