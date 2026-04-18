@@ -1,6 +1,5 @@
 # AcademicX Platform
 
-> Modern school management platform with Apple-style liquid glass UI, built with React + Vite.
 
 ## Architecture
 

@@ -2293,13 +2293,14 @@ const actions = {
         auth: false,
         handler: async ({ payload }) => {
             const db = getDb();
-            const { studentId, term, session } = payload;
+            const { schoolId, studentId, term, session } = payload;
 
-            if (!studentId || !term || !session) {
-                return { success: false, error: 'studentId, term and session are required' };
+            if (!schoolId || !studentId || !term || !session) {
+                return { success: false, error: 'schoolId, studentId, term and session are required' };
             }
 
             const studentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                Query.equal('schoolId', schoolId),
                 Query.equal('admissionNumber', String(studentId).trim()),
                 Query.equal('status', 'active'),
                 Query.limit(1),
@@ -2311,6 +2312,7 @@ const actions = {
 
             const student = studentRows.documents[0];
             const feesRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                Query.equal('schoolId', schoolId),
                 Query.equal('studentId', student.$id),
                 Query.equal('term', term),
                 Query.equal('session', session),
@@ -2348,10 +2350,10 @@ const actions = {
         auth: true,
         handler: async ({ payload, authId }) => {
             const db = getDb();
-            const { feeId, studentId, amount, term, session } = payload;
+            const { schoolId, feeId, studentId, amount, term, session } = payload;
 
-            if (!feeId || !studentId || !amount || !term || !session) {
-                return { success: false, error: 'Missing required fields' };
+            if (!schoolId || !studentId || !amount || !term || !session) {
+                return { success: false, error: 'schoolId, studentId, amount, term and session are required' };
             }
 
             try {
@@ -2363,8 +2365,30 @@ const actions = {
                     return { success: false, error: 'Unauthorized: Fee does not belong to this student' };
                 }
 
-                // Get fee record
-                const fee = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId);
+                // Get fee record by document ID first, then fall back to the school/student/term/session lookup.
+                let fee = null;
+                if (feeId) {
+                    try {
+                        fee = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId);
+                    } catch {
+                        fee = null;
+                    }
+                }
+
+                if (!fee) {
+                    const feeRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                        Query.equal('schoolId', schoolId),
+                        Query.equal('studentId', student.$id),
+                        Query.equal('term', term),
+                        Query.equal('session', session),
+                        Query.limit(1),
+                    ]);
+                    fee = feeRows.documents[0] || null;
+                }
+
+                if (!fee) {
+                    return { success: false, error: 'Unable to locate the fee record for this term/session.' };
+                }
                 
                 if (fee.studentId !== studentId) {
                     return { success: false, error: 'Invalid fee record' };

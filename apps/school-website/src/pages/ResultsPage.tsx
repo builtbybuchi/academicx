@@ -4,50 +4,48 @@ import { SchoolSubPage } from '@/components/school/SchoolSubPage';
 import { StudentAppPrompt } from '@/components/school/StudentAppPrompt';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { Button } from '@/components/ui/button';
-import { listAcademicSessions, getStudentResults } from '@/lib/api';
+import { getStudentResults } from '@/lib/api';
 import { useBasePath } from '@/hooks/useBasePath';
 import { BookLoader, ButtonBarLoader } from '@/components/ui/BookLoader';
 
 export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
-    const { school } = useSchoolSite();
+    const { school, sessions } = useSchoolSite();
     const navigate = useNavigate();
     const basePath = useBasePath();
-    const [sessions, setSessions] = useState<any[]>([]);
     const [selectedSession, setSelectedSession] = useState('');
     const [selectedTerm, setSelectedTerm] = useState('First Term');
     const [loading, setLoading] = useState(true);
     const [results, setResults] = useState<any[]>([]);
     const [fetchingResults, setFetchingResults] = useState(false);
-    const [popup, setPopup] = useState<{ type: 'warning' | 'error'; message: string } | null>(null);
+    const [popup, setPopup] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
     const studentId = sessionStorage.getItem('student_id');
+    const sessionOptions = ((sessions || []) as any[])
+        .map((item) => ({ $id: String(item.$id || item.id || item.name || 'session'), name: String(item.name || '').trim() }))
+        .filter((item) => item.name.length > 0);
 
     useEffect(() => {
         if (!studentId && !isEmbedded) {
             navigate(`${basePath}/login`);
             return;
         }
-        if (school) {
-            loadSessions();
-        }
-    }, [school, studentId, navigate, basePath, isEmbedded]);
+        const fallbackSession = String((school as any)?.currentSession || '').trim();
+        const fallbackTerm = String((school as any)?.currentTerm || '').trim();
+        const optionSession = sessionOptions.length > 0 ? sessionOptions[0].name : fallbackSession;
+        setSelectedSession(optionSession || '');
+        if (fallbackTerm) setSelectedTerm(fallbackTerm);
+        setLoading(false);
+    }, [school, sessionOptions, studentId, navigate, basePath, isEmbedded]);
 
-    async function loadSessions() {
-        try {
-            const res = await listAcademicSessions(school!.$id);
-            setSessions(res.documents);
-            if (res.documents.length > 0) {
-                setSelectedSession(res.documents[0].name);
-            }
-        } catch (err) {
-            console.error('Failed to load sessions:', err);
-        } finally {
-            setLoading(false);
-        }
-    }
+    const sessionOptionsFallback = sessionOptions.length > 0
+        ? sessionOptions
+        : (school ? [{ $id: 'current-session', name: String((school as any)?.currentSession || '').trim() || 'Current Session' }] : []);
 
     async function handleFetchResults() {
-        if (!studentId || !selectedSession || !selectedTerm) return;
+        if (!studentId || !selectedSession || !selectedTerm) {
+            setPopup({ type: 'error', message: 'Please select both session and term before checking results.' });
+            return;
+        }
         if (fetchingResults) return;
         setFetchingResults(true);
         setPopup(null);
@@ -58,6 +56,7 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
 
             if (approvedRows.length > 0) {
                 setResults(approvedRows);
+                setPopup({ type: 'success', message: `Loaded ${approvedRows.length} result record${approvedRows.length > 1 ? 's' : ''} for ${selectedTerm}, ${selectedSession}.` });
             } else if (rows.length > 0) {
                 setResults([]);
                 setPopup({ type: 'warning', message: 'Result not published yet for the selected term and session.' });
@@ -86,7 +85,7 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                         value={selectedSession}
                         onChange={(e) => setSelectedSession(e.target.value)}
                     >
-                        {sessions.map(s => <option key={s.$id} value={s.name}>{s.name}</option>)}
+                        {sessionOptionsFallback.map((s) => <option key={s.$id} value={s.name}>{s.name}</option>)}
                     </select>
                 </div>
                 <div className="space-y-2">
@@ -111,8 +110,16 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
             </div>
 
             {popup && (
-                <div className={`rounded-2xl border px-6 py-4 ${popup.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
-                    <p className="font-semibold">{popup.type === 'warning' ? 'Result not published' : 'Result unavailable'}</p>
+                <div className={`rounded-2xl border px-6 py-4 ${
+                    popup.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : popup.type === 'warning'
+                            ? 'bg-amber-50 border-amber-200 text-amber-900'
+                            : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}>
+                    <p className="font-semibold">
+                        {popup.type === 'success' ? 'Results loaded' : popup.type === 'warning' ? 'Result not published' : 'Result unavailable'}
+                    </p>
                     <p className="text-sm mt-1">{popup.message}</p>
                 </div>
             )}

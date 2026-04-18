@@ -30,8 +30,9 @@ export function StudentDashboardPage() {
         navigate(`${basePath}/login`);
     }
 
-    const isResults = location.pathname.endsWith('/dashboard/results') || location.pathname.endsWith('/results');
-    const isFees = location.pathname.endsWith('/dashboard/fees') || location.pathname.endsWith('/fees');
+    const path = location.pathname.replace(/\/+$/, '');
+    const isResults = path.includes('/dashboard/results') || path.endsWith('/results');
+    const isFees = path.includes('/dashboard/fees') || path.endsWith('/fees') || path.endsWith('/school-fees');
     const isDashboard = !isResults && !isFees;
 
     return (
