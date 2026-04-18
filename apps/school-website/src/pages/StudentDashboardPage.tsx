@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { SchoolSubPage } from '@/components/school/SchoolSubPage';
@@ -16,19 +17,21 @@ export function StudentDashboardPage() {
     const { school } = useSchoolSite();
     const studentId = sessionStorage.getItem('student_id');
 
-    if (!studentId) {
-        // Redirect to login if no student info in session
-        navigate(`${basePath}/login`);
-        return null;
-    }
+    useEffect(() => {
+        if (!studentId) {
+            navigate(`${basePath}/login`, { replace: true });
+        }
+    }, [studentId, navigate, basePath]);
+
+    if (!studentId) return null;
 
     function handleLogout() {
         sessionStorage.removeItem('student_id');
         navigate(`${basePath}/login`);
     }
 
-    const isResults = location.pathname.endsWith('/results');
-    const isFees = location.pathname.endsWith('/fees');
+    const isResults = location.pathname.endsWith('/dashboard/results') || location.pathname.endsWith('/results');
+    const isFees = location.pathname.endsWith('/dashboard/fees') || location.pathname.endsWith('/fees');
     const isDashboard = !isResults && !isFees;
 
     return (
@@ -60,14 +63,14 @@ export function StudentDashboardPage() {
                                     <span className="font-medium">Overview</span>
                                 </Link>
                                 <Link 
-                                    to={`${basePath}/results`}
+                                    to={`${basePath}/dashboard/results`}
                                     className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${isResults ? 'bg-[var(--school-primary)] text-white' : 'hover:bg-slate-50 text-slate-600'}`}
                                 >
                                     <BookOpen size={18} />
                                     <span className="font-medium">Academic Results</span>
                                 </Link>
                                 <Link 
-                                    to={`${basePath}/fees`}
+                                    to={`${basePath}/dashboard/fees`}
                                     className={`flex items-center gap-3 p-3 rounded-xl transition-colors ${isFees ? 'bg-[var(--school-primary)] text-white' : 'hover:bg-slate-50 text-slate-600'}`}
                                 >
                                     <CreditCard size={18} />
@@ -103,7 +106,7 @@ export function StudentDashboardPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <Button asChild className="w-full bg-[var(--school-primary)] text-white">
-                                            <Link to={`${basePath}/results`}>Check Results</Link>
+                                            <Link to={`${basePath}/dashboard/results`}>Check Results</Link>
                                         </Button>
                                     </CardContent>
                                 </Card>
@@ -119,7 +122,7 @@ export function StudentDashboardPage() {
                                     </CardHeader>
                                     <CardContent>
                                         <Button asChild className="w-full bg-[var(--school-primary)] text-white">
-                                            <Link to={`${basePath}/fees`}>Manage Payments</Link>
+                                            <Link to={`${basePath}/dashboard/fees`}>Manage Payments</Link>
                                         </Button>
                                     </CardContent>
                                 </Card>

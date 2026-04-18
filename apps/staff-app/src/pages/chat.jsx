@@ -10,6 +10,7 @@ import {
 } from 'shared/utils/api.js';
 import { useAuth } from 'shared/utils/auth.jsx';
 import { Search, MessageSquare, X, Hash, User } from 'lucide-react';
+import { enqueueAction, flushQueue, getQueue } from '../utils/local-first.js';
 
 function getDmChannel(currentUserId, recipientUserId) {
     return `dm:${[currentUserId, recipientUserId].sort().join(':')}`;
@@ -42,6 +43,14 @@ function localStorageKey(userId, schoolId) {
     return `academicx.staff.chat.read.${schoolId}.${userId}`;
 }
 
+function localThreadMessagesKey(userId, schoolId, channel) {
+    return `academicx.staff.chat.thread.${schoolId}.${userId}.${channel}`;
+}
+
+function localDmMessagesKey(userId, schoolId) {
+    return `academicx.staff.chat.dm.${schoolId}.${userId}`;
+}
+
 export default function StaffChat() {
     const { profile, schoolId } = useAuth();
     const toast = useToast();
@@ -58,10 +67,12 @@ export default function StaffChat() {
     const [searchQuery, setSearchQuery] = useState('');
     const [showStaffPicker, setShowStaffPicker] = useState(false);
     const [lastReadByThread, setLastReadByThread] = useState({});
+    const [syncInfo, setSyncInfo] = useState({ pending: 0, lastSyncedAt: '' });
 
     const channels = useMemo(() => (['general', 'teachers']), []);
     const messagesEndRef = useRef(null);
     const staffPickerRef = useRef(null);
+    const queueContext = useMemo(() => ({ schoolId: schoolId || 'school', userId: currentUserId || 'staff' }), [schoolId, currentUserId]);
 
     const activeChannel = useMemo(() => {
         const recipientId = selectedRecipient?.$id || '';
@@ -77,10 +88,17 @@ export default function StaffChat() {
             const raw = localStorage.getItem(localStorageKey(currentUserId, schoolId));
             const parsed = raw ? JSON.parse(raw) : {};
             setLastReadByThread(parsed && typeof parsed === 'object' ? parsed : {});
+
+            const cachedDmRaw = localStorage.getItem(localDmMessagesKey(currentUserId, schoolId));
+            const cachedDm = cachedDmRaw ? JSON.parse(cachedDmRaw) : [];
+            setDmMessages(Array.isArray(cachedDm) ? sortMessages(cachedDm) : []);
+
+            setSyncInfo((current) => ({ ...current, pending: getQueue('chat', queueContext).length }));
         } catch {
             setLastReadByThread({});
+            setDmMessages([]);
         }
-    }, [currentUserId, schoolId]);
+    }, [currentUserId, schoolId, queueContext]);
 
     function persistReadState(state) {
         if (!currentUserId || !schoolId) return;
@@ -94,6 +112,40 @@ export default function StaffChat() {
         };
         setLastReadByThread(next);
         persistReadState(next);
+    }
+
+    function refreshQueueInfo() {
+        setSyncInfo((current) => ({ ...current, pending: getQueue('chat', queueContext).length }));
+    }
+
+    async function syncQueuedMessages() {
+        if (!navigator.onLine || !schoolId || !currentUserId) {
+            refreshQueueInfo();
+            return;
+        }
+
+        const outcome = await flushQueue('chat', queueContext, async (payload) => {
+            const created = await sendChatMessage(
+                payload.schoolId,
+                payload.senderId,
+                payload.senderName,
+                payload.senderRole,
+                payload.message,
+                payload.channel
+            );
+
+            setMessages((prev) => mergeMessages(prev.filter((item) => item.$id !== payload.localId), [created]));
+            if (String(payload.channel || '').startsWith('dm:')) {
+                setDmMessages((prev) => mergeMessages(prev.filter((item) => item.$id !== payload.localId), [created]));
+            }
+        });
+
+        if (outcome.processed > 0) {
+            setSyncInfo({ pending: outcome.remaining, lastSyncedAt: new Date().toISOString() });
+            return;
+        }
+
+        refreshQueueInfo();
     }
 
     useEffect(() => {
@@ -119,18 +171,40 @@ export default function StaffChat() {
 
     useEffect(() => {
         if (!schoolId || !currentUserId) return;
+        localStorage.setItem(localDmMessagesKey(currentUserId, schoolId), JSON.stringify(dmMessages));
+    }, [dmMessages, schoolId, currentUserId]);
+
+    useEffect(() => {
+        if (!schoolId || !currentUserId || !activeChannel) return;
+        localStorage.setItem(localThreadMessagesKey(currentUserId, schoolId, activeChannel), JSON.stringify(messages));
+    }, [messages, activeChannel, schoolId, currentUserId]);
+
+    useEffect(() => {
+        if (!schoolId || !currentUserId) return;
 
         let unsub = null;
+        let hasCachedDm = false;
+        try {
+            const cachedDmRaw = localStorage.getItem(localDmMessagesKey(currentUserId, schoolId));
+            const parsedDm = cachedDmRaw ? JSON.parse(cachedDmRaw) : [];
+            hasCachedDm = Array.isArray(parsedDm) && parsedDm.length > 0;
+        } catch {
+            hasCachedDm = false;
+        }
 
-        listSchoolChatMessages(schoolId, 500)
-            .then((response) => {
-                const all = response.documents || [];
-                const ownDms = all.filter((item) => isDmForUser(item.channel, currentUserId));
-                setDmMessages(sortMessages(ownDms));
-            })
-            .catch((error) => {
-                toast({ type: 'error', title: 'Chat unavailable', message: error.message || 'Could not load conversations.' });
-            });
+        if (!hasCachedDm && navigator.onLine) {
+            listSchoolChatMessages(schoolId, 300)
+                .then((response) => {
+                    const all = response.documents || [];
+                    const ownDms = all.filter((item) => isDmForUser(item.channel, currentUserId));
+                    setDmMessages(sortMessages(ownDms));
+                })
+                .catch((error) => {
+                    toast({ type: 'error', title: 'Chat unavailable', message: error.message || 'Could not load conversations.' });
+                });
+        }
+
+        syncQueuedMessages().catch(() => refreshQueueInfo());
 
         unsub = subscribeToSchoolChatMessages(schoolId, (message) => {
             if (message.channel === 'admins') return;
@@ -148,7 +222,21 @@ export default function StaffChat() {
     }, [schoolId, currentUserId, activeChannel, toast]);
 
     useEffect(() => {
-        if (!schoolId || !activeChannel) return;
+        if (!schoolId || !activeChannel || !currentUserId) return;
+
+        try {
+            const raw = localStorage.getItem(localThreadMessagesKey(currentUserId, schoolId, activeChannel));
+            const cachedThread = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(cachedThread) && cachedThread.length > 0) {
+                setMessages(sortMessages(cachedThread));
+            } else {
+                setMessages([]);
+            }
+        } catch {
+            setMessages([]);
+        }
+
+        if (!navigator.onLine) return;
 
         listChatMessages(schoolId, activeChannel, 100, profile?.role)
             .then((response) => {
@@ -158,7 +246,7 @@ export default function StaffChat() {
             .catch((error) => {
                 toast({ type: 'error', title: 'Chat unavailable', message: error.message || 'Could not load messages.' });
             });
-    }, [schoolId, activeChannel, profile?.role, toast]);
+    }, [schoolId, activeChannel, profile?.role, toast, currentUserId]);
 
     useEffect(() => {
         if (activeChannel.startsWith('dm:')) {
@@ -166,6 +254,14 @@ export default function StaffChat() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeChannel]);
+
+    useEffect(() => {
+        const handleOnline = () => {
+            syncQueuedMessages().catch(() => refreshQueueInfo());
+        };
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, [queueContext]);
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -248,25 +344,26 @@ export default function StaffChat() {
             setDmMessages((prev) => mergeMessages(prev, [pending]));
         }
 
+        setInput('');
         setSending(true);
         try {
-            const created = await sendChatMessage(
+            enqueueAction('chat', queueContext, {
+                localId: pending.$id,
                 schoolId,
-                pending.senderId,
-                pending.senderName,
-                pending.senderRole,
-                messageText,
-                activeChannel
-            );
-            setMessages((prev) => mergeMessages(prev.filter((m) => m.$id !== pending.$id), [created]));
-            if (activeChannel.startsWith('dm:')) {
-                setDmMessages((prev) => mergeMessages(prev.filter((m) => m.$id !== pending.$id), [created]));
+                senderId: pending.senderId,
+                senderName: pending.senderName,
+                senderRole: pending.senderRole,
+                message: messageText,
+                channel: activeChannel,
+            });
+
+            refreshQueueInfo();
+            await syncQueuedMessages();
+            if (!navigator.onLine) {
+                toast({ type: 'success', title: 'Saved offline', message: 'Message stored locally and will send automatically when online.' });
             }
-            setInput('');
-        } catch (error) {
-            setMessages((prev) => prev.filter((m) => m.$id !== pending.$id));
-            setDmMessages((prev) => prev.filter((m) => m.$id !== pending.$id));
-            toast({ type: 'error', title: 'Send failed', message: error.message || 'Unable to send chat message.' });
+        } catch {
+            toast({ type: 'error', title: 'Send failed', message: 'Unable to queue this message.' });
         } finally {
             setSending(false);
         }

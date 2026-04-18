@@ -825,6 +825,11 @@ const COLLECTIONS = {
             required: true,
             type: 'string',
             size: 36,
+        },
+        {
+            key: 'markedAt',
+            required: false,
+            type: 'datetime',
         }
         ],
         indexes: [
@@ -881,6 +886,11 @@ const COLLECTIONS = {
             required: false,
             type: 'string',
             size: 36,
+        },
+        {
+            key: 'markedAt',
+            required: false,
+            type: 'datetime',
         },
         {
             key: 'excuseReason',
@@ -1017,7 +1027,7 @@ const COLLECTIONS = {
             key: 'type',
             required: false,
             type: 'enum',
-            elements: ["pin_purchase","withdrawal","student_pin_purchase"],
+            elements: ["pin_purchase","withdrawal","student_pin_purchase","school_fee"],
             default: 'pin_purchase',
         },
         {
@@ -1632,8 +1642,20 @@ const COLLECTIONS = {
             key: 'status',
             required: false,
             type: 'enum',
-            elements: ["pending","paid","failed","refunded"],
+            elements: ["pending","partial","paid","failed","refunded"],
             default: 'pending',
+        },
+        {
+            key: 'amountPaid',
+            required: false,
+            type: 'float',
+            default: 0,
+        },
+        {
+            key: 'outstandingAmount',
+            required: false,
+            type: 'float',
+            default: 0,
         },
         {
             key: 'paymentReference',
@@ -1650,6 +1672,11 @@ const COLLECTIONS = {
         },
         {
             key: 'paidAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'lastPaymentAt',
             required: false,
             type: 'datetime',
         },

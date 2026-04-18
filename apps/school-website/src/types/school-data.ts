@@ -130,7 +130,31 @@ export function parseSchoolDataJson(raw: unknown): SchoolDataJson {
     } else if (raw && typeof raw === 'object') {
         obj = raw as Record<string, any>;
     }
-    return mergeDeep(DEFAULT_SCHOOL_DATA, obj) as unknown as SchoolDataJson;
+    const merged = mergeDeep(DEFAULT_SCHOOL_DATA, obj) as unknown as SchoolDataJson;
+
+    const rawCoreValues = (merged as any).coreValues;
+    if (!Array.isArray(rawCoreValues) || rawCoreValues.length === 0) {
+        merged.coreValues = DEFAULT_SCHOOL_DATA.coreValues;
+        return merged;
+    }
+
+    merged.coreValues = rawCoreValues
+        .map((item: any) => {
+            if (typeof item === 'string') {
+                return { text: item.trim(), icon: '' };
+            }
+            return {
+                text: String(item?.text || '').trim(),
+                icon: String(item?.icon || '').trim(),
+            };
+        })
+        .filter((item: any) => item.text.length > 0);
+
+    if (merged.coreValues.length === 0) {
+        merged.coreValues = DEFAULT_SCHOOL_DATA.coreValues;
+    }
+
+    return merged;
 }
 
 function isPlainObject(x: unknown): x is Record<string, any> {

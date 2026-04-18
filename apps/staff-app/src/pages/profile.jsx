@@ -7,7 +7,7 @@ import { useAuth } from 'shared/utils/auth.jsx';
 
 export default function StaffProfile() {
     const toast = useToast();
-    const { checkAuth } = useAuth();
+    const { checkAuth, logout } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [data, setData] = useState(null);
@@ -80,12 +80,14 @@ export default function StaffProfile() {
                 <LiquidGlassPanel hover={false} style={{ padding: 24 }}>
                     <h3 style={{ fontSize: 16, marginBottom: 14, color: 'var(--color-gray-900)' }}>Work Details</h3>
                     <div style={{ fontSize: 14, color: 'var(--color-gray-600)', display: 'grid', gap: 10 }}>
+                        <div><strong>Name:</strong> {`${data?.user?.firstName || ''} ${data?.user?.lastName || ''}`.trim() || '-'}</div>
+                        <div><strong>Role:</strong> {data?.staff?.staffType || 'staff'}</div>
                         <div><strong>Email:</strong> {data?.user?.email || '-'}</div>
                         <div><strong>Department:</strong> {data?.staff?.department || '-'}</div>
-                        <div><strong>Role:</strong> {data?.staff?.staffType || 'staff'}</div>
                         <div><strong>Form Teacher Class:</strong> {data?.staff?.formTeacherClass || '-'}</div>
                         <div><strong>Assigned Classes:</strong> {assignedClasses.length > 0 ? assignedClasses.join(', ') : '-'}</div>
                         <div><strong>Attendance Role:</strong> {data?.staff?.canMarkStaffAttendance ? 'Officer' : 'None'}</div>
+                        <button className="btn btn-danger" onClick={logout} style={{ width: 'fit-content', marginTop: 8 }}>Sign Out</button>
                     </div>
                 </LiquidGlassPanel>
             </div>

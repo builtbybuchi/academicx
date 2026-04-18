@@ -10,11 +10,13 @@ import { Template7Layout } from './Template7';
 import { Template8Layout } from './Template8';
 import { Template9Layout } from './Template9';
 import { Template10Layout } from './Template10';
-import { Loader2 } from 'lucide-react';
 import { Footer } from './SharedTemplateComponents';
+import { BookLoader } from '@/components/ui/BookLoader';
+import { useBasePath } from '@/hooks/useBasePath';
 
 export function TemplateLayout({ children }: { children: React.ReactNode }) {
     const { school, loading, error, templateId, data } = useSchoolSite();
+    const basePath = useBasePath();
     
     useEffect(() => {
         if (school) {
@@ -39,10 +41,7 @@ export function TemplateLayout({ children }: { children: React.ReactNode }) {
     if (loading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-white">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
-                    <p className="text-gray-500 font-medium">Loading school site...</p>
-                </div>
+                <BookLoader label="Loading school site..." />
             </div>
         );
     }
@@ -56,7 +55,7 @@ export function TemplateLayout({ children }: { children: React.ReactNode }) {
                         <h2 className="text-2xl font-bold text-gray-900">School Not Found</h2>
                         <p className="text-gray-600">{error || 'The school you are looking for does not exist or has been moved.'}</p>
                     </div>
-                    <a href="/" className="inline-block w-full px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">
+                    <a href={basePath || '/'} className="inline-block w-full px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors">
                         Return to AcademicX
                     </a>
                 </div>

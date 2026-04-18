@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { LogOut } from 'lucide-react';
 
 // For mobile tabs, we flatten the menuGroups into a single array
 const getFlatItems = (groups) => {
@@ -10,6 +11,7 @@ export default function Sidebar({
     activeId,
     onNavigate,
     onUserClick,
+    onSignOut,
     appName = 'AcademicX',
     userName = 'User',
     userRole = '',
@@ -76,12 +78,20 @@ export default function Sidebar({
                             <div className="sidebar-role">{userRole}</div>
                         </div>
                     </div>
+                    {onSignOut && (
+                        <button
+                            className="btn btn-danger btn-sm sidebar-signout-btn"
+                            onClick={onSignOut}
+                        >
+                            <LogOut size={14} /> Sign Out
+                        </button>
+                    )}
                 </div>
             </aside>
 
             {/* Mobile Bottom Tab Navigation */}
             <nav className="mobile-bottom-tabs">
-                {flatItems.slice(0, 5).map((item) => (
+                {flatItems.map((item) => (
                     <button
                         key={item.id}
                         className={`mobile-tab-item ${activeId === item.id ? 'active' : ''}`}
@@ -147,6 +157,11 @@ export default function Sidebar({
                 
                 .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--color-gray-100); }
                 .sidebar-user-info { display: flex; align-items: center; gap: 12px; }
+                .sidebar-signout-btn {
+                    width: 100%;
+                    margin-top: 12px;
+                    justify-content: center;
+                }
                 .sidebar-avatar {
                     width: 36px; height: 36px; border-radius: 50%;
                     background: var(--color-primary-100); color: var(--color-primary);
@@ -167,9 +182,13 @@ export default function Sidebar({
                     box-shadow: 0 -4px 12px rgba(0,0,0,0.03);
                     z-index: 1000;
                     padding-bottom: env(safe-area-inset-bottom); /* iOS support */
+                    overflow-x: auto;
+                    overflow-y: hidden;
+                    white-space: nowrap;
                 }
                 .mobile-tab-item {
-                    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+                    min-width: 88px;
+                    display: flex; flex-direction: column; align-items: center; justify-content: center;
                     background: transparent; border: none; padding: 6px; cursor: pointer;
                     color: var(--color-gray-400); transition: color 0.2s;
                 }

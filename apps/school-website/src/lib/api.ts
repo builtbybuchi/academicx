@@ -1,5 +1,6 @@
 /** Re-export Appwrite helpers from monorepo shared layer */
 export {
+    login,
     getSchool,
     getSchoolByWebsiteSlug,
     listSchoolEvents,
@@ -12,5 +13,7 @@ export {
     resolveStudentLogin,
     listAcademicSessions,
     getStudentResults,
+    getStudentFeeStatus,
+    initiateSchoolFeePayment,
     getSystemConfig,
 } from 'shared/utils/api.js';

@@ -561,6 +561,10 @@ export async function staffCheckOut(staffDocId) {
     return invokeBackendFunction('staffCheckOut', { staffDocId });
 }
 
+export async function markStaffAttendance(payload) {
+    return invokeBackendFunction('markStaffAttendance', payload);
+}
+
 export async function markStudentAttendance(payload) {
     return invokeBackendFunction('markStudentAttendance', payload);
 }
@@ -882,6 +886,10 @@ export async function getStudentFees() {
     const queries = [Query.equal('studentId', student.$id), Query.limit(100)];
     const result = await databases.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES, queries);
     return result.documents;
+}
+
+export async function getStudentFeeStatus(payload) {
+    return invokeBackendFunction('getStudentFeeStatus', payload);
 }
 
 export async function initiateSchoolFeePayment(payload) {

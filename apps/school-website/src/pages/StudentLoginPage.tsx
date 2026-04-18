@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SchoolSubPage } from '@/components/school/SchoolSubPage';
-import { resolveStudentLogin } from '@/lib/api';
+import { login, resolveStudentLogin } from '@/lib/api';
 import { useBasePath } from '@/hooks/useBasePath';
+import { ButtonBarLoader } from '@/components/ui/BookLoader';
 
 export function StudentLoginPage() {
     const [studentId, setStudentId] = useState('');
@@ -18,13 +19,16 @@ export function StudentLoginPage() {
 
     async function handleLogin(e: React.FormEvent) {
         e.preventDefault();
+        if (loading) return;
         setLoading(true);
         setError(null);
         try {
-            await resolveStudentLogin({
+            const resolved = await resolveStudentLogin({
                 studentId,
                 parentCredential,
             });
+
+            await login(resolved.loginEmail, resolved.loginPassword || parentCredential);
             
             // Store basic student info for session
             sessionStorage.setItem('student_id', studentId);
@@ -82,7 +86,7 @@ export function StudentLoginPage() {
                                 className="w-full bg-[var(--school-primary)] text-white py-6 text-lg font-bold"
                                 disabled={loading}
                             >
-                                {loading ? "Verifying..." : "Access Portal"}
+                                {loading ? <ButtonBarLoader /> : "Access Portal"}
                             </Button>
                         </form>
                     </CardContent>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock, LogOut, UserCircle } from 'lucide-react';
+import { LayoutDashboard, FileEdit, CheckSquare, MessageCircle, Clock, UserCircle, Users } from 'lucide-react';
 import Sidebar from 'shared/components/Sidebar.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
 import AuthPage from 'shared/components/AuthPage.jsx';
@@ -8,6 +8,7 @@ import Dashboard from './pages/dashboard.jsx';
 import ResultsEntry from './pages/results-entry.jsx';
 import Attendance from './pages/attendance.jsx';
 import StaffAttendance from './pages/staff-attendance.jsx';
+import StaffAttendanceOfficer from './pages/staff-attendance-officer.jsx';
 import Chat from './pages/chat.jsx';
 import StaffProfile from './pages/profile.jsx';
 
@@ -22,6 +23,7 @@ const menuGroups = [
     {
         section: 'My Records', items: [
             { id: '/my-attendance', label: 'My Attendance', icon: <Clock size={20} /> },
+            { id: '/staff-attendance', label: 'Staff Attendance', icon: <Users size={20} /> },
             { id: '/profile', label: 'My Profile', icon: <UserCircle size={20} /> },
         ]
     },
@@ -67,18 +69,12 @@ export default function App() {
 
     return (
         <div className="app-layout">
-            <button
-                className="btn btn-danger btn-sm"
-                onClick={logout}
-                style={{ position: 'fixed', right: 12, top: 10, zIndex: 1200, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-                <LogOut size={14} /> Sign Out
-            </button>
             <Sidebar
                 menuGroups={menuGroups}
                 activeId={location.pathname}
                 onNavigate={(id) => navigate(id)}
                 onUserClick={() => navigate('/profile')}
+                onSignOut={logout}
                 appName="Staff Portal"
                 userName={profile ? `${profile.firstName} ${profile.lastName}` : 'Staff'}
                 userRole={profile?.department || 'Teacher'}
@@ -89,6 +85,7 @@ export default function App() {
                     <Route path="/results-entry" element={<ResultsEntry />} />
                     <Route path="/attendance" element={<Attendance />} />
                     <Route path="/my-attendance" element={<StaffAttendance />} />
+                    <Route path="/staff-attendance" element={<StaffAttendanceOfficer />} />
                     <Route path="/profile" element={<StaffProfile />} />
                     <Route path="/chat" element={<Chat />} />
                 </Routes>

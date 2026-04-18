@@ -28,7 +28,12 @@ export default function Dashboard() {
     }, []);
 
     const classMetrics = useMemo(() => {
-        const assignedClasses = portalData?.assignedClasses || [];
+        const assignedClasses = [...new Set([
+            ...(portalData?.assignedClasses || []),
+            ...(portalData?.formTeacherClasses || []),
+            ...((portalData?.students || []).map((item) => item.className)),
+            ...((portalData?.subjects || []).map((item) => item.className)),
+        ])].filter(Boolean);
         const students = portalData?.students || [];
         const subjects = portalData?.subjects || [];
         const results = portalData?.results || [];
@@ -56,7 +61,7 @@ export default function Dashboard() {
             </div>
 
             <div className="grid grid-4" style={{ marginBottom: 32 }}>
-                <StatsCard icon={<BookOpen size={24} color="var(--color-primary-600)" />} label="Assigned Classes" value={loading ? '...' : (portalData?.assignedClasses?.length || 0)} />
+                <StatsCard icon={<BookOpen size={24} color="var(--color-primary-600)" />} label="Assigned Classes" value={loading ? '...' : classMetrics.length} />
                 <StatsCard icon={<Users size={24} color="#8B5CF6" />} label="Total Students" value={loading ? '...' : (portalData?.students?.length || 0)} color="#8B5CF6" />
                 <StatsCard icon={<ClipboardList size={24} color="#F59E0B" />} label="Pending Results" value={loading ? '...' : (portalData?.results?.filter((item) => item.status !== 'approved').length || 0)} trend="Awaiting approvals" trendUp={false} color="#F59E0B" />
                 <StatsCard icon={<CheckSquare size={24} color="#10B981" />} label="Attendance Today" value={attendanceToday?.checkIn ? 'Checked In' : 'Not Marked'} trend={attendanceToday?.checkIn || 'Pending'} trendUp={Boolean(attendanceToday?.checkIn)} color="#10B981" />

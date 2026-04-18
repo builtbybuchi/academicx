@@ -5,8 +5,8 @@ import { StudentAppPrompt } from '@/components/school/StudentAppPrompt';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { Button } from '@/components/ui/button';
 import { listAcademicSessions, getStudentResults } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
 import { useBasePath } from '@/hooks/useBasePath';
+import { BookLoader, ButtonBarLoader } from '@/components/ui/BookLoader';
 
 export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
     const { school } = useSchoolSite();
@@ -18,6 +18,7 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
     const [loading, setLoading] = useState(true);
     const [results, setResults] = useState<any[]>([]);
     const [fetchingResults, setFetchingResults] = useState(false);
+    const [popup, setPopup] = useState<{ type: 'warning' | 'error'; message: string } | null>(null);
 
     const studentId = sessionStorage.getItem('student_id');
 
@@ -47,12 +48,27 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
 
     async function handleFetchResults() {
         if (!studentId || !selectedSession || !selectedTerm) return;
+        if (fetchingResults) return;
         setFetchingResults(true);
+        setPopup(null);
         try {
             const res = await getStudentResults(studentId, selectedTerm, selectedSession);
-            setResults(res.documents);
+            const rows = res.documents || [];
+            const approvedRows = rows.filter((item: any) => ['approved', 'published'].includes(String(item.status || '').toLowerCase()));
+
+            if (approvedRows.length > 0) {
+                setResults(approvedRows);
+            } else if (rows.length > 0) {
+                setResults([]);
+                setPopup({ type: 'warning', message: 'Result not published yet for the selected term and session.' });
+            } else {
+                setResults([]);
+                setPopup({ type: 'error', message: 'We cannot access this result for the selected term and session.' });
+            }
         } catch (err) {
             console.error('Failed to fetch results:', err);
+            setResults([]);
+            setPopup({ type: 'error', message: 'We cannot access this result for the selected term and session.' });
         } finally {
             setFetchingResults(false);
         }
@@ -90,13 +106,22 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                     disabled={fetchingResults || loading}
                     className="w-full bg-[var(--school-primary)] text-white py-7 rounded-xl font-bold"
                 >
-                    {fetchingResults ? <Loader2 className="animate-spin" /> : "Check Results"}
+                    {fetchingResults ? <ButtonBarLoader /> : "Check Results"}
                 </Button>
             </div>
 
+            {popup && (
+                <div className={`rounded-2xl border px-6 py-4 ${popup.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-rose-50 border-rose-200 text-rose-900'}`}>
+                    <p className="font-semibold">{popup.type === 'warning' ? 'Result not published' : 'Result unavailable'}</p>
+                    <p className="text-sm mt-1">{popup.message}</p>
+                </div>
+            )}
+
             {fetchingResults ? (
                 <div className="py-20 text-center">
-                    <Loader2 className="h-12 w-12 animate-spin mx-auto text-[var(--school-primary)] opacity-20" />
+                    <div className="flex justify-center">
+                        <BookLoader label="Checking results..." />
+                    </div>
                 </div>
             ) : results.length > 0 ? (
                 <div className="grid gap-6">
@@ -113,7 +138,7 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                 </div>
             ) : !loading && (
                 <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                    <p className="text-slate-400">Select session and term to check results.</p>
+                    <p className="text-slate-400">Select session and term, then click Check Results.</p>
                 </div>
             )}
 

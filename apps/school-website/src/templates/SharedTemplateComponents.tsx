@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import type { Models } from 'appwrite';
 import { submitContactMessage } from '@/lib/api';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
+import { useBasePath } from '@/hooks/useBasePath';
+import { ButtonBarLoader } from '@/components/ui/BookLoader';
 
 export function SubPageHero({ title, subtitle }: { title: string; subtitle?: string }) {
     const { data, templateId } = useSchoolSite();
@@ -239,6 +241,8 @@ export function EventsSection({ events, basePath }: { events: Models.Document[];
 }
 
 export function Footer({ schoolName, logoUrl, contact }: { schoolName: string; logoUrl?: string; contact: any }) {
+    const basePath = useBasePath();
+
     return (
         <footer className="bg-slate-50 border-t border-slate-100 py-20">
             <div className="container mx-auto px-4 grid md:grid-cols-4 gap-12">
@@ -254,10 +258,10 @@ export function Footer({ schoolName, logoUrl, contact }: { schoolName: string; l
                 <div className="space-y-6">
                     <h4 className="font-bold text-slate-900 uppercase tracking-widest text-xs">Navigation</h4>
                     <nav className="flex flex-col gap-3 text-slate-500 text-sm">
-                        <Link to="/" className="hover:text-[var(--school-primary)] transition-colors">Home</Link>
-                        <Link to="/news" className="hover:text-[var(--school-primary)] transition-colors">News</Link>
-                        <Link to="/events" className="hover:text-[var(--school-primary)] transition-colors">Events</Link>
-                        <Link to="/gallery" className="hover:text-[var(--school-primary)] transition-colors">Gallery</Link>
+                        <Link to={basePath || '/'} className="hover:text-[var(--school-primary)] transition-colors">Home</Link>
+                        <Link to={`${basePath}/news`} className="hover:text-[var(--school-primary)] transition-colors">News</Link>
+                        <Link to={`${basePath}/events`} className="hover:text-[var(--school-primary)] transition-colors">Events</Link>
+                        <Link to={`${basePath}/gallery`} className="hover:text-[var(--school-primary)] transition-colors">Gallery</Link>
                     </nav>
                 </div>
                 <div className="space-y-6 md:col-span-2">
@@ -447,10 +451,11 @@ export function ContactSection({ data, schoolId }: { data: any; schoolId: string
                             </div>
                             {status === 'error' && <p className="text-red-500 text-sm">Failed to send message. Please try again later.</p>}
                             <button 
+                                type="submit"
                                 disabled={status === 'loading'}
                                 className="w-full py-4 bg-[var(--school-primary)] text-white rounded-lg font-bold hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50"
                             >
-                                {status === 'loading' ? 'Sending...' : 'Send Message'}
+                                {status === 'loading' ? <ButtonBarLoader /> : 'Send Message'}
                             </button>
                         </form>
                     )}

@@ -4,9 +4,10 @@ import { SchoolSubPage } from '@/components/school/SchoolSubPage';
 import { StudentAppPrompt } from '@/components/school/StudentAppPrompt';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { Button } from '@/components/ui/button';
-import { listAcademicSessions } from '@/lib/api';
-import { Loader2, CreditCard, ShieldCheck } from 'lucide-react';
+import { getStudentFeeStatus, initiateSchoolFeePayment, listAcademicSessions } from '@/lib/api';
+import { CreditCard, ShieldCheck } from 'lucide-react';
 import { useBasePath } from '@/hooks/useBasePath';
+import { BookLoader, ButtonBarLoader } from '@/components/ui/BookLoader';
 
 export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
     const { school } = useSchoolSite();
@@ -17,7 +18,11 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
     const [selectedTerm, setSelectedTerm] = useState('First Term');
     const [loading, setLoading] = useState(true);
     const [feesDoc, setFeesDoc] = useState<any>(null);
+    const [feeBreakdown, setFeeBreakdown] = useState<any>(null);
     const [fetchingFees, setFetchingFees] = useState(false);
+    const [paying, setPaying] = useState(false);
+    const [payAmount, setPayAmount] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
     const studentId = sessionStorage.getItem('student_id');
 
@@ -47,39 +52,75 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
 
     async function handleCheckFees() {
         if (!selectedSession || !selectedTerm) return;
+        if (fetchingFees) return;
         setFetchingFees(true);
+        setError(null);
         setFeesDoc(null);
+        setFeeBreakdown(null);
         try {
-            // Mocking fees fetching for now
-            setTimeout(() => {
-                setFeesDoc({
-                    published: true,
-                    total: 150000,
-                    breakdown: [
-                        { item: 'Tuition', amount: 100000 },
-                        { item: 'Development Levy', amount: 25000 },
-                        { item: 'Laboratory Fee', amount: 15000 },
-                        { item: 'Library Fee', amount: 10000 },
-                    ],
-                    alreadyPaid: false
-                });
-                setFetchingFees(false);
-            }, 1000);
+            const response = await getStudentFeeStatus({
+                studentId,
+                term: selectedTerm,
+                session: selectedSession,
+            });
+            setFeesDoc(response.fee);
+            setFeeBreakdown(response.breakdown);
+            setPayAmount(String(response.breakdown?.outstanding || ''));
         } catch (err) {
             console.error('Failed to check fees:', err);
+            setError((err as Error).message || 'We cannot access this fee record for the selected term and session.');
+        } finally {
             setFetchingFees(false);
+        }
+    }
+
+    async function handlePayFees() {
+        if (!feesDoc || !feeBreakdown || paying) return;
+
+        const numeric = Number(payAmount || 0);
+        const outstanding = Number(feeBreakdown.outstanding || 0);
+        if (!Number.isFinite(numeric) || numeric <= 0) {
+            setError('Enter a valid payment amount.');
+            return;
+        }
+        if (numeric > outstanding) {
+            setError('Payment amount cannot be higher than outstanding balance.');
+            return;
+        }
+
+        setPaying(true);
+        setError(null);
+        try {
+            const payment = await initiateSchoolFeePayment({
+                feeId: feesDoc.$id,
+                studentId: feesDoc.studentId,
+                amount: numeric,
+                term: selectedTerm,
+                session: selectedSession,
+            });
+
+            if (payment.checkoutUrl) {
+                window.open(payment.checkoutUrl, '_blank', 'noopener,noreferrer');
+            }
+        } catch (err) {
+            setError((err as Error).message || 'Unable to initiate payment.');
+        } finally {
+            setPaying(false);
         }
     }
 
     if (!school) return null;
 
-    const TOTAL_CHARGE_RATE = 0.019; // 1.9%
-    const MAX_FEE = 2500;
-
-    const calculateProcessingFee = (amount: number) => {
-        const fee = amount * TOTAL_CHARGE_RATE;
-        return Math.min(fee, MAX_FEE);
-    };
+    const squadFeeRate = 0.012;
+    const platformFeeRate = 0.007;
+    const payAmountNumber = Number(payAmount || 0);
+    const squadFee = Math.max(0, payAmountNumber * squadFeeRate);
+    const platformFee = Math.max(0, payAmountNumber * platformFeeRate);
+    const totalCharge = payAmountNumber + squadFee + platformFee;
+    const paid = Number(feeBreakdown?.amountPaid || 0);
+    const total = Number(feeBreakdown?.principal || 0);
+    const outstanding = Number(feeBreakdown?.outstanding || 0);
+    const progress = total > 0 ? Math.min(100, (paid / total) * 100) : 0;
 
     const content = (
         <div className={`space-y-12 ${isEmbedded ? '' : 'max-w-4xl mx-auto'}`}>
@@ -111,13 +152,22 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                     disabled={fetchingFees || loading}
                     className="w-full bg-[var(--school-primary)] text-white py-7 rounded-xl font-bold"
                 >
-                    {fetchingFees ? <Loader2 className="animate-spin" /> : "Check Fees"}
+                    {fetchingFees ? <ButtonBarLoader /> : "Check Fees"}
                 </Button>
             </div>
 
+            {error && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 text-rose-900 px-6 py-4">
+                    <p className="font-semibold">Unable to access fees</p>
+                    <p className="text-sm mt-1">{error}</p>
+                </div>
+            )}
+
             {fetchingFees ? (
                 <div className="py-20 text-center">
-                    <Loader2 className="h-12 w-12 animate-spin mx-auto text-[var(--school-primary)] opacity-20" />
+                    <div className="flex justify-center">
+                        <BookLoader label="Checking fees..." />
+                    </div>
                 </div>
             ) : feesDoc ? (
                 <div className="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-xl shadow-black/5">
@@ -127,32 +177,60 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                             <p className="text-sm text-slate-500">{selectedSession} - {selectedTerm}</p>
                         </div>
                         <div className="text-right">
-                            <p className="text-3xl font-black text-[var(--school-primary)]">₦{feesDoc.total.toLocaleString()}</p>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Outstanding</p>
+                            <p className="text-3xl font-black text-[var(--school-primary)]">₦{outstanding.toLocaleString()}</p>
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Outstanding Balance</p>
                         </div>
                     </div>
                     
                     <div className="p-8 space-y-4">
-                        {feesDoc.breakdown.map((item: any, i: number) => (
-                            <div key={i} className="flex justify-between text-slate-600">
-                                <span>{item.item}</span>
-                                <span className="font-mono font-bold">₦{item.amount.toLocaleString()}</span>
+                        <div className="space-y-3">
+                            <div className="flex justify-between text-slate-600">
+                                <span>Total Fee</span>
+                                <span className="font-mono font-bold">₦{total.toLocaleString()}</span>
                             </div>
-                        ))}
+                            <div className="flex justify-between text-slate-600">
+                                <span>Already Paid</span>
+                                <span className="font-mono font-bold text-emerald-600">₦{paid.toLocaleString()}</span>
+                            </div>
+                            <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                                <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+                            </div>
+                            <div className="text-xs text-slate-500">Payment progress: {progress.toFixed(1)}%</div>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-100">
+                            <label className="text-sm font-bold text-slate-500 uppercase tracking-widest">Amount to pay now (part or full)</label>
+                            <input
+                                className="w-full mt-2 p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-[var(--school-primary)]"
+                                type="number"
+                                min="1"
+                                max={outstanding || 0}
+                                value={payAmount}
+                                onChange={(event) => setPayAmount(event.target.value)}
+                            />
+                        </div>
                         
                         <div className="pt-6 border-t border-slate-100 space-y-2">
                             <div className="flex justify-between text-sm text-slate-400">
-                                <span>Processing Fee (1.9%)</span>
-                                <span className="font-mono">₦{calculateProcessingFee(feesDoc.total).toLocaleString()}</span>
+                                <span>SquadCo Fee (1.2%)</span>
+                                <span className="font-mono">₦{squadFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-slate-400">
+                                <span>Platform Fee (0.7%)</span>
+                                <span className="font-mono">₦{platformFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                             <div className="flex justify-between text-xl font-bold pt-2">
-                                <span>Total to Pay</span>
-                                <span className="text-[var(--school-primary)] font-mono">₦{(feesDoc.total + calculateProcessingFee(feesDoc.total)).toLocaleString()}</span>
+                                <span>Total Charge</span>
+                                <span className="text-[var(--school-primary)] font-mono">₦{totalCharge.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
                             </div>
                         </div>
 
-                        <Button className="w-full bg-[var(--school-primary)] text-white py-8 rounded-2xl text-lg font-bold shadow-lg mt-8">
-                            <CreditCard className="mr-2" /> Pay Fees Now
+                        <Button
+                            className="w-full bg-[var(--school-primary)] text-white py-8 rounded-2xl text-lg font-bold shadow-lg mt-8"
+                            onClick={handlePayFees}
+                            disabled={paying || outstanding <= 0}
+                        >
+                            {paying ? <ButtonBarLoader /> : <><CreditCard className="mr-2" /> Pay with SquadCo</>}
                         </Button>
                         
                         <div className="flex items-center justify-center gap-2 text-slate-400 text-xs mt-4">
