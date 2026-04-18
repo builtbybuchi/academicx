@@ -72,6 +72,40 @@ function computePaymentFees(amount) {
     };
 }
 
+async function createPaymentAttemptRecord(db, data) {
+    const basePayload = {
+        schoolId: data.schoolId,
+        reference: data.reference,
+        amount: data.amount,
+        currency: data.currency || 'NGN',
+        status: data.status || 'pending',
+        provider: data.provider || 'squad',
+        description: data.description || '',
+        studentId: data.studentId || '',
+        createdAt: data.createdAt || nowIso(),
+        metadata: data.metadata || '{}',
+    };
+
+    const candidateTypes = Array.from(new Set([
+        data.type || 'school_fee',
+        'pin_purchase',
+    ]));
+
+    let lastErr = null;
+    for (const candidateType of candidateTypes) {
+        try {
+            return await db.createDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, ID.unique(), {
+                ...basePayload,
+                type: candidateType,
+            });
+        } catch (err) {
+            lastErr = err;
+        }
+    }
+
+    throw lastErr || new Error('Unable to create payment attempt record.');
+}
+
 function parseJson(value, fallback = {}) {
     if (!value) return fallback;
     if (typeof value === 'object') return value;
@@ -2196,10 +2230,33 @@ const actions = {
                     return { success: false, error: paymentResult.error };
                 }
 
-                // Update fee record with payment reference
-                await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeRecord.$id, {
-                    paymentReference: paymentResult.data.transactionRef
-                });
+                // Track initiation attempt for superadmin visibility, but do not block checkout if tracking write fails.
+                try {
+                    await createPaymentAttemptRecord(db, {
+                        schoolId: school.$id,
+                        reference: paymentResult.data.transactionRef,
+                        amount: Number(amount || 0),
+                        currency: 'NGN',
+                        type: 'school_fee',
+                        status: 'pending',
+                        provider: 'squad',
+                        description: `School fee payment (${term} ${session})`,
+                        studentId,
+                        createdAt: nowIso(),
+                        metadata: JSON.stringify({
+                            kind: 'school_fee',
+                            stage: 'initiated',
+                            feeId: feeRecord.$id,
+                            term,
+                            session,
+                            paymentAmount: Number(amount || 0),
+                            totalCharge,
+                            platformFee: platformFeeAmount,
+                        }),
+                    });
+                } catch (trackingError) {
+                    console.error('Payment initiation tracking failed:', trackingError?.message || trackingError);
+                }
 
                 return {
                     success: true,
@@ -2467,34 +2524,35 @@ const actions = {
                     return { success: false, error: paymentResult.error };
                 }
 
-                // Update fee record with payment reference
-                await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, fee.$id, {
-                    paymentReference: paymentResult.data.transactionRef,
-                    updatedAt: nowIso(),
-                });
-
-                await db.createDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, ID.unique(), {
-                    schoolId: fee.schoolId,
-                    reference: paymentResult.data.transactionRef,
-                    amount: amountToPay,
-                    currency: 'NGN',
-                    type: 'school_fee',
-                    status: 'pending',
-                    provider: 'squad',
-                    description: `School fee payment (${term} ${session})`,
-                    studentId: student.$id,
-                    createdAt: nowIso(),
-                    metadata: JSON.stringify({
-                        feeId: fee.$id,
-                        term,
-                        session,
-                        paymentAmount: amountToPay,
-                        outstandingBefore: outstandingAmount,
-                        totalCharge: feeBreakdown.totalCharge,
-                        squadFee: feeBreakdown.squadFee,
-                        platformFee: feeBreakdown.platformFee,
-                    }),
-                });
+                // Track initiation attempt for superadmin visibility, but do not block checkout if tracking write fails.
+                try {
+                    await createPaymentAttemptRecord(db, {
+                        schoolId: fee.schoolId,
+                        reference: paymentResult.data.transactionRef,
+                        amount: amountToPay,
+                        currency: 'NGN',
+                        type: 'school_fee',
+                        status: 'pending',
+                        provider: 'squad',
+                        description: `School fee payment (${term} ${session})`,
+                        studentId: student.$id,
+                        createdAt: nowIso(),
+                        metadata: JSON.stringify({
+                            kind: 'school_fee',
+                            stage: 'initiated',
+                            feeId: fee.$id,
+                            term,
+                            session,
+                            paymentAmount: amountToPay,
+                            outstandingBefore: outstandingAmount,
+                            totalCharge: feeBreakdown.totalCharge,
+                            squadFee: feeBreakdown.squadFee,
+                            platformFee: feeBreakdown.platformFee,
+                        }),
+                    });
+                } catch (trackingError) {
+                    console.error('Payment initiation tracking failed:', trackingError?.message || trackingError);
+                }
 
                 return {
                     success: true,
@@ -2551,8 +2609,14 @@ const actions = {
                         Query.limit(1),
                     ]);
                     if (paymentRows.total > 0) {
+                        const existingMeta = parseJson(paymentRows.documents[0].metadata || '{}', {});
                         await db.updateDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, paymentRows.documents[0].$id, {
                             status: 'success',
+                            metadata: JSON.stringify({
+                                ...existingMeta,
+                                stage: 'successful',
+                                verifiedAt: nowIso(),
+                            }),
                         });
                     }
                     
@@ -2570,6 +2634,26 @@ const actions = {
                         });
                     }
                     
+                    return { success: true };
+                }
+
+                if ((event === 'charge_failed' || event === 'transaction_failed' || event === 'payment_failed') && data?.transaction_ref) {
+                    const paymentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS.id, [
+                        Query.equal('reference', data.transaction_ref),
+                        Query.limit(1),
+                    ]);
+                    if (paymentRows.total > 0) {
+                        const existingMeta = parseJson(paymentRows.documents[0].metadata || '{}', {});
+                        await db.updateDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, paymentRows.documents[0].$id, {
+                            status: 'failed',
+                            metadata: JSON.stringify({
+                                ...existingMeta,
+                                stage: 'failed',
+                                failedAt: nowIso(),
+                                failureReason: data?.message || data?.reason || '',
+                            }),
+                        });
+                    }
                     return { success: true };
                 }
                 
