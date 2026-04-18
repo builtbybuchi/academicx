@@ -11,15 +11,23 @@ const SQUAD_BASE_URL = 'https://api.squadco.com';
 const SQUAD_SANDBOX_URL = 'https://sandbox-api-d.squadco.com';
 
 function getConfig() {
+    const secretKey = process.env.SQUAD_SECRET_KEY || process.env.SQUADCO_SECRET_KEY || '';
+    const publicKey = process.env.SQUAD_PUBLIC_KEY || process.env.SQUADCO_PUBLIC_KEY || '';
+    const useSandboxRaw = process.env.SQUAD_USE_SANDBOX ?? process.env.SQUADCO_USE_SANDBOX ?? '';
+    const baseUrlOverride = process.env.SQUAD_BASE_URL || process.env.SQUADCO_BASE_URL || '';
+
     return {
-        secretKey: process.env.SQUAD_SECRET_KEY || '',
-        publicKey: process.env.SQUAD_PUBLIC_KEY || '',
-        useSandbox: process.env.SQUAD_USE_SANDBOX === 'true',
+        secretKey,
+        publicKey,
+        useSandbox: String(useSandboxRaw).toLowerCase() === 'true',
+        baseUrlOverride,
     };
 }
 
 function getBaseUrl() {
-    return getConfig().useSandbox ? SQUAD_SANDBOX_URL : SQUAD_BASE_URL;
+    const cfg = getConfig();
+    if (cfg.baseUrlOverride) return cfg.baseUrlOverride;
+    return cfg.useSandbox ? SQUAD_SANDBOX_URL : SQUAD_BASE_URL;
 }
 
 /**
