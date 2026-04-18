@@ -105,6 +105,7 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                 amount: numeric,
                 term: selectedTerm,
                 session: selectedSession,
+                callbackUrl: `${window.location.origin}${basePath}/dashboard/fees`,
             });
 
             if (payment.checkoutUrl) {

@@ -2128,7 +2128,7 @@ const actions = {
         auth: true,
         handler: async ({ payload, authId }) => {
             const db = getDb();
-            const { studentId, amount, term, session, platformFee } = payload;
+            const { studentId, amount, term, session, platformFee, callbackUrl } = payload;
 
             if (!studentId || !amount || !term || !session) {
                 return { success: false, error: 'Missing required fields' };
@@ -2176,10 +2176,14 @@ const actions = {
 
                 // Initiate payment with Squad
                 const squad = require('./payment-squad');
+                const resolvedCallbackUrl = String(callbackUrl || '').trim() || `${process.env.FRONTEND_URL || ''}/school-fees/payment-success`;
+                if (!/^https?:\/\//i.test(resolvedCallbackUrl)) {
+                    return { success: false, error: 'Payment callback URL is not configured properly on the backend.' };
+                }
                 const paymentResult = await squad.initiateTransaction({
                     email: student.parentEmail || user.email,
                     amount: totalAmount,
-                    callbackUrl: `${process.env.FRONTEND_URL}/school-fees/payment-success`,
+                    callbackUrl: resolvedCallbackUrl,
                     metadata: {
                         type: 'school_fee',
                         feeId: feeRecord.$id,
@@ -2373,7 +2377,7 @@ const actions = {
         auth: true,
         handler: async ({ payload, authId }) => {
             const db = getDb();
-            const { schoolId, feeId, studentId, amount, term, session } = payload;
+            const { schoolId, feeId, studentId, amount, term, session, callbackUrl } = payload;
 
             if (!schoolId || !studentId || !amount || !term || !session) {
                 return { success: false, error: 'schoolId, studentId, amount, term and session are required' };
@@ -2440,10 +2444,14 @@ const actions = {
 
                 // Initiate payment with Squad
                 const squad = require('./payment-squad');
+                const resolvedCallbackUrl = String(callbackUrl || '').trim() || `${process.env.FRONTEND_URL || ''}/school-fees/payment-success`;
+                if (!/^https?:\/\//i.test(resolvedCallbackUrl)) {
+                    return { success: false, error: 'Payment callback URL is not configured properly on the backend.' };
+                }
                 const paymentResult = await squad.initiateTransaction({
                     email: student.parentEmail || user.email,
                     amount: feeBreakdown.totalCharge,
-                    callbackUrl: `${process.env.FRONTEND_URL}/school-fees/payment-success`,
+                    callbackUrl: resolvedCallbackUrl,
                     metadata: {
                         type: 'school_fee',
                         feeId: fee.$id,

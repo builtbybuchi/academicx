@@ -29,26 +29,45 @@ async function initiateTransaction({ email, amount, currency = 'NGN', callbackUr
     const config = getConfig();
     const baseUrl = getBaseUrl();
 
-    const response = await fetch(`${baseUrl}/transaction/initiate`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${config.secretKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            email,
-            amount: amount * 100, // Squad expects kobo
-            currency,
-            callback_url: callbackUrl,
-            metadata,
-            initiate_type: 'inline',
-        }),
-    });
+    if (!config.secretKey) {
+        return { success: false, error: 'Squad secret key is not configured on the backend.' };
+    }
+    if (!email) {
+        return { success: false, error: 'Payment email is required.' };
+    }
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+        return { success: false, error: 'Payment amount must be greater than zero.' };
+    }
+    if (!callbackUrl || !/^https?:\/\//i.test(String(callbackUrl))) {
+        return { success: false, error: 'A valid callback URL is required to initiate payment.' };
+    }
 
-    const data = await response.json();
+    let response;
+    let data = null;
+    try {
+        response = await fetch(`${baseUrl}/transaction/initiate`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.secretKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                email,
+                amount: Number(amount) * 100, // Squad expects kobo
+                currency,
+                callback_url: callbackUrl,
+                metadata,
+                initiate_type: 'inline',
+            }),
+        });
+        data = await response.json().catch(() => null);
+    } catch (err) {
+        return { success: false, error: err?.message || 'Could not reach Squad payment gateway.' };
+    }
 
     if (!response.ok || !data.status) {
-        return { success: false, error: data.message || 'Payment initiation failed' };
+        const providerError = data?.message || data?.data?.message || `Squad payment initiation failed with status ${response.status}.`;
+        return { success: false, error: providerError };
     }
 
     return {
