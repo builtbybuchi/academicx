@@ -105,7 +105,7 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                 amount: numeric,
                 term: selectedTerm,
                 session: selectedSession,
-                callbackUrl: `${window.location.origin}${basePath}/dashboard/fees`,
+                callbackUrl: `${window.location.origin}${basePath}/payment-success`,
             });
 
             if (payment.checkoutUrl) {
@@ -123,12 +123,10 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
 
     if (!school) return null;
 
-    const squadFeeRate = 0.012;
-    const platformFeeRate = 0.007;
     const payAmountNumber = Number(payAmount || 0);
-    const squadFee = Math.max(0, payAmountNumber * squadFeeRate);
-    const platformFee = Math.max(0, payAmountNumber * platformFeeRate);
-    const totalCharge = payAmountNumber + squadFee + platformFee;
+        const serviceFeeRate = 0.019;
+        const serviceFee = Math.min(Math.max(0, payAmountNumber * serviceFeeRate), 2500);
+        const totalCharge = payAmountNumber + serviceFee;
     const paid = Number(feeBreakdown?.amountPaid || 0);
     const total = Number(feeBreakdown?.principal || 0);
     const outstanding = Number(feeBreakdown?.outstanding || 0);
@@ -231,18 +229,14 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                         </div>
                         
                         <div className="pt-6 border-t border-slate-100 space-y-2">
-                            <div className="flex justify-between text-sm text-slate-400">
-                                <span>SquadCo Fee (1.2%)</span>
-                                <span className="font-mono">₦{squadFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between text-sm text-slate-400">
-                                <span>Platform Fee (0.7%)</span>
-                                <span className="font-mono">₦{platformFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                            </div>
-                            <div className="flex justify-between text-xl font-bold pt-2">
-                                <span>Total Charge</span>
-                                <span className="text-[var(--school-primary)] font-mono">₦{totalCharge.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                            </div>
+                                <div className="flex justify-between text-sm text-slate-400">
+                                    <span>Service Fee (1.9%, capped at ₦2,500)</span>
+                                    <span className="font-mono">₦{serviceFee.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="flex justify-between text-xl font-bold pt-2">
+                                    <span>Total Charge</span>
+                                    <span className="font-mono text-[var(--school-primary)]">₦{totalCharge.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                                </div>
                         </div>
 
                         <Button

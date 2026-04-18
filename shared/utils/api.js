@@ -896,6 +896,10 @@ export async function initiateSchoolFeePayment(payload) {
     return invokeBackendFunction('initiateStudentFeePayment', payload);
 }
 
+export async function verifySchoolFeePayment(payload) {
+    return invokeBackendFunction('verifySchoolFeePayment', payload);
+}
+
 export async function recordManualSchoolFeePayment(payload) {
     return invokeBackendFunction('recordManualSchoolFeePayment', payload);
 }

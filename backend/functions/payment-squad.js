@@ -114,6 +114,7 @@ async function verifyTransaction(transactionRef) {
             amount: data.data.transaction_amount / 100, // Convert back from kobo
             currency: data.data.transaction_currency_id,
             paidAt: data.data.transaction_date,
+            metadata: data.data.metadata || {},
         },
     };
 }

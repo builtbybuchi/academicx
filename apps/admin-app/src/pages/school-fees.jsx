@@ -78,8 +78,7 @@ const SchoolFeesManagement = () => {
             .filter(fee => fee.status === 'paid')
             .reduce((sum, fee) => sum + (Number(fee.amount) || 0), 0);
         const totalExpected = students.reduce((sum, s) => sum + getClassFee(s.className), 0);
-        const platformFees = totalCollected * 0.019;
-        const cappedPlatformFees = Math.min(platformFees, 2500);
+        const serviceFees = Math.min(totalCollected * 0.019, 2500);
 
         return {
             totalStudents,
@@ -87,8 +86,8 @@ const SchoolFeesManagement = () => {
             unpaidStudents,
             totalCollected,
             totalExpected,
-            platformFees: cappedPlatformFees,
-            netRevenue: totalCollected - cappedPlatformFees,
+            serviceFees,
+            netRevenue: totalCollected - serviceFees,
             paymentRate: totalStudents > 0 ? (paidStudents / totalStudents) * 100 : 0
         };
     }, [students, filteredFees, classFeeAmounts]);
@@ -109,7 +108,6 @@ const SchoolFeesManagement = () => {
                 amount: feeAmount,
                 term: selectedTerm,
                 session: selectedSession,
-                platformFee: Math.min(feeAmount * 0.019, 2500)
             };
             
             const result = await createSchoolFeePayment(paymentData);
@@ -366,8 +364,7 @@ const SchoolFeesManagement = () => {
             {/* Fee Structure Notice */}
             <div className="alert alert-info" style={{ marginBottom: 24 }}>
                 <h4>Fee Structure Information</h4>
-                <p><strong>Platform Fee:</strong> 1.9% of transaction amount (capped at ₦2,500 per transaction)</p>
-                <p><strong>Breakdown:</strong> 1.2% goes to SquadCo (GTBank) platform, 0.7% goes to AcademicX</p>
+                <p><strong>Service Fee:</strong> 1.9% of transaction amount (capped at ₦2,500 per transaction)</p>
                 <p><strong>Note:</strong> This is an optional feature. Schools can continue to manage fees manually if preferred.</p>
             </div>
 
@@ -451,8 +448,8 @@ const SchoolFeesManagement = () => {
                 />
                 <StatsCard 
                     icon="·" 
-                    label="Platform Fees" 
-                    value={formatCurrency(stats.platformFees || 0)} 
+                    label="Service Fees" 
+                    value={formatCurrency(stats.serviceFees || 0)} 
                     color="#EF4444" 
                 />
             </div>

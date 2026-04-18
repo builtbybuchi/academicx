@@ -15,5 +15,6 @@ export {
     getStudentResults,
     getStudentFeeStatus,
     initiateSchoolFeePayment,
+    verifySchoolFeePayment,
     getSystemConfig,
 } from 'shared/utils/api.js';

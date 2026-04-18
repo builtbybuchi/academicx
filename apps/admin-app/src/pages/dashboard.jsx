@@ -4,7 +4,7 @@ import StatsCard from 'shared/components/StatsCard.jsx';
 import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
 import { formatDate } from 'shared/utils/index.js';
-import { getSchool, listPins, listResults, listStaff, listStudents, listUsers } from 'shared/utils/api.js';
+import { getSchool, listPayments, listPins, listResults, listStaff, listStudents, listUsers } from 'shared/utils/api.js';
 
 export default function Dashboard() {
     const { schoolId } = useAuth();
@@ -13,6 +13,7 @@ export default function Dashboard() {
     const [students, setStudents] = useState([]);
     const [staff, setStaff] = useState([]);
     const [results, setResults] = useState([]);
+    const [payments, setPayments] = useState([]);
     const [pins, setPins] = useState([]);
     const [users, setUsers] = useState([]);
 
@@ -26,11 +27,12 @@ export default function Dashboard() {
         async function load() {
             setLoading(true);
             try {
-                const [schoolDoc, studentRes, staffRes, resultRes, pinRes, userRes] = await Promise.all([
+                const [schoolDoc, studentRes, staffRes, resultRes, paymentRes, pinRes, userRes] = await Promise.all([
                     getSchool(schoolId),
                     listStudents(schoolId),
                     listStaff(schoolId),
                     listResults(schoolId),
+                    listPayments(schoolId),
                     listPins(schoolId),
                     listUsers(schoolId),
                 ]);
@@ -40,6 +42,7 @@ export default function Dashboard() {
                 setStudents(studentRes.documents);
                 setStaff(staffRes.documents);
                 setResults(resultRes.documents);
+                setPayments(paymentRes.documents);
                 setPins(pinRes.documents);
                 setUsers(userRes.documents);
             } finally {
@@ -54,6 +57,16 @@ export default function Dashboard() {
     }, [schoolId]);
 
     const recentActivities = useMemo(() => {
+        const parseMetadata = (value) => {
+            if (!value) return {};
+            if (typeof value === 'object') return value;
+            try {
+                return JSON.parse(value);
+            } catch {
+                return {};
+            }
+        };
+
         const recentUsers = users
             .filter((item) => item.createdAt)
             .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
@@ -74,8 +87,27 @@ export default function Dashboard() {
                 icon: <KeySquare size={18} />,
             }));
 
-        return [...recentUsers, ...recentPins].slice(0, 5);
-    }, [pins, users]);
+        const recentPayments = payments
+            .filter((item) => item.createdAt)
+            .filter((item) => {
+                const metadata = parseMetadata(item.metadata);
+                return metadata?.kind === 'school_fee' || item.type === 'school_fee' || String(item.description || '').toLowerCase().includes('school fee');
+            })
+            .sort((left, right) => new Date(right.createdAt) - new Date(left.createdAt))
+            .slice(0, 3)
+            .map((item) => {
+                const metadata = parseMetadata(item.metadata);
+                const isSuccess = String(item.status || '').toLowerCase() === 'success';
+                return {
+                    text: isSuccess ? `School fee payment received ${item.reference ? `(${item.reference})` : ''}` : `School fee payment ${String(item.status || 'pending')}`,
+                    time: formatDate(item.createdAt, { month: 'short', day: 'numeric' }),
+                    icon: <ClipboardList size={18} />,
+                    meta: metadata,
+                };
+            });
+
+        return [...recentPayments, ...recentUsers, ...recentPins].slice(0, 5);
+    }, [payments, pins, users]);
 
     const pendingResults = results.filter((item) => item.status !== 'approved').length;
     const activePins = pins.filter((item) => !item.used).length;

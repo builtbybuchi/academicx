@@ -106,6 +106,189 @@ async function createPaymentAttemptRecord(db, data) {
     throw lastErr || new Error('Unable to create payment attempt record.');
 }
 
+function stripHtmlTags(value) {
+    return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function buildPaymentReceiptHtml({ school, student, feeDoc, paymentAmount, serviceFee, totalCharge, reference, paymentDate }) {
+    const schoolName = school?.name || 'AcademicX School';
+    const studentName = `${student?.firstName || ''} ${student?.lastName || ''}`.trim();
+    const admissionNumber = student?.admissionNumber || '';
+    const term = feeDoc?.term || '';
+    const session = feeDoc?.session || '';
+    return `
+        <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6; max-width: 680px; margin: 0 auto; padding: 24px; background: #f8fafc;">
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 28px;">
+                <h2 style="margin: 0 0 12px; font-size: 24px; color: #1d4ed8;">Payment Receipt</h2>
+                <p style="margin: 0 0 20px; color: #475569;">${schoolName} has successfully received a school fee payment.</p>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <tr><td style="padding: 8px 0; color: #64748b; width: 180px;">Student</td><td style="padding: 8px 0; font-weight: 600;">${studentName}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Admission Number</td><td style="padding: 8px 0; font-weight: 600;">${admissionNumber}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Term / Session</td><td style="padding: 8px 0; font-weight: 600;">${term} / ${session}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Fee Paid</td><td style="padding: 8px 0; font-weight: 600;">₦${Number(paymentAmount || 0).toLocaleString()}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Service Fee</td><td style="padding: 8px 0; font-weight: 600;">₦${Number(serviceFee || 0).toLocaleString()}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Total Charged</td><td style="padding: 8px 0; font-weight: 600;">₦${Number(totalCharge || 0).toLocaleString()}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Reference</td><td style="padding: 8px 0; font-weight: 600;">${reference || 'N/A'}</td></tr>
+                    <tr><td style="padding: 8px 0; color: #64748b;">Paid At</td><td style="padding: 8px 0; font-weight: 600;">${paymentDate || nowIso()}</td></tr>
+                </table>
+                <p style="margin: 24px 0 0; color: #64748b; font-size: 13px;">This receipt was generated automatically after verified payment confirmation.</p>
+            </div>
+        </div>
+    `;
+}
+
+async function sendPaymentReceiptEmails(db, { school, student, feeDoc, paymentAmount, serviceFee, totalCharge, reference, paymentDate }) {
+    const recipients = [...new Set([
+        String(student?.parentEmail || '').trim(),
+        String(school?.email || '').trim(),
+    ].filter(Boolean))];
+
+    if (recipients.length === 0) return [];
+
+    const subject = `Payment receipt - ${school?.name || 'AcademicX School'}`;
+    const html = buildPaymentReceiptHtml({ school, student, feeDoc, paymentAmount, serviceFee, totalCharge, reference, paymentDate });
+    const text = stripHtmlTags(html);
+    const results = [];
+
+    for (const recipient of recipients) {
+        const result = await sendEmailWithSMTP({ to: recipient, subject, html, text });
+        results.push({ recipient, ...result });
+
+        await saveEmailRecord(db, {
+            schoolId: school?.$id || '',
+            recipients: [recipient],
+            subject,
+            body: html,
+            status: result.success ? 'sent' : 'failed',
+            errorMessage: result.error || '',
+            sentBy: 'system',
+        });
+    }
+
+    return results;
+}
+
+async function finalizeSchoolFeePayment(db, { transactionRef, metadata, paymentDate }) {
+    const feeId = String(metadata?.feeId || '').trim();
+    const studentId = String(metadata?.studentId || '').trim();
+    const schoolId = String(metadata?.schoolId || '').trim();
+    const paymentAmount = Number(metadata?.paymentAmount || 0);
+
+    if (!transactionRef || !feeId || !studentId || !schoolId) {
+        throw new Error('Missing payment metadata for school fee finalization.');
+    }
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+        throw new Error('Invalid payment amount in transaction metadata.');
+    }
+
+    const paymentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS.id, [
+        Query.equal('reference', transactionRef),
+        Query.limit(1),
+    ]);
+    const existingPayment = paymentRows.total > 0 ? paymentRows.documents[0] : null;
+    if (existingPayment && String(existingPayment.status || '').toLowerCase() === 'success') {
+        return { success: true, alreadyProcessed: true, feeId };
+    }
+
+    const feeDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId);
+    const principalAmount = Number(feeDoc.amount || 0);
+    const amountPaid = Number((Number(feeDoc.amountPaid || 0) + paymentAmount).toFixed(2));
+    const outstandingAmount = Math.max(0, Number((principalAmount - amountPaid).toFixed(2)));
+    const status = outstandingAmount <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
+    const serviceFee = Math.min(Number((paymentAmount * TOTAL_FEE_RATE).toFixed(2)), 2500);
+    const totalCharge = Number((paymentAmount + serviceFee).toFixed(2));
+    const processedAt = paymentDate || nowIso();
+
+    await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId, {
+        status,
+        amountPaid,
+        outstandingAmount,
+        paidAt: processedAt,
+        lastPaymentAt: processedAt,
+        paymentReference: transactionRef,
+        updatedAt: processedAt,
+    });
+
+    if (existingPayment) {
+        const existingMeta = parseJson(existingPayment.metadata || '{}', {});
+        await db.updateDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, existingPayment.$id, {
+            status: 'success',
+            metadata: JSON.stringify({
+                ...existingMeta,
+                stage: 'successful',
+                verifiedAt: processedAt,
+            }),
+        });
+    } else {
+        await createPaymentAttemptRecord(db, {
+            schoolId,
+            reference: transactionRef,
+            amount: paymentAmount,
+            currency: 'NGN',
+            type: 'school_fee',
+            status: 'success',
+            provider: 'squad',
+            description: `School fee payment (${feeDoc.term || ''} ${feeDoc.session || ''})`,
+            studentId,
+            createdAt: processedAt,
+            metadata: JSON.stringify({
+                kind: 'school_fee',
+                stage: 'successful',
+                verifiedAt: processedAt,
+                feeId,
+                term: feeDoc.term || '',
+                session: feeDoc.session || '',
+                paymentAmount,
+                serviceFee,
+                totalCharge,
+            }),
+        });
+    }
+
+    const [student, school] = await Promise.all([
+        db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId),
+        db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId),
+    ]);
+
+    try {
+        await sendPaymentReceiptEmails(db, {
+            school,
+            student,
+            feeDoc,
+            paymentAmount,
+            serviceFee,
+            totalCharge,
+            reference: transactionRef,
+            paymentDate: processedAt,
+        });
+    } catch (receiptError) {
+        console.error('Failed to send payment receipt email:', receiptError?.message || receiptError);
+    }
+
+    if (student.parentPhone) {
+        try {
+            const reminderService = require('../whatsapp/reminder-service');
+            await reminderService.handlePaymentSuccess({
+                feeId,
+                transactionRef,
+                metadata,
+            });
+        } catch (whatsAppError) {
+            console.error('Failed to send WhatsApp payment confirmation:', whatsAppError?.message || whatsAppError);
+        }
+    }
+
+    return {
+        success: true,
+        alreadyProcessed: false,
+        feeId,
+        transactionRef,
+        paymentAmount,
+        serviceFee,
+        totalCharge,
+    };
+}
+
 function parseJson(value, fallback = {}) {
     if (!value) return fallback;
     if (typeof value === 'object') return value;
@@ -2210,7 +2393,7 @@ const actions = {
 
                 // Initiate payment with Squad
                 const squad = require('./payment-squad');
-                const resolvedCallbackUrl = String(callbackUrl || '').trim() || `${process.env.FRONTEND_URL || ''}/school-fees/payment-success`;
+                const resolvedCallbackUrl = String(callbackUrl || '').trim() || `${process.env.FRONTEND_URL || ''}/payment-success`;
                 if (!/^https?:\/\//i.test(resolvedCallbackUrl)) {
                     return { success: false, error: 'Payment callback URL is not configured properly on the backend.' };
                 }
@@ -2501,7 +2684,7 @@ const actions = {
 
                 // Initiate payment with Squad
                 const squad = require('./payment-squad');
-                const resolvedCallbackUrl = String(callbackUrl || '').trim() || `${process.env.FRONTEND_URL || ''}/school-fees/payment-success`;
+                const resolvedCallbackUrl = String(callbackUrl || '').trim() || `${process.env.FRONTEND_URL || ''}/payment-success`;
                 if (!/^https?:\/\//i.test(resolvedCallbackUrl)) {
                     return { success: false, error: 'Payment callback URL is not configured properly on the backend.' };
                 }
@@ -2585,55 +2768,11 @@ const actions = {
             
             try {
                 if (event === 'charge_successful' && data.metadata?.type === 'school_fee') {
-                    const { feeId, studentId, schoolId } = data.metadata;
-                    const paymentAmount = Number(data.metadata?.paymentAmount || 0);
-
-                    const feeDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId);
-                    const principalAmount = Number(feeDoc.amount || 0);
-                    const amountPaid = Number((Number(feeDoc.amountPaid || 0) + paymentAmount).toFixed(2));
-                    const outstandingAmount = Math.max(0, Number((principalAmount - amountPaid).toFixed(2)));
-                    const status = outstandingAmount <= 0 ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending');
-                    
-                    // Update fee record
-                    await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, feeId, {
-                        status,
-                        amountPaid,
-                        outstandingAmount,
-                        paidAt: nowIso(),
-                        lastPaymentAt: nowIso(),
-                        paymentReference: data.transaction_ref
+                    await finalizeSchoolFeePayment(db, {
+                        transactionRef: data.transaction_ref,
+                        metadata: data.metadata,
+                        paymentDate: nowIso(),
                     });
-
-                    const paymentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS.id, [
-                        Query.equal('reference', data.transaction_ref),
-                        Query.limit(1),
-                    ]);
-                    if (paymentRows.total > 0) {
-                        const existingMeta = parseJson(paymentRows.documents[0].metadata || '{}', {});
-                        await db.updateDocument(DATABASE_ID, COLLECTIONS.PAYMENTS.id, paymentRows.documents[0].$id, {
-                            status: 'success',
-                            metadata: JSON.stringify({
-                                ...existingMeta,
-                                stage: 'successful',
-                                verifiedAt: nowIso(),
-                            }),
-                        });
-                    }
-                    
-                    // Get student and school details
-                    const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
-                    const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId);
-                    
-                    // Send WhatsApp confirmation
-                    if (student.parentPhone) {
-                        const reminderService = require('../whatsapp/reminder-service');
-                        await reminderService.handlePaymentSuccess({
-                            feeId,
-                            transactionRef: data.transaction_ref,
-                            metadata: data.metadata
-                        });
-                    }
-                    
                     return { success: true };
                 }
 
@@ -2654,6 +2793,17 @@ const actions = {
                             }),
                         });
                     }
+
+                    if (data?.metadata?.feeId) {
+                        try {
+                            await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, data.metadata.feeId, {
+                                paymentReference: data.transaction_ref || '',
+                                updatedAt: nowIso(),
+                            });
+                        } catch {
+                            // Best-effort only for failed attempts.
+                        }
+                    }
                     return { success: true };
                 }
                 
@@ -2663,6 +2813,56 @@ const actions = {
                 return { success: false, error: error.message };
             }
         }
+    },
+
+    verifySchoolFeePayment: {
+        auth: false,
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const transactionRef = String(payload.transactionRef || payload.reference || '').trim();
+            if (!transactionRef) {
+                return { success: false, error: 'transactionRef is required.' };
+            }
+
+            const squad = require('./payment-squad');
+            const verification = await squad.verifyTransaction(transactionRef);
+            if (!verification.success) {
+                return { success: false, error: verification.error || 'Unable to verify payment at this time.' };
+            }
+
+            const status = String(verification.data?.status || '').toLowerCase();
+            const metadata = verification.data?.metadata || {};
+            if (metadata?.type !== 'school_fee') {
+                return { success: false, error: 'Verified transaction is not a school fee payment.' };
+            }
+
+            if (!['success', 'successful', 'approved', 'paid'].includes(status)) {
+                return {
+                    success: false,
+                    error: `Payment is not successful yet (status: ${status || 'unknown'}).`,
+                    data: {
+                        status,
+                        reference: verification.data?.reference || transactionRef,
+                    },
+                };
+            }
+
+            const result = await finalizeSchoolFeePayment(db, {
+                transactionRef,
+                metadata,
+                paymentDate: verification.data?.paidAt || nowIso(),
+            });
+
+            return {
+                success: true,
+                data: {
+                    verified: true,
+                    reference: transactionRef,
+                    status,
+                    alreadyProcessed: Boolean(result.alreadyProcessed),
+                },
+            };
+        },
     },
 
     /** Public: school website contact form → contact_messages (validated server-side). */

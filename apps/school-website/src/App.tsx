@@ -8,6 +8,7 @@ import { NewsPage } from '@/pages/NewsPage';
 import { StaffPage } from '@/pages/StaffPage';
 import { StudentLoginPage } from '@/pages/StudentLoginPage';
 import { StudentDashboardPage } from '@/pages/StudentDashboardPage';
+import { PaymentSuccessPage } from '@/pages/PaymentSuccessPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
 export default function App() {
@@ -31,6 +32,8 @@ export default function App() {
                 <Route path="news" element={<NewsPage />} />
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="login" element={<StudentLoginPage />} />
+                <Route path="payment-success" element={<PaymentSuccessPage />} />
+                <Route path="school-fees/payment-success" element={<Navigate to="../payment-success" replace />} />
                 <Route path="dashboard/*" element={<StudentDashboardPage />} />
                 <Route path="results" element={<Navigate to="../dashboard/results" replace />} />
                 <Route path="fees" element={<Navigate to="../dashboard/fees" replace />} />
@@ -46,6 +49,8 @@ export default function App() {
                 <Route path="news" element={<NewsPage />} />
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="login" element={<StudentLoginPage />} />
+                <Route path="payment-success" element={<PaymentSuccessPage />} />
+                <Route path="school-fees/payment-success" element={<Navigate to="/payment-success" replace />} />
                 <Route path="dashboard/*" element={<StudentDashboardPage />} />
                 <Route path="results" element={<Navigate to="/dashboard/results" replace />} />
                 <Route path="fees" element={<Navigate to="/dashboard/fees" replace />} />
