@@ -2726,6 +2726,7 @@ const actions = {
                         studentId: student.$id,
                         createdAt: nowIso(),
                         metadata: JSON.stringify({
+                            type: 'school_fee',
                             kind: 'school_fee',
                             stage: 'initiated',
                             feeId: fee.$id,
@@ -2836,9 +2837,26 @@ const actions = {
             }
 
             const status = String(verification.data?.status || '').toLowerCase();
-            const metadata = verification.data?.metadata || {};
-            if (metadata?.type !== 'school_fee') {
-                return { success: false, error: 'Verified transaction is not a school fee payment.' };
+            
+            // Try to get metadata from our payment record in DB (Squad may not return it)
+            let metadata = {};
+            try {
+                const paymentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS.id, [
+                    Query.equal('reference', transactionRef),
+                    Query.limit(1),
+                ]);
+                if (paymentRows.total > 0) {
+                    const paymentRecord = paymentRows.documents[0];
+                    const storedMeta = parseJson(paymentRecord.metadata || '{}', {});
+                    metadata = storedMeta;
+                }
+            } catch (err) {
+                // Fall back to verification response metadata if DB lookup fails
+                metadata = verification.data?.metadata || {};
+            }
+            
+            if (!metadata || metadata.type !== 'school_fee') {
+                return { success: false, error: 'Verified transaction is not a school fee payment or metadata not found.' };
             }
 
             if (!['success', 'successful', 'approved', 'paid'].includes(status)) {
