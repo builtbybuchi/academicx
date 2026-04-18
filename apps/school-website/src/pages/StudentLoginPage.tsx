@@ -8,8 +8,10 @@ import { SchoolSubPage } from '@/components/school/SchoolSubPage';
 import { login, resolveStudentLogin } from '@/lib/api';
 import { useBasePath } from '@/hooks/useBasePath';
 import { ButtonBarLoader } from '@/components/ui/BookLoader';
+import { useSchoolSite } from '@/context/SchoolSiteContext';
 
 export function StudentLoginPage() {
+    const { school } = useSchoolSite();
     const [studentId, setStudentId] = useState('');
     const [parentCredential, setParentCredential] = useState('');
     const [loading, setLoading] = useState(false);
@@ -26,12 +28,13 @@ export function StudentLoginPage() {
             const resolved = await resolveStudentLogin({
                 studentId,
                 parentCredential,
+                schoolId: school?.$id,
             });
 
             await login(resolved.loginEmail, resolved.loginPassword || parentCredential);
             
             // Store basic student info for session
-            sessionStorage.setItem('student_id', studentId);
+            sessionStorage.setItem('student_id', resolved.studentId || studentId);
             navigate(`${basePath}/dashboard`);
         } catch (err: any) {
             setError(err.message || "Invalid student ID or parent credential.");

@@ -347,6 +347,10 @@ async function requireSchool(authId, schoolId) {
 }
 
 async function ensureAuth(definition, authId, payload) {
+    if (definition.auth && !authId) {
+        return { authorized: false, error: 'Missing authenticated user context.' };
+    }
+
     if (!definition.roles || definition.roles.length === 0) {
         return { authorized: true, user: null };
     }
@@ -830,6 +834,7 @@ const actions = {
 
             const studentId = String(payload.studentId || '').trim();
             const parentCredential = String(payload.parentCredential || '').trim();
+            const schoolId = String(payload.schoolId || '').trim();
 
             if (!studentId || !parentCredential) {
                 return { success: false, error: 'studentId and parentCredential are required.' };
@@ -838,11 +843,14 @@ const actions = {
             const attemptIds = [...new Set([studentId, studentId.toUpperCase()])];
             let student = null;
             for (const id of attemptIds) {
-                const rows = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                const queries = [
                     Query.equal('admissionNumber', id),
                     Query.equal('status', 'active'),
                     Query.limit(1),
-                ]);
+                ];
+                if (schoolId) queries.unshift(Query.equal('schoolId', schoolId));
+
+                const rows = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, queries);
                 if (rows.total > 0) {
                     student = rows.documents[0];
                     break;
@@ -2129,7 +2137,10 @@ const actions = {
             try {
                 // Get student and school info
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
+                if (!user) {
+                    return { success: false, error: 'Authenticated user profile not found.' };
+                }
                 const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
 
                 // Calculate total amount with platform fee
@@ -2212,7 +2223,10 @@ const actions = {
             }
 
             try {
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
+                if (!user) {
+                    return { success: false, error: 'Authenticated user profile not found.' };
+                }
                 
                 // Get all fees for the term/session
                 const fees = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
@@ -2299,18 +2313,27 @@ const actions = {
                 return { success: false, error: 'schoolId, studentId, term and session are required' };
             }
 
-            const studentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
-                Query.equal('schoolId', schoolId),
-                Query.equal('admissionNumber', String(studentId).trim()),
-                Query.equal('status', 'active'),
-                Query.limit(1),
-            ]);
+            const normalizedStudentId = String(studentId).trim();
+            const attemptIds = [...new Set([normalizedStudentId, normalizedStudentId.toUpperCase()])];
+            let student = null;
 
-            if (studentRows.total === 0) {
+            for (const attemptId of attemptIds) {
+                const studentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                    Query.equal('schoolId', schoolId),
+                    Query.equal('admissionNumber', attemptId),
+                    Query.equal('status', 'active'),
+                    Query.limit(1),
+                ]);
+                if (studentRows.total > 0) {
+                    student = studentRows.documents[0];
+                    break;
+                }
+            }
+
+            if (!student) {
                 return { success: false, error: 'Student not found.' };
             }
 
-            const student = studentRows.documents[0];
             const feesRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
                 Query.equal('schoolId', schoolId),
                 Query.equal('studentId', student.$id),
@@ -2358,7 +2381,10 @@ const actions = {
 
             try {
                 // Verify the fee belongs to the authenticated student
-                const user = await db.getDocument(DATABASE_ID, COLLECTIONS.USERS.id, authId);
+                const user = await getUserByAuthId(authId);
+                if (!user) {
+                    return { success: false, error: 'Authenticated user profile not found.' };
+                }
                 const student = await db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId);
                 
                 if (student.userId !== user.$id) {
