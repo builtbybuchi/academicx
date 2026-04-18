@@ -2175,7 +2175,7 @@ const actions = {
                 });
 
                 // Initiate payment with Squad
-                const squad = require('../payment/squad');
+                const squad = require('./payment-squad');
                 const paymentResult = await squad.initiateTransaction({
                     email: student.parentEmail || user.email,
                     amount: totalAmount,
@@ -2439,7 +2439,7 @@ const actions = {
                 const feeBreakdown = computePaymentFees(amountToPay);
 
                 // Initiate payment with Squad
-                const squad = require('../payment/squad');
+                const squad = require('./payment-squad');
                 const paymentResult = await squad.initiateTransaction({
                     email: student.parentEmail || user.email,
                     amount: feeBreakdown.totalCharge,
