@@ -68,8 +68,15 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
             });
             setFeesDoc(response.fee);
             setFeeBreakdown(response.breakdown);
-            setPayAmount(String(response.breakdown?.outstanding || ''));
-            setPopup({ type: 'success', message: `Fee record loaded for ${selectedTerm}, ${selectedSession}.` });
+            const outstandingAmount = Number(response.breakdown?.outstanding || 0);
+            const feeStatus = String(response.fee?.status || '').toLowerCase();
+            const isSettledPaid = feeStatus === 'paid' && Boolean(response.fee?.paidAt);
+            setPayAmount(String(outstandingAmount || ''));
+            if (isSettledPaid && outstandingAmount <= 0) {
+                setPopup({ type: 'warning', message: `Fees already paid for ${selectedTerm}, ${selectedSession}.` });
+            } else {
+                setPopup({ type: 'success', message: `Fee record loaded for ${selectedTerm}, ${selectedSession}.` });
+            }
         } catch (err) {
             console.error('Failed to check fees:', err);
             setPopup({ type: 'error', message: (err as Error).message || 'We cannot access this fee record for the selected term and session.' });

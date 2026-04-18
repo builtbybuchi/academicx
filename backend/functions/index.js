@@ -2387,6 +2387,8 @@ const actions = {
                     platformFee: platformFeeAmount,
                     totalAmount,
                     status: 'pending',
+                    amountPaid: 0,
+                    outstandingAmount: Number(amount || 0),
                     paymentMethod: 'online',
                     createdAt: nowIso()
                 });
@@ -2593,7 +2595,10 @@ const actions = {
             const fee = feesRows.documents[0];
             const principal = Number(fee.amount || 0);
             const amountPaid = Number(fee.amountPaid || 0);
-            const outstanding = Math.max(0, Number((fee.outstandingAmount ?? principal - amountPaid).toFixed(2)));
+            const derivedOutstanding = Math.max(0, Number((principal - amountPaid).toFixed(2)));
+            const feeStatus = String(fee.status || '').toLowerCase();
+            const isSettledPaid = feeStatus === 'paid' && Boolean(fee.paidAt);
+            const outstanding = isSettledPaid ? 0 : derivedOutstanding;
 
             return {
                 success: true,
