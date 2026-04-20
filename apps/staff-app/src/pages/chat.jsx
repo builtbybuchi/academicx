@@ -66,6 +66,7 @@ export default function StaffChat() {
     const [selectedRecipient, setSelectedRecipient] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showStaffPicker, setShowStaffPicker] = useState(false);
+    const [showMobileChannels, setShowMobileChannels] = useState(false);
     const [lastReadByThread, setLastReadByThread] = useState({});
     const [syncInfo, setSyncInfo] = useState({ pending: 0, lastSyncedAt: '' });
 
@@ -373,13 +374,32 @@ export default function StaffChat() {
 
     return (
         <div>
+            <style>{`
+                .staff-chat-shell { display: grid; grid-template-columns: 280px 1fr; gap: 16px; height: calc(100vh - 200px); }
+                .staff-chat-mobile-toggle { display: none; }
+                .staff-chat-overlay { display: none; }
+                @media (max-width: 768px) {
+                    .staff-chat-shell { grid-template-columns: 1fr; height: auto; min-height: calc(100vh - 170px); }
+                    .staff-chat-sidebar { position: fixed; inset: 0 auto 70px 0; width: min(84vw, 320px); transform: translateX(-110%); transition: transform 180ms ease; z-index: 40; }
+                    .staff-chat-sidebar.open { transform: translateX(0); }
+                    .staff-chat-overlay { display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.32); z-index: 30; }
+                    .staff-chat-mobile-toggle { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+                    .staff-chat-pane { min-height: calc(100vh - 220px); }
+                }
+            `}</style>
             <div className="page-header">
                 <h1 className="page-title">Chat</h1>
                 <p className="page-subtitle">Real-time messaging with colleagues and school admins</p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, height: 'calc(100vh - 200px)' }}>
-                <LiquidGlassPanel hover={false} style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
+            <button className="btn btn-glass staff-chat-mobile-toggle" onClick={() => setShowMobileChannels((current) => !current)}>
+                {showMobileChannels ? 'Close Chats' : 'Chats'}
+            </button>
+
+            {showMobileChannels && <div className="staff-chat-overlay" onClick={() => setShowMobileChannels(false)} />}
+
+            <div className="staff-chat-shell">
+                <LiquidGlassPanel hover={false} className={`staff-chat-sidebar ${showMobileChannels ? 'open' : ''}`} style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
                     <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.27)' }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: '#1D4ED8', marginBottom: 12 }}>Channels</div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -389,6 +409,7 @@ export default function StaffChat() {
                                     onClick={() => {
                                         setChannel(ch);
                                         setSelectedRecipient(null);
+                                        setShowMobileChannels(false);
                                     }}
                                     style={{
                                         display: 'flex',
@@ -477,6 +498,7 @@ export default function StaffChat() {
                                                     setSelectedRecipient(item);
                                                     setShowStaffPicker(false);
                                                     setSearchQuery('');
+                                                    setShowMobileChannels(false);
                                                     markThreadRead(getDmChannel(currentUserId, item.$id));
                                                 }}
                                                 style={{
@@ -527,10 +549,11 @@ export default function StaffChat() {
                         {threadSummaries.map((thread) => (
                             <button
                                 key={thread.channel}
-                                onClick={() => {
-                                    setSelectedRecipient(thread.partner);
-                                    markThreadRead(thread.channel);
-                                }}
+                                                onClick={() => {
+                                                    setSelectedRecipient(thread.partner);
+                                                    setShowMobileChannels(false);
+                                                    markThreadRead(thread.channel);
+                                                }}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
@@ -578,9 +601,12 @@ export default function StaffChat() {
                     </div>
                 </LiquidGlassPanel>
 
-                <LiquidGlassPanel hover={false} style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
+                <LiquidGlassPanel hover={false} className="staff-chat-pane" style={{ padding: 0, display: 'flex', flexDirection: 'column' }}>
                     <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <button className="btn btn-glass btn-sm staff-chat-mobile-toggle" onClick={() => setShowMobileChannels((current) => !current)}>
+                                Channels
+                            </button>
                             {isDirectMessage ? (
                                 <>
                                     <div style={{
@@ -645,16 +671,28 @@ export default function StaffChat() {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8, position: 'sticky', bottom: 0, background: 'rgba(8, 12, 24, 0.75)', backdropFilter: 'blur(8px)' }}>
-                        <input
+                    <div style={{ padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 10, position: 'sticky', bottom: 0, background: 'rgba(8, 12, 24, 0.75)', backdropFilter: 'blur(8px)' }}>
+                        <textarea
                             className="input"
                             placeholder={isDirectMessage ? `Message ${selectedRecipient?.firstName}...` : 'Type a message...'}
                             value={input}
                             onChange={(event) => setInput(event.target.value)}
-                            onKeyDown={(event) => event.key === 'Enter' && !event.shiftKey && send()}
-                            style={{ flex: 1 }}
+                            rows={3}
+                            style={{
+                                width: '100%',
+                                resize: 'vertical',
+                                border: 'none',
+                                outline: 'none',
+                                boxShadow: 'none',
+                                background: 'transparent',
+                                padding: '12px 0',
+                                color: '#fff',
+                                minHeight: 72,
+                            }}
                         />
-                        <button className="btn btn-primary" onClick={send} disabled={sending}>{sending ? 'Sending...' : 'Send'}</button>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button className="btn btn-primary" onClick={send} disabled={sending}>{sending ? 'Sending...' : 'Send'}</button>
+                        </div>
                     </div>
                 </LiquidGlassPanel>
             </div>

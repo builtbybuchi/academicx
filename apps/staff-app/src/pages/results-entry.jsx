@@ -29,7 +29,6 @@ export default function ResultsEntry() {
         const classes = [
             ...(portalData?.assignedClasses || []),
             ...(portalData?.formTeacherClasses || []),
-            ...((portalData?.students || []).map((item) => item.className)),
             ...((portalData?.subjects || []).map((item) => item.className)),
         ];
         return [...new Set(classes)].filter(Boolean);
@@ -46,6 +45,18 @@ export default function ResultsEntry() {
         if (!selectedClass || !selectedSubjectId) return [];
         return rows.filter((item) => item.className === selectedClass);
     }, [portalData, selectedClass, selectedSubjectId]);
+
+    const loadingSkeleton = (
+        <LiquidGlassPanel hover={false} style={{ padding: 20, overflow: 'hidden' }}>
+            <div style={{ display: 'grid', gap: 12 }}>
+                <div style={{ height: 22, width: '42%', borderRadius: 999, background: 'rgba(148,163,184,0.16)' }} />
+                <div style={{ height: 16, width: '58%', borderRadius: 999, background: 'rgba(148,163,184,0.12)' }} />
+                {[...Array(5)].map((_, index) => (
+                    <div key={index} style={{ height: 44, borderRadius: 12, background: 'rgba(148,163,184,0.1)' }} />
+                ))}
+            </div>
+        </LiquidGlassPanel>
+    );
 
     const refreshQueueInfo = () => {
         const pending = getQueue('results', queueContext).length;
@@ -211,9 +222,10 @@ export default function ResultsEntry() {
                 {syncInfo.lastSyncedAt ? ` Last sync: ${new Date(syncInfo.lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` : ''}
             </div>
 
-            <LiquidGlassPanel hover={false} style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="table-container">
-                    <table className="table">
+            {loading ? loadingSkeleton : (
+                <LiquidGlassPanel hover={false} style={{ padding: 0, overflow: 'hidden' }}>
+                    <div className="table-container">
+                        <table className="table">
                         <thead>
                             <tr>
                                 <th>Adm. No.</th><th>Student Name</th>
@@ -253,13 +265,14 @@ export default function ResultsEntry() {
                                 );
                             })}
                         </tbody>
-                    </table>
-                </div>
-                <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button className="btn btn-glass" disabled={saving || !selectedClass || !selectedSubjectId} onClick={() => saveResults('draft')}>{saving ? 'Saving...' : 'Save Draft'}</button>
-                    <button className="btn btn-primary" disabled={saving || !selectedClass || !selectedSubjectId} onClick={() => saveResults('submitted')}>{saving ? 'Submitting...' : 'Submit Results'}</button>
-                </div>
-            </LiquidGlassPanel>
+                        </table>
+                    </div>
+                    <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                        <button className="btn btn-glass" disabled={saving || !selectedClass || !selectedSubjectId} onClick={() => saveResults('draft')}>{saving ? 'Saving...' : 'Save Draft'}</button>
+                        <button className="btn btn-primary" disabled={saving || !selectedClass || !selectedSubjectId} onClick={() => saveResults('submitted')}>{saving ? 'Submitting...' : 'Submit Results'}</button>
+                    </div>
+                </LiquidGlassPanel>
+            )}
         </div>
     );
 }

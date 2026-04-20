@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { Info } from 'lucide-react';
 import DataTable from 'shared/components/DataTable.jsx';
 import Modal from 'shared/components/Modal.jsx';
 import StatsCard from 'shared/components/StatsCard.jsx';
 import { formatCurrency, formatDate } from 'shared/utils/index.js';
-import { getCurrentSchool, getSchoolStudents, getSchoolFees, getAcademicSessions, recordManualSchoolFeePayment } from 'shared/utils/api.js';
+import { getCurrentSchool, getSchoolStudents, getSchoolFees, getAcademicSessions, recordManualSchoolFeePayment, requestSchoolFeeWithdrawal } from 'shared/utils/api.js';
 
 const SchoolFeesManagement = () => {
     const [school, setSchool] = useState(null);
@@ -19,6 +20,8 @@ const SchoolFeesManagement = () => {
     const [paymentNotes, setPaymentNotes] = useState('');
     const [paymentMethod, setPaymentMethod] = useState('manual');
     const [processingPayment, setProcessingPayment] = useState(false);
+    const [withdrawing, setWithdrawing] = useState(false);
+    const [showWithdrawInfo, setShowWithdrawInfo] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -87,6 +90,67 @@ const SchoolFeesManagement = () => {
             paymentRate: totalStudents > 0 ? (paidStudents / totalStudents) * 100 : 0
         };
     }, [students, filteredFees, classFeeAmounts]);
+
+    const financialSummary = useMemo(() => {
+        const now = Date.now();
+        const cutoff = now - (48 * 60 * 60 * 1000);
+        let manualCollected = 0;
+        let platformCollected = 0;
+        let withdrawable = 0;
+
+        filteredFees.forEach((fee) => {
+            if (String(fee.status || '').toLowerCase() !== 'paid') return;
+            const amount = Number(fee.amountPaid || fee.amount || 0);
+            if (!Number.isFinite(amount) || amount <= 0) return;
+
+            const method = String(fee.paymentMethod || '').toLowerCase();
+            const isManual = method === 'manual' || method === 'cash' || method === 'bank_transfer';
+
+            if (isManual) {
+                manualCollected += amount;
+                return;
+            }
+
+            platformCollected += amount;
+
+            const paidAt = new Date(String(fee.paidAt || fee.lastPaymentAt || ''));
+            if (!Number.isNaN(paidAt.getTime()) && paidAt.getTime() >= cutoff) {
+                withdrawable += amount;
+            }
+        });
+
+        let lastRequestedAt = '';
+        try {
+            const schoolData = typeof school?.data === 'string' ? JSON.parse(school.data || '{}') : (school?.data || {});
+            lastRequestedAt = String(schoolData?.withdrawal?.lastRequestedAt || '');
+        } catch {
+            lastRequestedAt = '';
+        }
+
+        const lastRequestedMs = lastRequestedAt ? new Date(lastRequestedAt).getTime() : 0;
+        const canWithdrawByTime = !lastRequestedAt || Number.isNaN(lastRequestedMs) || (now - lastRequestedMs) >= (7 * 24 * 60 * 60 * 1000);
+
+        return {
+            manualCollected: Number(manualCollected.toFixed(2)),
+            platformCollected: Number(platformCollected.toFixed(2)),
+            withdrawable: Number(withdrawable.toFixed(2)),
+            canWithdrawByTime,
+            lastRequestedAt,
+        };
+    }, [filteredFees, school]);
+
+    const handleWithdraw = async () => {
+        setWithdrawing(true);
+        try {
+            const result = await requestSchoolFeeWithdrawal({});
+            alert(`Withdrawal request submitted for ${formatCurrency(result.amount || 0)}.`);
+            await loadData();
+        } catch (error) {
+            alert(error.message || 'Withdrawal request failed.');
+        } finally {
+            setWithdrawing(false);
+        }
+    };
 
     const handleManualPayment = async () => {
         if (!selectedStudent || !manualPaymentAmount || !selectedTerm || !selectedSession) return;
@@ -307,6 +371,58 @@ const SchoolFeesManagement = () => {
                 .school-fees-page .fees-action-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
                 .school-fees-page .fees-export-wrap { display: flex; align-items: flex-end; }
                 .school-fees-page .modal { width: min(92vw, 560px); max-height: 92vh; overflow: auto; }
+                .school-fees-page .fund-card {
+                    position: relative;
+                    border: 1px solid var(--color-gray-200);
+                    border-radius: 14px;
+                    background: #fff;
+                    padding: 16px;
+                    display: grid;
+                    gap: 8px;
+                }
+                .school-fees-page .fund-label { font-size: 12px; color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.05em; }
+                .school-fees-page .fund-value { font-size: 24px; font-weight: 800; color: var(--color-gray-900); }
+                .school-fees-page .fund-meta { font-size: 12px; color: var(--color-gray-500); }
+                .school-fees-page .fund-info-icon {
+                    position: absolute;
+                    right: 12px;
+                    top: 12px;
+                    width: 24px;
+                    height: 24px;
+                    border-radius: 50%;
+                    border: 1px solid var(--color-gray-300);
+                    color: var(--color-gray-500);
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    background: #fff;
+                }
+                .school-fees-page .fund-tooltip {
+                    position: absolute;
+                    right: 8px;
+                    top: 44px;
+                    z-index: 10;
+                    width: min(260px, 90vw);
+                    background: #111827;
+                    color: #fff;
+                    border-radius: 10px;
+                    padding: 10px 12px;
+                    font-size: 12px;
+                    line-height: 1.45;
+                    opacity: 0;
+                    pointer-events: none;
+                    transform: translateY(-4px);
+                    transition: opacity 0.18s ease, transform 0.18s ease;
+                }
+                .school-fees-page .fund-info-icon:hover + .fund-tooltip,
+                .school-fees-page .fund-info-icon:focus + .fund-tooltip,
+                .school-fees-page .fund-tooltip.show,
+                .school-fees-page .fund-tooltip:hover {
+                    opacity: 1;
+                    pointer-events: auto;
+                    transform: translateY(0);
+                }
                 @media (max-width: 768px) {
                     .school-fees-page .grid.grid-4,
                     .school-fees-page .grid.grid-3,
@@ -396,6 +512,43 @@ const SchoolFeesManagement = () => {
                     value={`${(stats.paymentRate || 0).toFixed(1)}%`} 
                     color="#06B6D4" 
                 />
+            </div>
+
+            <div className="grid grid-3" style={{ marginBottom: 24 }}>
+                <div className="fund-card">
+                    <div className="fund-label">Manually Collected</div>
+                    <div className="fund-value">{formatCurrency(financialSummary.manualCollected)}</div>
+                    <div className="fund-meta">Cash and transfer records from this page.</div>
+                </div>
+                <div className="fund-card">
+                    <div className="fund-label">Platform Payments</div>
+                    <div className="fund-value">{formatCurrency(financialSummary.platformCollected)}</div>
+                    <div className="fund-meta">Payments collected via the school website checkout.</div>
+                </div>
+                <div className="fund-card">
+                    <button className="fund-info-icon" type="button" aria-label="Withdrawal info" onClick={() => setShowWithdrawInfo((current) => !current)}>
+                        <Info size={14} />
+                    </button>
+                    <div className={`fund-tooltip ${showWithdrawInfo ? 'show' : ''}`}>
+                        Fees can only be withdrawn once every week and only fees paid in the last 48 hours can be withdrawn.
+                    </div>
+                    <div className="fund-label">Available For Withdrawal</div>
+                    <div className="fund-value">{formatCurrency(financialSummary.withdrawable)}</div>
+                    <div className="fund-meta">
+                        {financialSummary.lastRequestedAt
+                            ? `Last request: ${new Date(financialSummary.lastRequestedAt).toLocaleString()}`
+                            : 'No withdrawal request submitted yet.'}
+                    </div>
+                    <div>
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleWithdraw}
+                            disabled={withdrawing || !financialSummary.canWithdrawByTime || financialSummary.withdrawable <= 0}
+                        >
+                            {withdrawing ? 'Requesting...' : 'Withdraw'}
+                        </button>
+                    </div>
+                </div>
             </div>
 
             {/* WhatsApp Reminder Notice */}

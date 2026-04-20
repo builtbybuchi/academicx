@@ -447,6 +447,9 @@ export default function Website() {
                     </LiquidGlassPanel>
 
                     <LiquidGlassPanel title="Visual Template" style={{ marginBottom: 20 }}>
+                        <p style={{ fontSize: 13, opacity: 0.8, marginBottom: 16 }}>
+                            <b>Select a design template for your website.</b>
+                        </p>
                         <div
                             style={{
                                 display: 'grid',

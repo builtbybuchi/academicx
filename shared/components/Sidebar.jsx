@@ -18,6 +18,7 @@ export default function Sidebar({
 }) {
     const initials = userName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 1024);
+    const [moreOpen, setMoreOpen] = useState(false);
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 1024);
@@ -26,6 +27,8 @@ export default function Sidebar({
     }, []);
 
     const flatItems = getFlatItems(menuGroups);
+    const mobilePrimaryItems = flatItems.slice(0, 4);
+    const mobileOverflowItems = flatItems.slice(4);
 
     return (
         <>
@@ -67,31 +70,45 @@ export default function Sidebar({
                 </nav>
 
                 <div className="sidebar-footer">
-                    <div
+                    <button
+                        type="button"
                         className="sidebar-user-info"
                         style={{ cursor: onUserClick ? 'pointer' : 'default' }}
                         onClick={() => onUserClick && onUserClick()}
                     >
                         <div className="sidebar-avatar">{initials}</div>
-                        <div>
+                        <div style={{ textAlign: 'left' }}>
                             <div className="sidebar-username">{userName}</div>
                             <div className="sidebar-role">{userRole}</div>
                         </div>
-                    </div>
-                    {onSignOut && (
-                        <button
-                            className="btn btn-danger btn-sm sidebar-signout-btn"
-                            onClick={onSignOut}
-                        >
-                            <LogOut size={14} /> Sign Out
-                        </button>
-                    )}
+                        {onSignOut && (
+                            <span
+                                className="sidebar-inline-signout"
+                                title="Sign out"
+                                role="button"
+                                tabIndex={0}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onSignOut();
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        onSignOut();
+                                    }
+                                }}
+                            >
+                                <LogOut size={14} />
+                            </span>
+                        )}
+                    </button>
                 </div>
             </aside>
 
             {/* Mobile Bottom Tab Navigation */}
             <nav className="mobile-bottom-tabs">
-                {flatItems.map((item) => (
+                {mobilePrimaryItems.map((item) => (
                     <button
                         key={item.id}
                         className={`mobile-tab-item ${activeId === item.id ? 'active' : ''}`}
@@ -101,7 +118,51 @@ export default function Sidebar({
                         <span className="mobile-tab-label">{item.label}</span>
                     </button>
                 ))}
+                {mobileOverflowItems.length > 0 && (
+                    <button
+                        className={`mobile-tab-item ${mobileOverflowItems.some((item) => item.id === activeId) ? 'active' : ''}`}
+                        onClick={() => setMoreOpen((current) => !current)}
+                    >
+                        <div className="mobile-tab-icon">...</div>
+                        <span className="mobile-tab-label">More</span>
+                    </button>
+                )}
             </nav>
+
+            {moreOpen && (
+                <div className="mobile-more-overlay" onClick={() => setMoreOpen(false)}>
+                    <div className="mobile-more-sheet" onClick={(event) => event.stopPropagation()}>
+                        <div className="mobile-more-header">More Pages</div>
+                        <div className="mobile-more-list">
+                            {mobileOverflowItems.map((item) => (
+                                <button
+                                    key={item.id}
+                                    className={`mobile-more-item ${activeId === item.id ? 'active' : ''}`}
+                                    onClick={() => {
+                                        onNavigate(item.id);
+                                        setMoreOpen(false);
+                                    }}
+                                >
+                                    <span className="mobile-more-icon">{item.icon}</span>
+                                    <span>{item.label}</span>
+                                </button>
+                            ))}
+                            {onSignOut && (
+                                <button
+                                    className="mobile-more-item danger"
+                                    onClick={() => {
+                                        onSignOut();
+                                        setMoreOpen(false);
+                                    }}
+                                >
+                                    <span className="mobile-more-icon"><LogOut size={16} /></span>
+                                    <span>Sign Out</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <style>{`
                 /* Desktop Sidebar Styles (White Theme) */
@@ -156,11 +217,30 @@ export default function Sidebar({
                 .sidebar-nav-icon { width: 22px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
                 
                 .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--color-gray-100); }
-                .sidebar-user-info { display: flex; align-items: center; gap: 12px; }
-                .sidebar-signout-btn {
+                .sidebar-user-info {
                     width: 100%;
-                    margin-top: 12px;
+                    border: none;
+                    background: transparent;
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 6px 8px;
+                    border-radius: 12px;
+                    justify-content: flex-start;
+                }
+                .sidebar-user-info:hover {
+                    background: var(--color-gray-50);
+                }
+                .sidebar-inline-signout {
+                    margin-left: auto;
+                    display: inline-flex;
+                    align-items: center;
                     justify-content: center;
+                    width: 28px;
+                    height: 28px;
+                    border-radius: 50%;
+                    background: #FEE2E2;
+                    color: #B91C1C;
                 }
                 .sidebar-avatar {
                     width: 36px; height: 36px; border-radius: 50%;
@@ -187,7 +267,7 @@ export default function Sidebar({
                     white-space: nowrap;
                 }
                 .mobile-tab-item {
-                    min-width: 88px;
+                    min-width: 72px;
                     display: flex; flex-direction: column; align-items: center; justify-content: center;
                     background: transparent; border: none; padding: 6px; cursor: pointer;
                     color: var(--color-gray-400); transition: color 0.2s;
@@ -197,6 +277,68 @@ export default function Sidebar({
                 .mobile-tab-icon { font-size: 20px; margin-bottom: 4px; transition: transform 0.2s; }
                 .mobile-tab-item.active .mobile-tab-icon { transform: translateY(-2px); }
                 .mobile-tab-label { font-size: 10px; font-weight: 600; font-family: var(--font-heading); }
+
+                .mobile-more-overlay {
+                    position: fixed;
+                    inset: 0;
+                    z-index: 1100;
+                    background: rgba(15, 23, 42, 0.25);
+                    display: flex;
+                    align-items: flex-end;
+                    justify-content: center;
+                }
+                .mobile-more-sheet {
+                    width: min(96vw, 460px);
+                    background: #fff;
+                    border: 1px solid var(--color-gray-200);
+                    border-bottom: none;
+                    border-radius: 16px 16px 0 0;
+                    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
+                    padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+                    max-height: 72vh;
+                    overflow: auto;
+                }
+                .mobile-more-header {
+                    font-family: var(--font-heading);
+                    font-size: 12px;
+                    font-weight: 700;
+                    color: var(--color-gray-500);
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                    padding: 8px 10px;
+                }
+                .mobile-more-list {
+                    display: grid;
+                    gap: 6px;
+                }
+                .mobile-more-item {
+                    border: 1px solid var(--color-gray-200);
+                    background: #fff;
+                    border-radius: 10px;
+                    padding: 10px 12px;
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: var(--color-gray-700);
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    text-align: left;
+                }
+                .mobile-more-item.active {
+                    border-color: var(--color-primary-300);
+                    background: var(--color-primary-50);
+                    color: var(--color-primary-700);
+                }
+                .mobile-more-item.danger {
+                    border-color: #FECACA;
+                    background: #FEF2F2;
+                    color: #B91C1C;
+                }
+                .mobile-more-icon {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                }
 
                 @media (max-width: 1024px) {
                     .desktop-sidebar { display: none; }

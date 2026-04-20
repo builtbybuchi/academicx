@@ -904,6 +904,14 @@ export async function recordManualSchoolFeePayment(payload) {
     return invokeBackendFunction('recordManualSchoolFeePayment', payload);
 }
 
+export async function verifyAndSaveAdminBankDetails(payload) {
+    return invokeBackendFunction('verifyAndSaveAdminBankDetails', payload);
+}
+
+export async function requestSchoolFeeWithdrawal(payload = {}) {
+    return invokeBackendFunction('requestSchoolFeeWithdrawal', payload);
+}
+
 export async function updateSchoolBackend(data) {
     return invokeBackendFunction('updateSchool', data);
 }

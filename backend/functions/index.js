@@ -1136,6 +1136,28 @@ const actions = {
                 status: updates.status,
             };
 
+            const normalizeList = (value) => {
+                if (Array.isArray(value)) {
+                    return value.map((item) => String(item || '').trim()).filter(Boolean);
+                }
+                if (typeof value === 'string') {
+                    try {
+                        const parsed = JSON.parse(value);
+                        if (Array.isArray(parsed)) {
+                            return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+                        }
+                    } catch {
+                        return value.split(',').map((item) => String(item || '').trim()).filter(Boolean);
+                    }
+                }
+                return [];
+            };
+
+            const assignedClasses = normalizeList(updates.assignedClasses);
+            const assignedSubjects = normalizeList(updates.assignedSubjects);
+            const formTeacherClasses = normalizeList(updates.formTeacherClasses || updates.formTeacherClass);
+            const department = Array.isArray(updates.department) ? updates.department : (typeof updates.department === 'string' ? updates.department.split(',') : []);
+
             const clean = Object.fromEntries(Object.entries(allowed).filter(([, value]) => value !== undefined));
             const updatedUser = await db.updateDocument(DATABASE_ID, COLLECTIONS.USERS.id, targetUserId, clean);
 
@@ -1152,7 +1174,7 @@ const actions = {
                 }
             }
 
-            if (targetDoc.role === 'staff' && (clean.firstName || clean.lastName || clean.profileImage || clean.dateOfBirth !== undefined)) {
+            if (targetDoc.role === 'staff' && (clean.firstName || clean.lastName || clean.profileImage || clean.dateOfBirth !== undefined || assignedClasses.length > 0 || assignedSubjects.length > 0 || formTeacherClasses.length > 0 || department.length > 0)) {
                 const staff = await getStaffDocByUser(db, targetDoc.$id);
                 if (staff) {
                     await db.updateDocument(DATABASE_ID, COLLECTIONS.STAFF.id, staff.$id, {
@@ -1160,11 +1182,153 @@ const actions = {
                         ...(clean.lastName ? { lastName: clean.lastName } : {}),
                         ...(clean.dateOfBirth !== undefined ? { dateOfBirth: clean.dateOfBirth || '' } : {}),
                         ...(clean.profileImage ? { profileImage: clean.profileImage } : {}),
+                        ...(assignedClasses.length > 0 ? { assignedClasses: JSON.stringify(assignedClasses) } : {}),
+                        ...(assignedSubjects.length > 0 ? { assignedSubjects: JSON.stringify(assignedSubjects) } : {}),
+                        ...(formTeacherClasses.length > 0 ? {
+                            formTeacherClass: formTeacherClasses[0] || '',
+                            formTeacherClasses: JSON.stringify(formTeacherClasses),
+                        } : {}),
+                        ...(department.length > 0 ? { department: department.map((item) => String(item || '').trim()).filter(Boolean).join(', ') } : {}),
                     });
                 }
             }
 
             return { success: true, data: updatedUser };
+        },
+    },
+
+    verifyAndSaveAdminBankDetails: {
+        roles: ['admin', 'super_admin'],
+        handler: async ({ authId, payload }) => {
+            const db = getDb();
+            const user = await getUserByAuthId(authId);
+            if (!user || !user.schoolId) {
+                return { success: false, error: 'Authenticated user profile not found.' };
+            }
+
+            const bankCode = String(payload.bankCode || '').trim();
+            const bankName = String(payload.bankName || '').trim();
+            const accountNumber = String(payload.accountNumber || '').trim();
+
+            if (!bankCode || !accountNumber) {
+                return { success: false, error: 'bankCode and accountNumber are required.' };
+            }
+
+            const squad = require('./payment-squad');
+            const verification = await squad.verifyBankAccount({ bankCode, accountNumber });
+            if (!verification.success) {
+                return { success: false, error: verification.error || 'Unable to verify account details with Squad.' };
+            }
+
+            const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
+            const schoolData = parseJson(school.data || '{}', {});
+            const accountName = String(verification.data?.accountName || payload.accountName || '').trim();
+
+            if (!accountName) {
+                return { success: false, error: 'Account verification did not return a valid account name.' };
+            }
+
+            const nextData = {
+                ...schoolData,
+                bankDetails: {
+                    bankCode,
+                    bankName,
+                    accountNumber,
+                    accountName,
+                    verifiedAt: nowIso(),
+                    verifiedBy: user.$id,
+                },
+            };
+
+            await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, school.$id, {
+                data: JSON.stringify(nextData),
+            });
+
+            return {
+                success: true,
+                data: {
+                    bankCode,
+                    bankName,
+                    accountNumber,
+                    accountName,
+                },
+            };
+        },
+    },
+
+    requestSchoolFeeWithdrawal: {
+        roles: ['admin', 'super_admin'],
+        handler: async ({ authId }) => {
+            const db = getDb();
+            const user = await getUserByAuthId(authId);
+            if (!user || !user.schoolId) {
+                return { success: false, error: 'Authenticated user profile not found.' };
+            }
+
+            const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, user.schoolId);
+            const schoolData = parseJson(school.data || '{}', {});
+            const withdrawalMeta = schoolData.withdrawal || {};
+            const now = new Date();
+
+            if (withdrawalMeta.lastRequestedAt) {
+                const last = new Date(withdrawalMeta.lastRequestedAt);
+                const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+                if (now.getTime() - last.getTime() < sevenDaysMs) {
+                    return {
+                        success: false,
+                        error: 'Fees can only be withdrawn once every week.',
+                        data: { lastRequestedAt: withdrawalMeta.lastRequestedAt },
+                    };
+                }
+            }
+
+            const cutoff = new Date(now.getTime() - (48 * 60 * 60 * 1000));
+            const feeRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOL_FEES.id, [
+                Query.equal('schoolId', user.schoolId),
+                Query.equal('status', 'paid'),
+                Query.limit(1000),
+            ]);
+
+            const eligibleFees = feeRows.documents.filter((fee) => {
+                const paidAtRaw = String(fee.paidAt || fee.lastPaymentAt || '').trim();
+                if (!paidAtRaw) return false;
+                const paidAt = new Date(paidAtRaw);
+                if (Number.isNaN(paidAt.getTime())) return false;
+
+                const method = String(fee.paymentMethod || '').toLowerCase();
+                const isManual = method === 'manual' || method === 'cash' || method === 'bank_transfer';
+                if (isManual) return false;
+
+                return paidAt.getTime() >= cutoff.getTime();
+            });
+
+            const availableAmount = eligibleFees.reduce((sum, fee) => sum + Number(fee.amountPaid || fee.amount || 0), 0);
+            if (!Number.isFinite(availableAmount) || availableAmount <= 0) {
+                return { success: false, error: 'No eligible fees are available for withdrawal right now.' };
+            }
+
+            const nextData = {
+                ...schoolData,
+                withdrawal: {
+                    ...withdrawalMeta,
+                    lastRequestedAt: nowIso(),
+                    lastRequestedAmount: Number(availableAmount.toFixed(2)),
+                    lastRequestedBy: user.$id,
+                },
+            };
+
+            await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, school.$id, {
+                data: JSON.stringify(nextData),
+            });
+
+            return {
+                success: true,
+                data: {
+                    amount: Number(availableAmount.toFixed(2)),
+                    eligibleCount: eligibleFees.length,
+                    requestedAt: nowIso(),
+                },
+            };
         },
     },
 
@@ -2198,7 +2362,7 @@ const actions = {
             const assignedSubjectByName = new Set(assignedSubjectValues.map((value) => value.toLowerCase()));
 
             const filteredSubjects = assignedSubjectValues.length === 0
-                ? subjectList
+                ? []
                 : subjectList.filter((subject) => (
                     assignedSubjectById.has(String(subject.$id || ''))
                     || assignedSubjectByName.has(String(subject.name || '').toLowerCase())

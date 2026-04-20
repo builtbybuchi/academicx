@@ -18,6 +18,98 @@ import {
     updateProfile,
 } from 'shared/utils/api.js';
 
+function parseList(value) {
+    if (Array.isArray(value)) {
+        return value.map((item) => String(item || '').trim()).filter(Boolean);
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+        try {
+            const parsed = JSON.parse(value);
+            if (Array.isArray(parsed)) {
+                return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+            }
+        } catch {
+            return value.split(',').map((item) => String(item || '').trim()).filter(Boolean);
+        }
+    }
+
+    return [];
+}
+
+function MultiSelectChips({ label, value = [], options = [], onChange, placeholder, helperText }) {
+    const selected = Array.isArray(value) ? value : [];
+    const toggleValue = (nextValue) => {
+        const exists = selected.includes(nextValue);
+        onChange(exists ? selected.filter((item) => item !== nextValue) : [...selected, nextValue]);
+    };
+
+    return (
+        <div style={{ marginBottom: 16 }}>
+            <label className="input-label">{label}</label>
+            <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 8,
+                padding: 10,
+                border: '1px solid rgba(148, 163, 184, 0.35)',
+                borderRadius: 12,
+                background: 'rgba(255,255,255,0.72)',
+                maxHeight: 220,
+                overflow: 'auto',
+            }}>
+                {options.length === 0 ? (
+                    <div style={{ color: 'var(--color-gray-500)', fontSize: 13 }}>{placeholder || 'No options available'}</div>
+                ) : options.map((option) => {
+                    const active = selected.includes(option.value);
+                    return (
+                        <button
+                            key={option.value}
+                            type="button"
+                            className={active ? 'btn btn-primary btn-sm' : 'btn btn-glass btn-sm'}
+                            onClick={() => toggleValue(option.value)}
+                            style={{ whiteSpace: 'nowrap' }}
+                        >
+                            {active ? '✓ ' : ''}{option.label}
+                        </button>
+                    );
+                })}
+            </div>
+            {selected.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {selected.map((item) => (
+                        <span key={item} className="badge badge-primary" style={{ cursor: 'pointer' }} onClick={() => toggleValue(item)}>
+                            {item} ×
+                        </span>
+                    ))}
+                </div>
+            )}
+            {helperText && <div style={{ fontSize: 12, color: 'var(--color-gray-500)', marginTop: 6 }}>{helperText}</div>}
+        </div>
+    );
+}
+
+function ProfileSkeleton() {
+    return (
+        <div style={{ display: 'grid', gap: 16 }}>
+            <div style={{ height: 24, width: '38%', borderRadius: 999, background: 'linear-gradient(90deg, rgba(148,163,184,0.18), rgba(148,163,184,0.32), rgba(148,163,184,0.18))', backgroundSize: '200% 100%', animation: 'pulseX 1.2s ease-in-out infinite' }} />
+            <div style={{ height: 18, width: '56%', borderRadius: 999, background: 'linear-gradient(90deg, rgba(148,163,184,0.12), rgba(148,163,184,0.22), rgba(148,163,184,0.12))', backgroundSize: '200% 100%', animation: 'pulseX 1.2s ease-in-out infinite' }} />
+            <div className="card" style={{ padding: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    {[...Array(4)].map((_, index) => (
+                        <div key={index} style={{ height: 88, borderRadius: 16, background: 'linear-gradient(90deg, rgba(148,163,184,0.12), rgba(148,163,184,0.2), rgba(148,163,184,0.12))', backgroundSize: '200% 100%', animation: 'pulseX 1.2s ease-in-out infinite' }} />
+                    ))}
+                </div>
+            </div>
+            <div className="card" style={{ padding: 16 }}>
+                {[...Array(6)].map((_, index) => (
+                    <div key={index} style={{ height: 16, borderRadius: 999, marginBottom: index === 5 ? 0 : 12, width: `${92 - index * 6}%`, background: 'linear-gradient(90deg, rgba(148,163,184,0.12), rgba(148,163,184,0.2), rgba(148,163,184,0.12))', backgroundSize: '200% 100%', animation: 'pulseX 1.2s ease-in-out infinite' }} />
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export default function Enrollment() {
     const { schoolId, profile } = useAuth();
     const toast = useToast();
@@ -33,32 +125,81 @@ export default function Enrollment() {
     const [assigningByClass, setAssigningByClass] = useState({});
     const [classes, setClasses] = useState([]);
     const [subjects, setSubjects] = useState([]);
+    const [loadedTabs, setLoadedTabs] = useState({ students: false, staff: false, form_teachers: false });
+    const [tabLoading, setTabLoading] = useState({ students: true, staff: false, form_teachers: false });
     const [saving, setSaving] = useState(false);
     const [studentForm, setStudentForm] = useState({ firstName: '', lastName: '', className: '', section: 'A', gender: '', parentName: '', parentEmail: '', parentPhone: '', dateOfBirth: '', allergies: '' });
     const [staffForm, setStaffForm] = useState({ firstName: '', lastName: '', email: '', password: '', department: [], staffType: 'academic', gender: '', dateOfBirth: '', canMarkStaffAttendance: false });
-    const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '', dateOfBirth: '', allergies: '' });
+    const [editForm, setEditForm] = useState({ firstName: '', lastName: '', phone: '', dateOfBirth: '', allergies: '', assignedClasses: [], assignedSubjects: [] });
 
-    async function loadData() {
+    async function loadTabData(targetTab = tab, force = false) {
         if (!schoolId) return;
-        const [studentRes, staffRes, classRes, userRes, formTeacherRes, subjectRes] = await Promise.all([
-            listStudents(schoolId),
-            listStaff(schoolId),
-            listClasses(schoolId),
-            listUsers(schoolId),
-            listFormTeachers(schoolId),
-            listSubjects(schoolId),
-        ]);
-        setStudents(studentRes.documents);
-        setStaff(staffRes.documents);
-        setClasses(classRes.documents);
-        setUsers(userRes.documents);
-        setFormTeacherRows(Array.isArray(formTeacherRes) ? formTeacherRes : []);
-        setSubjects(subjectRes.documents || []);
+
+        if (!force && loadedTabs[targetTab]) {
+            return;
+        }
+
+        setTabLoading((current) => ({ ...current, [targetTab]: true }));
+        try {
+            if (targetTab === 'students') {
+                const [studentRes, classRes, userRes] = await Promise.all([
+                    listStudents(schoolId),
+                    listClasses(schoolId),
+                    listUsers(schoolId),
+                ]);
+                setStudents(studentRes.documents || []);
+                setClasses(classRes.documents || []);
+                setUsers(userRes.documents || []);
+            }
+
+            if (targetTab === 'staff') {
+                const [staffRes, classRes, userRes, subjectRes] = await Promise.all([
+                    listStaff(schoolId),
+                    listClasses(schoolId),
+                    listUsers(schoolId),
+                    listSubjects(schoolId),
+                ]);
+                setStaff(staffRes.documents || []);
+                setClasses(classRes.documents || []);
+                setUsers(userRes.documents || []);
+                setSubjects(subjectRes.documents || []);
+            }
+
+            if (targetTab === 'form_teachers') {
+                const [formTeacherRes, staffRes, classRes] = await Promise.all([
+                    listFormTeachers(schoolId),
+                    listStaff(schoolId),
+                    listClasses(schoolId),
+                ]);
+                setFormTeacherRows(Array.isArray(formTeacherRes) ? formTeacherRes : []);
+                setStaff(staffRes.documents || []);
+                setClasses(classRes.documents || []);
+            }
+
+            setLoadedTabs((current) => ({ ...current, [targetTab]: true }));
+        } catch (error) {
+            toast({ type: 'error', title: 'Load failed', message: error.message || 'Unable to load profile data.' });
+        } finally {
+            setTabLoading((current) => ({ ...current, [targetTab]: false }));
+        }
     }
 
     useEffect(() => {
-        loadData();
+        setLoadedTabs({ students: false, staff: false, form_teachers: false });
+        setTabLoading({ students: false, staff: false, form_teachers: false });
+        setStudents([]);
+        setStaff([]);
+        setUsers([]);
+        setFormTeacherRows([]);
+        setClasses([]);
+        setSubjects([]);
     }, [schoolId]);
+
+    useEffect(() => {
+        if (schoolId) {
+            loadTabData(tab);
+        }
+    }, [schoolId, tab]);
 
     const classOptions = useMemo(() => {
         const dbClasses = classes.map((item) => item.name);
@@ -80,20 +221,22 @@ export default function Enrollment() {
     const staffRows = useMemo(() => staff.map((item) => {
         const user = usersById[item.userId] || {};
         const formTeacherClasses = (() => {
-            try {
-                const parsed = JSON.parse(item.formTeacherClasses || '[]');
-                return Array.isArray(parsed) ? parsed : [];
-            } catch {
-                return item.formTeacherClass ? [item.formTeacherClass] : [];
-            }
+            const parsed = parseList(item.formTeacherClasses);
+            return parsed.length > 0 ? parsed : parseList(item.formTeacherClass);
         })();
+        const assignedClasses = parseList(item.assignedClasses);
+        const assignedSubjects = parseList(item.assignedSubjects);
         return {
             ...item,
             dateOfBirth: user.dateOfBirth || item.dateOfBirth || '',
             phone: user.phone || '',
             formTeacherClasses,
+            assignedClasses,
+            assignedSubjects,
         };
     }), [staff, usersById]);
+
+    const currentTabLoading = !loadedTabs[tab] || tabLoading[tab];
 
     const studentCols = useMemo(() => ([
         { key: 'admissionNumber', label: 'Adm. No.' },
@@ -150,7 +293,7 @@ export default function Enrollment() {
                                 enabled: !row.canMarkStaffAttendance,
                             });
                             toast({ type: 'success', title: 'Updated', message: `${row.firstName} ${row.lastName} attendance role updated.` });
-                            await loadData();
+                                await loadTabData('staff', true);
                         } catch (error) {
                             toast({ type: 'error', title: 'Update failed', message: error.message });
                         }
@@ -179,6 +322,8 @@ export default function Enrollment() {
                             phone: row.phone || '',
                             dateOfBirth: row.dateOfBirth || '',
                             allergies: '',
+                            assignedClasses: row.assignedClasses || [],
+                            assignedSubjects: row.assignedSubjects || [],
                         });
                         setEditOpen(true);
                     }}>Edit</button>
@@ -225,7 +370,7 @@ export default function Enrollment() {
                             try {
                                 await assignFormTeacher({ schoolId, classId: row.$id, staffDocId });
                                 toast({ type: 'success', title: 'Assigned', message: `Form teacher updated for ${row.name}.` });
-                                await loadData();
+                                await loadTabData('form_teachers', true);
                             } catch (error) {
                                 toast({ type: 'error', title: 'Assignment failed', message: error.message });
                             }
@@ -274,7 +419,7 @@ export default function Enrollment() {
             }
 
             setModalOpen(false);
-            await loadData();
+            await loadTabData(tab, true);
         } catch (error) {
             toast({ type: 'error', title: 'Save failed', message: error.message });
         } finally {
@@ -295,11 +440,14 @@ export default function Enrollment() {
                     phone: editForm.phone,
                     dateOfBirth: editForm.dateOfBirth,
                     allergies: selectedRecord.recordType === 'student' ? editForm.allergies : undefined,
+                    assignedClasses: selectedRecord.recordType === 'staff' ? editForm.assignedClasses : undefined,
+                    assignedSubjects: selectedRecord.recordType === 'staff' ? editForm.assignedSubjects : undefined,
+                    department: selectedRecord.recordType === 'staff' ? editForm.assignedSubjects : undefined,
                 },
             });
             toast({ type: 'success', title: 'Profile updated', message: `${editForm.firstName} ${editForm.lastName} was updated.` });
             setEditOpen(false);
-            await loadData();
+            await loadTabData(tab, true);
         } catch (error) {
             toast({ type: 'error', title: 'Update failed', message: error.message });
         } finally {
@@ -325,9 +473,17 @@ export default function Enrollment() {
                 <button className={`btn ${tab === 'form_teachers' ? 'btn-primary' : 'btn-glass'} btn-sm`} onClick={() => setTab('form_teachers')}>Form Teachers</button>
             </div>
 
-            {tab === 'students' && <DataTable columns={studentCols} data={studentRows} />}
-            {tab === 'staff' && <DataTable columns={staffCols} data={staffRows} />}
-            {tab === 'form_teachers' && <DataTable columns={formTeacherCols} data={formTeacherRows} emptyMessage="No classes found for this school." />}
+            {currentTabLoading ? (
+                <div className="card" style={{ padding: 20 }}>
+                    <ProfileSkeleton />
+                </div>
+            ) : (
+                <>
+                    {tab === 'students' && <DataTable columns={studentCols} data={studentRows} />}
+                    {tab === 'staff' && <DataTable columns={staffCols} data={staffRows} />}
+                    {tab === 'form_teachers' && <DataTable columns={formTeacherCols} data={formTeacherRows} emptyMessage="No classes found for this school." />}
+                </>
+            )}
 
             <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={tab === 'students' ? 'Enroll Student' : 'Add Staff'} footer={<><button className="btn btn-glass" onClick={() => setModalOpen(false)}>Cancel</button><button className="btn btn-primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button></>}>
                 {tab === 'students' ? (
@@ -397,6 +553,8 @@ export default function Enrollment() {
                         {selectedRecord.recordType === 'student' && <div><strong>Allergies:</strong> {selectedRecord.allergies || '-'}</div>}
                         {selectedRecord.recordType === 'student' && <div><strong>Parent Contact:</strong> {selectedRecord.parentEmail || selectedRecord.parentPhone || '-'}</div>}
                         {selectedRecord.recordType === 'staff' && <div><strong>Form Classes:</strong> {(selectedRecord.formTeacherClasses || []).length ? selectedRecord.formTeacherClasses.join(', ') : (selectedRecord.formTeacherClass || '-')}</div>}
+                        {selectedRecord.recordType === 'staff' && <div><strong>Assigned Classes:</strong> {(selectedRecord.assignedClasses || []).length ? selectedRecord.assignedClasses.join(', ') : '-'}</div>}
+                        {selectedRecord.recordType === 'staff' && <div><strong>Assigned Subjects:</strong> {(selectedRecord.assignedSubjects || []).length ? selectedRecord.assignedSubjects.join(', ') : '-'}</div>}
                     </div>
                 )}
             </Modal>
@@ -413,6 +571,26 @@ export default function Enrollment() {
                 <FormField label="Date of Birth" type="date" value={editForm.dateOfBirth} onChange={(value) => setEditForm((current) => ({ ...current, dateOfBirth: value }))} />
                 {selectedRecord?.recordType === 'student' && (
                     <FormField label="Allergies" type="textarea" rows={3} value={editForm.allergies} onChange={(value) => setEditForm((current) => ({ ...current, allergies: value }))} />
+                )}
+                {selectedRecord?.recordType === 'staff' && (
+                    <>
+                        <MultiSelectChips
+                            label="Classes Handled"
+                            value={editForm.assignedClasses}
+                            options={classOptions}
+                            onChange={(value) => setEditForm((current) => ({ ...current, assignedClasses: value }))}
+                            placeholder="No classes available"
+                            helperText="Select every class this teacher can handle."
+                        />
+                        <MultiSelectChips
+                            label="Subjects Handled"
+                            value={editForm.assignedSubjects}
+                            options={[...new Set(subjects.map((item) => item.name).filter(Boolean))].sort().map((name) => ({ value: name, label: name }))}
+                            onChange={(value) => setEditForm((current) => ({ ...current, assignedSubjects: value }))}
+                            placeholder="No subjects available"
+                            helperText="Only subjects already configured in Academics can be selected here."
+                        />
+                    </>
                 )}
             </Modal>
         </div>

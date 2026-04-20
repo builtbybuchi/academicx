@@ -420,6 +420,7 @@ select.input {
   margin-left: var(--sidebar-width);
   padding: var(--space-8);
   transition: margin-left 250ms ease;
+  overflow-x: hidden;
 }
 
 .page-header {
@@ -534,6 +535,21 @@ select.input {
     padding: var(--space-4);
     padding-bottom: calc(var(--bottom-tab-height) + var(--space-4));
   }
+
+  .page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .page-header.flex {
+    flex-wrap: wrap;
+  }
+
+  .table td,
+  .table th {
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 768px) {
@@ -553,6 +569,34 @@ select.input {
   }
 
   .app-main {
+    padding: 14px;
     padding-bottom: calc(var(--bottom-tab-height) + var(--space-4));
+  }
+
+  .liquid-glass,
+  .card,
+  .alert {
+    border-radius: 14px;
+  }
+
+  .btn {
+    max-width: 100%;
+  }
+
+  .modal,
+  [role="dialog"] {
+    width: min(94vw, 560px);
+    max-height: 90vh;
+    overflow: auto;
+  }
+
+  .table-container {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  input,
+  select,
+  textarea {
+    max-width: 100%;
   }
 }

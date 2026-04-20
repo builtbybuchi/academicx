@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Users, UserPlus, ClipboardList, KeySquare, FileText, Settings, UserCircle, Mail, PlusCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import StatsCard from 'shared/components/StatsCard.jsx';
 import LiquidGlassPanel from 'shared/components/LiquidGlassPanel.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
@@ -7,6 +8,7 @@ import { formatDate } from 'shared/utils/index.js';
 import { getSchool, listPayments, listPins, listResults, listStaff, listStudents, listUsers } from 'shared/utils/api.js';
 
 export default function Dashboard() {
+    const navigate = useNavigate();
     const { schoolId } = useAuth();
     const [loading, setLoading] = useState(true);
     const [school, setSchool] = useState(null);
@@ -147,12 +149,12 @@ export default function Dashboard() {
                 <LiquidGlassPanel hover={false} style={{ padding: 24 }}>
                     <h3 style={{ fontSize: 16, marginBottom: 16, color: 'var(--color-gray-900)' }}>Quick Actions</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <button className="btn btn-primary" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}><UserPlus size={16} /> Enroll New Student</button>
-                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}><FileText size={16} /> Generate Broadsheet</button>
-                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}><KeySquare size={16} /> Generate PIN Codes</button>
-                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={16} /> Send Bulk Email</button>
-                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}><PlusCircle size={16} /> Register New Subject</button>
-                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }}><Settings size={16} /> Update Grading Scheme</button>
+                        <button className="btn btn-primary" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => navigate('/profile')}><UserPlus size={16} /> Enroll New Student</button>
+                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => navigate('/results')}><FileText size={16} /> Review Results</button>
+                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => navigate('/school-fees')}><KeySquare size={16} /> Manage School Fees</button>
+                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => navigate('/communication')}><Mail size={16} /> Send Bulk Email</button>
+                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => navigate('/academics')}><PlusCircle size={16} /> Register New Subject</button>
+                        <button className="btn btn-glass" style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => navigate('/grading')}><Settings size={16} /> Update Grading Scheme</button>
                     </div>
                 </LiquidGlassPanel>
             </div>

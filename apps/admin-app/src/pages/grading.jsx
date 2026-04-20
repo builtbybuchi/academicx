@@ -281,10 +281,10 @@ export default function Grading() {
                     <h3 style={{ fontSize: 16, margin: 0 }}>Default Grading Scheme</h3>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <button className="btn btn-glass btn-sm" onClick={handleAddClick}>
-                            ➕ Add Grade
+                            Add Grade
                         </button>
                         <button className="btn btn-glass btn-sm" onClick={resetToDefault}>
-                            ↩️ Reset to Default
+                            Reset to Default
                         </button>
                     </div>
                 </div>
@@ -313,14 +313,14 @@ export default function Grading() {
                                                 onClick={() => handleEditClick(i)}
                                                 style={{ padding: '4px 10px', fontSize: 12 }}
                                             >
-                                                ✏️ Edit
+                                                Edit
                                             </button>
                                             <button
                                                 className="btn btn-danger btn-sm"
                                                 onClick={() => handleDeleteClick(i)}
                                                 style={{ padding: '4px 10px', fontSize: 12 }}
                                             >
-                                                🗑️ Delete
+                                                Delete
                                             </button>
                                         </div>
                                     </td>
@@ -340,7 +340,7 @@ export default function Grading() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <h3 style={{ fontSize: 16, margin: 0 }}>Score Components</h3>
                     <button className="btn btn-glass btn-sm" onClick={handleAddComponent}>
-                        ➕ Add Component
+                        Add Component
                     </button>
                 </div>
                 <div className="table-container" style={{ marginBottom: 16 }}>
@@ -388,14 +388,14 @@ export default function Grading() {
                                                 onClick={() => handleEditComponent(component)}
                                                 style={{ padding: '4px 10px', fontSize: 12 }}
                                             >
-                                                ✏️ Edit
+                                                Edit
                                             </button>
                                             <button
                                                 className="btn btn-danger btn-sm"
                                                 onClick={() => handleDeleteComponentClick(component)}
                                                 style={{ padding: '4px 10px', fontSize: 12 }}
                                             >
-                                                🗑️ Delete
+                                                Delete
                                             </button>
                                         </div>
                                     </td>
@@ -542,7 +542,7 @@ export default function Grading() {
                 }
             >
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}></div>
                     <p style={{ fontSize: 16, marginBottom: 8 }}>
                         Are you sure you want to delete this grade range?
                     </p>
@@ -618,7 +618,7 @@ export default function Grading() {
                 }
             >
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+                    <div style={{ fontSize: 48, marginBottom: 16 }}></div>
                     <p style={{ fontSize: 16, marginBottom: 8 }}>
                         Are you sure you want to delete this score component?
                     </p>

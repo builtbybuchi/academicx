@@ -120,6 +120,76 @@ async function verifyTransaction(transactionRef) {
 }
 
 /**
+ * Verify a bank account against Squad payout APIs.
+ */
+async function verifyBankAccount({ bankCode, accountNumber }) {
+    const config = getConfig();
+    const baseUrl = getBaseUrl();
+
+    if (!config.secretKey) {
+        return { success: false, error: 'Squad secret key is not configured on the backend.' };
+    }
+
+    const normalizedBankCode = String(bankCode || '').trim();
+    const normalizedAccountNumber = String(accountNumber || '').trim();
+
+    if (!normalizedBankCode || !normalizedAccountNumber) {
+        return { success: false, error: 'bankCode and accountNumber are required.' };
+    }
+
+    const payloadVariants = [
+        { bank_code: normalizedBankCode, account_number: normalizedAccountNumber },
+        { bankCode: normalizedBankCode, accountNumber: normalizedAccountNumber },
+        { bank_code: normalizedBankCode, account_number: normalizedAccountNumber, currency: 'NGN' },
+    ];
+
+    const endpoints = [
+        '/payout/account/verify',
+        '/transfer/account/verify',
+        '/account/verify',
+    ];
+
+    let lastError = 'Unable to verify account details at this time.';
+
+    for (const endpoint of endpoints) {
+        for (const body of payloadVariants) {
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${config.secretKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body),
+                });
+
+                const data = await response.json().catch(() => null);
+                const payload = data?.data || {};
+                const accountName = payload.account_name || payload.accountName || payload.beneficiary_name || '';
+
+                if (response.ok && data?.status && accountName) {
+                    return {
+                        success: true,
+                        data: {
+                            accountName,
+                            accountNumber: payload.account_number || payload.accountNumber || normalizedAccountNumber,
+                            bankCode: payload.bank_code || payload.bankCode || normalizedBankCode,
+                            raw: payload,
+                        },
+                    };
+                }
+
+                lastError = data?.message || data?.data?.message || lastError;
+            } catch (error) {
+                lastError = error?.message || lastError;
+            }
+        }
+    }
+
+    return { success: false, error: lastError };
+}
+
+/**
  * Handle Squad webhook notification.
  */
 function handleWebhook(payload, squadSignature, secretKey) {
@@ -260,6 +330,7 @@ async function handleSchoolFeeWebhook(payload) {
 module.exports = {
     initiateTransaction,
     verifyTransaction,
+    verifyBankAccount,
     handleWebhook,
     handleSchoolFeeWebhook,
     initiateSchoolPinPurchase,

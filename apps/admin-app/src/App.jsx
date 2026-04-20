@@ -1,6 +1,6 @@
 import React from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, LogOut, Download, Globe, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquare, Download, Globe, CreditCard, Landmark } from 'lucide-react';
 import Sidebar from 'shared/components/Sidebar.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
 import AuthPage from 'shared/components/AuthPage.jsx';
@@ -15,6 +15,7 @@ import Chat from './pages/chat.jsx';
 import Downloads from './pages/downloads.jsx';
 import Website from './pages/website.jsx';
 import SchoolFees from './pages/school-fees.jsx';
+import AccountSettings from './pages/account-settings.jsx';
 
 export default function App() {
     const navigate = useNavigate();
@@ -36,6 +37,7 @@ export default function App() {
                 { id: '/academics', label: 'Academics', icon: <BookOpen size={20} /> },
                 { id: '/grading', label: 'Grading Schemes', icon: <Settings size={20} /> },
                 { id: '/website', label: 'School website', icon: <Globe size={20} /> },
+                { id: '/account-settings', label: 'Account Settings', icon: <Landmark size={20} /> },
             ],
         },
         {
@@ -105,17 +107,12 @@ export default function App() {
 
     return (
         <div className="app-layout">
-            <button
-                className="btn btn-danger btn-sm"
-                onClick={logout}
-                style={{ position: 'fixed', right: 12, top: 10, zIndex: 1200, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-                <LogOut size={14} /> Sign Out
-            </button>
             <Sidebar
                 menuGroups={menuGroups}
                 activeId={location.pathname}
                 onNavigate={(id) => navigate(id)}
+                onUserClick={() => navigate('/account-settings')}
+                onSignOut={logout}
                 appName="Admin Panel"
                 userName={profile ? `${profile.firstName} ${profile.lastName}` : 'Admin'}
                 userRole={profile?.role === 'super_admin' ? 'Platform Admin' : 'Administrator'}
@@ -128,6 +125,7 @@ export default function App() {
                     <Route path="/academics" element={<Academics />} />
                     <Route path="/grading" element={<Grading />} />
                     <Route path="/website" element={<Website />} />
+                    <Route path="/account-settings" element={<AccountSettings />} />
                     <Route path="/results" element={<Results />} />
                     <Route path="/school-fees" element={<SchoolFees />} />
                     <Route path="/communication" element={<Communication />} />
