@@ -7,8 +7,43 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  discover:
     runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.find-apps.outputs.apps }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Discover buildable apps
+        id: find-apps
+        run: |
+          APPS=()
+          # Search for any directory containing a package.json with a "build" script
+          while IFS= read -r pkg; do
+            DIR=$(dirname "$pkg")
+            # Skip root and node_modules
+            if [[ "$DIR" == "." ]] || echo "$DIR" | grep -q "node_modules"; then
+              continue
+            fi
+            # Check if it has a build script
+            if node -e "const p=require('./$pkg'); process.exit(p.scripts && p.scripts.build ? 0 : 1)" 2>/dev/null; then
+              APPS+=("$DIR")
+            fi
+          done < <(find . -name "package.json" -not -path "*/node_modules/*" -not -path "./.git/*")
+
+          # Convert to JSON array for matrix
+          JSON=$(printf '%s\n' "${APPS[@]}" | jq -R . | jq -sc .)
+          echo "apps=$JSON" >> $GITHUB_OUTPUT
+          echo "✅ Found apps: $JSON"
+
+  deploy:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: ${{ fromJson(needs.discover.outputs.apps) }}
+      fail-fast: false  # Deploy other apps even if one fails
 
     steps:
       - name: Checkout
@@ -20,19 +55,42 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
+        working-directory: ${{ matrix.app }}
         run: npm ci
 
       - name: Build
+        working-directory: ${{ matrix.app }}
         run: npm run build
 
-      - name: Generate bucket name
+      - name: Detect build output directory
+        id: build-out
+        working-directory: ${{ matrix.app }}
         run: |
-          REPO_NAME="${{ github.event.repository.name }}"
-          # Stable 6-digit number derived from the repo name (same every run)
-          HASH=$(echo -n "$REPO_NAME" | sha256sum | tr -d '[:alpha:]' | cut -c1-6)
-          BUCKET_NAME="${REPO_NAME}-${HASH}"
-          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
-          echo "✅ Bucket name: $BUCKET_NAME"
+          # Check common build output folders in order of preference
+          for DIR in dist out build .next/static public; do
+            if [ -d "$DIR" ]; then
+              echo "out_dir=${{ matrix.app }}/$DIR"  >> $GITHUB_OUTPUT
+              echo "✅ Build output: $DIR"
+              exit 0
+            fi
+          done
+          echo "❌ Could not detect build output directory"
+          exit 1
+
+      - name: Generate bucket name
+        id: bucket
+        run: |
+          REPO="${{ github.event.repository.name }}"
+          # Sanitize app path to a slug: apps/landing-page → landing-page
+          APP_SLUG=$(echo "${{ matrix.app }}" | sed 's|^\./||' | sed 's|/|-|g' | tr '[:upper:]' '[:lower:]')
+          # Stable 6-digit hash from repo + app name
+          HASH=$(echo -n "${REPO}-${APP_SLUG}" | sha256sum | tr -d '[:alpha:]' | cut -c1-6)
+          BUCKET="${REPO}-${APP_SLUG}-${HASH}"
+          # R2 bucket names max 63 chars, lowercase, no consecutive hyphens
+          BUCKET=$(echo "$BUCKET" | cut -c1-63 | sed 's/--*/-/g' | sed 's/-$//')
+          echo "name=$BUCKET" >> $GITHUB_OUTPUT
+          echo "slug=$APP_SLUG" >> $GITHUB_OUTPUT
+          echo "✅ Bucket name: $BUCKET"
 
       - name: Create R2 bucket (idempotent)
         env:
@@ -43,7 +101,7 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"name\": \"$BUCKET_NAME\"}")
+            -d "{\"name\": \"${{ steps.bucket.outputs.name }}\"}")
 
           if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "409" ]; then
             echo "✅ Bucket ready (HTTP $RESPONSE)"
@@ -51,7 +109,6 @@ jobs:
             echo "❌ Unexpected response: $RESPONSE"
             exit 1
           fi
-          # 409 = bucket already exists → safe to continue
 
       - name: Install rclone
         run: curl https://rclone.org/install.sh | sudo bash
@@ -70,7 +127,7 @@ jobs:
 
       - name: Sync build to R2
         run: |
-          rclone sync ./dist r2:$BUCKET_NAME \
+          rclone sync ${{ steps.build-out.outputs.out_dir }} r2:${{ steps.bucket.outputs.name }} \
             --transfers 8 \
             --checkers 16 \
             --delete-during \
@@ -82,17 +139,15 @@ jobs:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           curl -s -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets/$BUCKET_NAME/policy" \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets/${{ steps.bucket.outputs.name }}/policy" \
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
             -d '{"public": true}' > /dev/null
 
-          CNAME="${BUCKET_NAME}.${CF_ACCOUNT_ID}.r2.dev"
+          CNAME="${{ steps.bucket.outputs.name }}.${{ secrets.CF_ACCOUNT_ID }}.r2.dev"
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🌍 Your CNAME / public URL:"
-          echo "   $CNAME"
-          echo ""
-          echo "   Point your domain's CNAME record to:"
-          echo "   → $CNAME"
+          echo "📦 App:  ${{ steps.bucket.outputs.slug }}"
+          echo "🌍 CNAME: $CNAME"
+          echo "   Add to DNS → CNAME www → $CNAME"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
