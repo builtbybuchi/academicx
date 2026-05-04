@@ -125,38 +125,173 @@ jobs:
             --delete-during \
             --progress
 
-      - name: Enable public access & save result
+      - name: Deploy Worker (CDN + index.html routing)
+        id: worker
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           BUCKET="${{ steps.bucket.outputs.name }}"
           SLUG="${{ steps.bucket.outputs.slug }}"
+          REPO="${{ github.event.repository.name }}"
+          WORKER_NAME="${REPO}-${SLUG}"
 
-          curl -s -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}/domains/managed" \
+          # Truncate worker name to 63 chars (Cloudflare limit)
+          WORKER_NAME=$(echo "$WORKER_NAME" | cut -c1-63 | sed 's/-$//')
+
+          cat > /tmp/worker.js << 'WORKER_EOF'
+          const CACHE_TTL_IMMUTABLE = 31536000; // 1 year — hashed assets (e.g. main.abc123.js)
+          const CACHE_TTL_HTML      = 0;        // no cache — HTML always fresh
+
+          function getMimeType(path) {
+            const ext = path.split(".").pop().toLowerCase();
+            const types = {
+              html: "text/html; charset=utf-8",
+              css:  "text/css",
+              js:   "application/javascript",
+              json: "application/json",
+              png:  "image/png",
+              jpg:  "image/jpeg",
+              jpeg: "image/jpeg",
+              gif:  "image/gif",
+              svg:  "image/svg+xml",
+              ico:  "image/x-icon",
+              woff: "font/woff",
+              woff2:"font/woff2",
+              ttf:  "font/ttf",
+              webp: "image/webp",
+              txt:  "text/plain",
+              xml:  "application/xml",
+              map:  "application/json",
+            };
+            return types[ext] || "application/octet-stream";
+          }
+
+          function isImmutable(path) {
+            // Vite/CRA/webpack hashed filenames contain a content hash — safe to cache forever
+            return /\.[a-f0-9]{8,}\.(js|css|woff2?|png|jpg|svg|webp)$/.test(path);
+          }
+
+          async function serveFromR2(env, key, request) {
+            const cache = caches.default;
+
+            // 1. Check Cloudflare edge cache first
+            const cached = await cache.match(request);
+            if (cached) return cached;
+
+            // 2. Fetch from R2
+            const object = await env.BUCKET.get(key);
+            if (!object) return null;
+
+            const contentType = object.httpMetadata?.contentType || getMimeType(key);
+            const isHtml = contentType.startsWith("text/html");
+            const ttl = isHtml ? CACHE_TTL_HTML : isImmutable(key) ? CACHE_TTL_IMMUTABLE : 3600;
+
+            const headers = new Headers({
+              "Content-Type": contentType,
+              "Cache-Control": ttl === 0
+                ? "no-cache, no-store, must-revalidate"
+                : `public, max-age=${ttl}${ttl === CACHE_TTL_IMMUTABLE ? ", immutable" : ""}`,
+              "ETag": object.etag || "",
+            });
+
+            const response = new Response(object.body, { headers });
+
+            // 3. Store in edge cache (only cacheable responses)
+            if (ttl > 0) {
+              await cache.put(request, response.clone());
+            }
+
+            return response;
+          }
+
+          export default {
+            async fetch(request, env) {
+              const url  = new URL(request.url);
+              let path   = url.pathname;
+
+              // Normalise: strip trailing slash (except root)
+              if (path !== "/" && path.endsWith("/")) {
+                path = path.slice(0, -1);
+              }
+
+              // Determine R2 key to try
+              let key;
+              if (path === "/" || !path.includes(".")) {
+                // Directory or SPA route → try <path>/index.html then root index.html
+                key = (path === "/" ? "" : path.slice(1)) + (path.endsWith("index.html") ? "" : (path === "/" ? "index.html" : "/index.html"));
+              } else {
+                key = path.slice(1); // strip leading /
+              }
+
+              // Try exact key
+              let response = await serveFromR2(env, key, request);
+
+              // SPA fallback: any unmatched route → root index.html
+              if (!response) {
+                response = await serveFromR2(env, "index.html", new Request(new URL("/index.html", request.url).toString()));
+              }
+
+              if (!response) {
+                return new Response("Not Found", { status: 404 });
+              }
+
+              return response;
+            },
+          };
+          WORKER_EOF
+
+          # Deploy the Worker
+          DEPLOY_RESPONSE=$(curl -s -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -F "metadata={\"main_module\":\"worker.js\",\"bindings\":[{\"type\":\"r2_bucket\",\"name\":\"BUCKET\",\"bucket_name\":\"${BUCKET}\"}],\"compatibility_date\":\"2024-09-23\"};type=application/json" \
+            -F "worker.js=@/tmp/worker.js;type=application/javascript+module")
+
+          echo "$DEPLOY_RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          if d.get('success'):
+              print('✅ Worker deployed')
+          else:
+              print('❌ Worker deploy failed:', d.get('errors'))
+              sys.exit(1)
+          "
+
+          # Enable workers.dev subdomain for this worker
+          curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts/${WORKER_NAME}/subdomain" \
             -H "Authorization: Bearer ${CF_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"enabled": true}' > /tmp/managed_response.json
+            -d '{"enabled": true}' > /dev/null
 
-          PUBLIC_DOMAIN=$(python3 -c "
-          import json
-          with open('/tmp/managed_response.json') as f:
-              data = json.load(f)
-          print(data.get('result', {}).get('domain', ''))
-          ")
+          # Get account workers.dev subdomain
+          SUBDOMAIN=$(curl -s \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/subdomain" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',{}).get('subdomain',''))")
 
-          PUBLIC_URL="https://${PUBLIC_DOMAIN}"
+          WORKER_URL="https://${WORKER_NAME}.${SUBDOMAIN}.workers.dev"
+          echo "worker_url=${WORKER_URL}" >> $GITHUB_OUTPUT
+          echo "✅ Worker URL: ${WORKER_URL}"
 
-          # Write this app's result as its own JSON file
+      - name: Save result
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          BUCKET="${{ steps.bucket.outputs.name }}"
+          SLUG="${{ steps.bucket.outputs.slug }}"
+          WORKER_URL="${{ steps.worker.outputs.worker_url }}"
+
           mkdir -p /tmp/results
-          echo "{\"app\": \"${SLUG}\", \"bucket\": \"${BUCKET}\", \"url\": \"${PUBLIC_URL}\"}" \
+          echo "{\"app\": \"${SLUG}\", \"bucket\": \"${BUCKET}\", \"url\": \"${WORKER_URL}\"}" \
             > /tmp/results/${SLUG}.json
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "App:  $SLUG"
-          echo "URL:  $PUBLIC_URL"
+          echo "URL:  $WORKER_URL"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
       - name: Upload result fragment
