@@ -1,0 +1,98 @@
+# .github/workflows/deploy.yml
+name: Build & Deploy to Cloudflare R2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Generate bucket name
+        run: |
+          REPO_NAME="${{ github.event.repository.name }}"
+          # Stable 6-digit number derived from the repo name (same every run)
+          HASH=$(echo -n "$REPO_NAME" | sha256sum | tr -d '[:alpha:]' | cut -c1-6)
+          BUCKET_NAME="${REPO_NAME}-${HASH}"
+          echo "BUCKET_NAME=$BUCKET_NAME" >> $GITHUB_ENV
+          echo "✅ Bucket name: $BUCKET_NAME"
+
+      - name: Create R2 bucket (idempotent)
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"$BUCKET_NAME\"}")
+
+          if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "409" ]; then
+            echo "✅ Bucket ready (HTTP $RESPONSE)"
+          else
+            echo "❌ Unexpected response: $RESPONSE"
+            exit 1
+          fi
+          # 409 = bucket already exists → safe to continue
+
+      - name: Install rclone
+        run: curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone for R2
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          rclone config create r2 s3 \
+            provider Cloudflare \
+            access_key_id "$R2_ACCESS_KEY_ID" \
+            secret_access_key "$R2_SECRET_ACCESS_KEY" \
+            endpoint "https://$CF_ACCOUNT_ID.r2.cloudflarestorage.com"
+
+      - name: Sync build to R2
+        run: |
+          rclone sync ./dist r2:$BUCKET_NAME \
+            --transfers 8 \
+            --checkers 16 \
+            --delete-during \
+            --progress
+
+      - name: Enable public access & print CNAME
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          curl -s -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets/$BUCKET_NAME/policy" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"public": true}' > /dev/null
+
+          CNAME="${BUCKET_NAME}.${CF_ACCOUNT_ID}.r2.dev"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌍 Your CNAME / public URL:"
+          echo "   $CNAME"
+          echo ""
+          echo "   Point your domain's CNAME record to:"
+          echo "   → $CNAME"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
