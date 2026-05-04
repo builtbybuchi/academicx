@@ -133,27 +133,34 @@ jobs:
             --delete-during \
             --progress
 
-      - name: Enable public access & print CNAME
+      - name: Enable public access & print URL
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
+          BUCKET="${{ steps.bucket.outputs.name }}"
+
+          # Enable public development URL
           curl -s -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/r2/buckets/${{ steps.bucket.outputs.name }}/policy" \
-            -H "Authorization: Bearer $CF_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}/policy" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{"public": true}' > /dev/null
 
-          BUCKET="${{ steps.bucket.outputs.name }}"
-          CNAME="${BUCKET}.${CF_ACCOUNT_ID}.r2.dev"
+          # Fetch the actual pub- URL Cloudflare assigned to this bucket
+          BUCKET_INFO=$(curl -s \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}")
 
-          # Write to a temp file so GitHub doesn't mask it
-          echo "${BUCKET}.${CF_ACCOUNT_ID}.r2.dev" > /tmp/cname.txt
-          CNAME=$(cat /tmp/cname.txt)
+          PUBLIC_URL=$(echo "$BUCKET_INFO" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          domain = data.get('result', {}).get('public_domain', '')
+          print(domain)
+          ")
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "App:  ${{ steps.bucket.outputs.slug }}"
-          echo "CNAME: $CNAME"
-          echo "   Add to DNS → CNAME www → $CNAME"
+          echo "App:    ${{ steps.bucket.outputs.slug }}"
+          echo "URL:    https://${PUBLIC_URL}"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
