@@ -40,9 +40,6 @@ jobs:
       matrix:
         app: ${{ fromJson(needs.discover.outputs.apps) }}
       fail-fast: false
-    outputs:
-      # Each job writes its result; we collect in the summarize job
-      result_${{ strategy.job-index }}: ${{ steps.publish.outputs.result }}
 
     steps:
       - name: Checkout
@@ -128,8 +125,7 @@ jobs:
             --delete-during \
             --progress
 
-      - name: Enable public access & get URL
-        id: publish
+      - name: Enable public access & save result
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
@@ -137,16 +133,12 @@ jobs:
           BUCKET="${{ steps.bucket.outputs.name }}"
           SLUG="${{ steps.bucket.outputs.slug }}"
 
-          # Enable the managed r2.dev public URL (correct endpoint)
           curl -s -X PUT \
             "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}/domains/managed" \
             -H "Authorization: Bearer ${CF_API_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{"enabled": true}' > /tmp/managed_response.json
 
-          cat /tmp/managed_response.json
-
-          # Extract the domain field from { result: { domain, enabled, bucketId } }
           PUBLIC_DOMAIN=$(python3 -c "
           import json
           with open('/tmp/managed_response.json') as f:
@@ -156,7 +148,10 @@ jobs:
 
           PUBLIC_URL="https://${PUBLIC_DOMAIN}"
 
-          echo "result={\"app\":\"${SLUG}\",\"url\":\"${PUBLIC_URL}\"}" >> $GITHUB_OUTPUT
+          # Write this app's result as its own JSON file
+          mkdir -p /tmp/results
+          echo "{\"app\": \"${SLUG}\", \"bucket\": \"${BUCKET}\", \"url\": \"${PUBLIC_URL}\"}" \
+            > /tmp/results/${SLUG}.json
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -164,33 +159,39 @@ jobs:
           echo "URL:  $PUBLIC_URL"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+      - name: Upload result fragment
+        uses: actions/upload-artifact@v4
+        with:
+          name: result-${{ steps.bucket.outputs.slug }}
+          path: /tmp/results/${{ steps.bucket.outputs.slug }}.json
+
   summarize:
     needs: deploy
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Collect deployment URLs into JSON
+      - name: Download all result fragments
+        uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          merge-multiple: true
+          path: /tmp/results
+
+      - name: Merge into deployments.json
         run: |
-          # Gather all result_* outputs from the deploy matrix jobs
-          RESULTS='${{ toJson(needs.deploy.outputs) }}'
-
           python3 << 'EOF'
-          import json, os
+          import json, os, glob
+          from datetime import datetime
 
-          raw = os.environ.get("RESULTS", "{}")
-          outputs = json.loads(raw)
-
+          files = glob.glob("/tmp/results/*.json")
           deployments = []
-          for key, value in outputs.items():
-              if key.startswith("result_") and value:
-                  try:
-                      deployments.append(json.loads(value))
-                  except:
-                      pass
+          for f in sorted(files):
+              with open(f) as fp:
+                  deployments.append(json.load(fp))
 
           output = {
               "deployments": deployments,
-              "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z"
+              "timestamp": datetime.utcnow().isoformat() + "Z"
           }
 
           print(json.dumps(output, indent=2))
@@ -198,18 +199,8 @@ jobs:
           with open("deployments.json", "w") as f:
               json.dump(output, f, indent=2)
           EOF
-        env:
-          RESULTS: ${{ toJson(needs.deploy.outputs) }}
 
-      - name: Print deployments summary
-        run: |
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 DEPLOYMENT SUMMARY"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          cat deployments.json
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-      - name: Upload deployments.json as artifact
+      - name: Upload deployments.json
         uses: actions/upload-artifact@v4
         with:
           name: deployment-urls
