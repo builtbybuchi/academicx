@@ -19,20 +19,16 @@ jobs:
         id: find-apps
         run: |
           APPS=()
-          # Search for any directory containing a package.json with a "build" script
           while IFS= read -r pkg; do
             DIR=$(dirname "$pkg")
-            # Skip root and node_modules
             if [[ "$DIR" == "." ]] || echo "$DIR" | grep -q "node_modules"; then
               continue
             fi
-            # Check if it has a build script
             if node -e "const p=require('./$pkg'); process.exit(p.scripts && p.scripts.build ? 0 : 1)" 2>/dev/null; then
               APPS+=("$DIR")
             fi
           done < <(find . -name "package.json" -not -path "*/node_modules/*" -not -path "./.git/*")
 
-          # Convert to JSON array for matrix
           JSON=$(printf '%s\n' "${APPS[@]}" | jq -R . | jq -sc .)
           echo "apps=$JSON" >> $GITHUB_OUTPUT
           echo "✅ Found apps: $JSON"
@@ -43,7 +39,10 @@ jobs:
     strategy:
       matrix:
         app: ${{ fromJson(needs.discover.outputs.apps) }}
-      fail-fast: false  # Deploy other apps even if one fails
+      fail-fast: false
+    outputs:
+      # Each job writes its result; we collect in the summarize job
+      result_${{ strategy.job-index }}: ${{ steps.publish.outputs.result }}
 
     steps:
       - name: Checkout
@@ -66,10 +65,9 @@ jobs:
         id: build-out
         working-directory: ${{ matrix.app }}
         run: |
-          # Check common build output folders in order of preference
           for DIR in dist out build .next/static public; do
             if [ -d "$DIR" ]; then
-              echo "out_dir=${{ matrix.app }}/$DIR"  >> $GITHUB_OUTPUT
+              echo "out_dir=${{ matrix.app }}/$DIR" >> $GITHUB_OUTPUT
               echo "✅ Build output: $DIR"
               exit 0
             fi
@@ -81,12 +79,9 @@ jobs:
         id: bucket
         run: |
           REPO="${{ github.event.repository.name }}"
-          # Sanitize app path to a slug: apps/landing-page → landing-page
-          APP_SLUG=$(echo "${{ matrix.app }}" | sed 's|^\./||' | sed 's|/|-|g' | tr '[:upper:]' '[:lower:]')
-          # Stable 6-digit hash from repo + app name
+          APP_SLUG=$(echo "${{ matrix.app }}" | sed 's|^\./||' | sed 's|^apps/||' | sed 's|/|-|g' | tr '[:upper:]' '[:lower:]')
           HASH=$(echo -n "${REPO}-${APP_SLUG}" | sha256sum | tr -d '[:alpha:]' | cut -c1-6)
           BUCKET="${REPO}-${APP_SLUG}-${HASH}"
-          # R2 bucket names max 63 chars, lowercase, no consecutive hyphens
           BUCKET=$(echo "$BUCKET" | cut -c1-63 | sed 's/--*/-/g' | sed 's/-$//')
           echo "name=$BUCKET" >> $GITHUB_OUTPUT
           echo "slug=$APP_SLUG" >> $GITHUB_OUTPUT
@@ -133,34 +128,89 @@ jobs:
             --delete-during \
             --progress
 
-      - name: Enable public access & print URL
+      - name: Enable public access & get URL
+        id: publish
         env:
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: |
           BUCKET="${{ steps.bucket.outputs.name }}"
+          SLUG="${{ steps.bucket.outputs.slug }}"
 
-          # Enable public development URL
+          # Enable the managed r2.dev public URL (correct endpoint)
           curl -s -X PUT \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}/policy" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}/domains/managed" \
             -H "Authorization: Bearer ${CF_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"public": true}' > /dev/null
+            -d '{"enabled": true}' > /tmp/managed_response.json
 
-          # Fetch the actual pub- URL Cloudflare assigned to this bucket
-          BUCKET_INFO=$(curl -s \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/r2/buckets/${BUCKET}" \
-            -H "Authorization: Bearer ${CF_API_TOKEN}")
+          cat /tmp/managed_response.json
 
-          PUBLIC_URL=$(echo "$BUCKET_INFO" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          domain = data.get('result', {}).get('public_domain', '')
-          print(domain)
+          # Extract the domain field from { result: { domain, enabled, bucketId } }
+          PUBLIC_DOMAIN=$(python3 -c "
+          import json
+          with open('/tmp/managed_response.json') as f:
+              data = json.load(f)
+          print(data.get('result', {}).get('domain', ''))
           ")
+
+          PUBLIC_URL="https://${PUBLIC_DOMAIN}"
+
+          echo "result={\"app\":\"${SLUG}\",\"url\":\"${PUBLIC_URL}\"}" >> $GITHUB_OUTPUT
 
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "App:    ${{ steps.bucket.outputs.slug }}"
-          echo "URL:    https://${PUBLIC_URL}"
+          echo "App:  $SLUG"
+          echo "URL:  $PUBLIC_URL"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  summarize:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Collect deployment URLs into JSON
+        run: |
+          # Gather all result_* outputs from the deploy matrix jobs
+          RESULTS='${{ toJson(needs.deploy.outputs) }}'
+
+          python3 << 'EOF'
+          import json, os
+
+          raw = os.environ.get("RESULTS", "{}")
+          outputs = json.loads(raw)
+
+          deployments = []
+          for key, value in outputs.items():
+              if key.startswith("result_") and value:
+                  try:
+                      deployments.append(json.loads(value))
+                  except:
+                      pass
+
+          output = {
+              "deployments": deployments,
+              "timestamp": __import__("datetime").datetime.utcnow().isoformat() + "Z"
+          }
+
+          print(json.dumps(output, indent=2))
+
+          with open("deployments.json", "w") as f:
+              json.dump(output, f, indent=2)
+          EOF
+        env:
+          RESULTS: ${{ toJson(needs.deploy.outputs) }}
+
+      - name: Print deployments summary
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "📦 DEPLOYMENT SUMMARY"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          cat deployments.json
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+      - name: Upload deployments.json as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-urls
+          path: deployments.json
