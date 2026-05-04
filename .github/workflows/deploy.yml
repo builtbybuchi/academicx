@@ -144,10 +144,16 @@ jobs:
             -H "Content-Type: application/json" \
             -d '{"public": true}' > /dev/null
 
-          CNAME="${{ steps.bucket.outputs.name }}.${{ secrets.CF_ACCOUNT_ID }}.r2.dev"
+          BUCKET="${{ steps.bucket.outputs.name }}"
+          CNAME="${BUCKET}.${CF_ACCOUNT_ID}.r2.dev"
+
+          # Write to a temp file so GitHub doesn't mask it
+          echo "${BUCKET}.${CF_ACCOUNT_ID}.r2.dev" > /tmp/cname.txt
+          CNAME=$(cat /tmp/cname.txt)
+
           echo ""
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 App:  ${{ steps.bucket.outputs.slug }}"
-          echo "🌍 CNAME: $CNAME"
+          echo "App:  ${{ steps.bucket.outputs.slug }}"
+          echo "CNAME: $CNAME"
           echo "   Add to DNS → CNAME www → $CNAME"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
