@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import DataTable from 'shared/components/DataTable.jsx';
 import Modal from 'shared/components/Modal.jsx';
 import FormField from 'shared/components/FormField.jsx';
-import { createSchoolAdmin, getSuperAdminPortalData, registerSchool } from 'shared/utils/api.js';
+import { createSchoolAdmin, getSuperAdminPortalData, registerSchool, updateSchool } from 'shared/utils/api.js';
 
 const baseColumns = [
     { key: 'name', label: 'School Name' },
@@ -10,6 +10,7 @@ const baseColumns = [
     { key: 'students', label: 'Students' },
     { key: 'staff', label: 'Staff' },
     { key: 'plan', label: 'Plan', render: (v) => <span className="badge badge-primary">{v}</span> },
+    { key: 'onlineFees', label: 'Online Fees', render: (v) => <span className={`badge badge-${v ? 'success' : 'danger'}`}>{v ? 'Enabled' : 'Disabled'}</span> },
     { key: 'status', label: 'Status', render: (v) => <span className={`badge badge-${v === 'active' ? 'success' : 'warning'}`}>{v}</span> },
 ];
 
@@ -41,6 +42,7 @@ export default function Schools() {
     const tableRows = useMemo(() => {
         return schools.map((school) => {
             const schoolUsers = users.filter((item) => item.schoolId === school.$id);
+            const schoolData = typeof school.data === 'string' ? JSON.parse(school.data || '{}') : (school.data || {});
             return {
                 id: school.$id,
                 name: school.name,
@@ -48,6 +50,7 @@ export default function Schools() {
                 students: schoolUsers.filter((item) => item.role === 'student').length,
                 staff: schoolUsers.filter((item) => item.role === 'staff').length,
                 plan: school.paymentModel,
+                onlineFees: schoolData.onlineFeesEnabled !== false,
                 status: school.status,
             };
         });
@@ -58,19 +61,33 @@ export default function Schools() {
         {
             key: 'id',
             label: 'Actions',
-            render: (_, row) => (
-                <button
-                    className="btn btn-sm btn-glass"
-                    onClick={() => {
-                        setSelectedSchoolId(row.id);
-                        setAdminModalOpen(true);
-                    }}
-                >
-                    Add Admin
-                </button>
+            render: (id, row) => (
+                <div className="flex gap-2">
+                    <button
+                        className="btn btn-sm btn-glass"
+                        onClick={() => {
+                            setSelectedSchoolId(row.id);
+                            setAdminModalOpen(true);
+                        }}
+                    >
+                        Add Admin
+                    </button>
+                    <button
+                        className={`btn btn-sm ${row.onlineFees ? 'btn-danger' : 'btn-success'}`}
+                        onClick={async () => {
+                            const school = schools.find(s => s.$id === row.id);
+                            const currentData = typeof school.data === 'string' ? JSON.parse(school.data || '{}') : (school.data || {});
+                            const nextData = { ...currentData, onlineFeesEnabled: !row.onlineFees };
+                            await updateSchool(row.id, { data: JSON.stringify(nextData) });
+                            await load();
+                        }}
+                    >
+                        {row.onlineFees ? 'Disable Fees' : 'Enable Fees'}
+                    </button>
+                </div>
             ),
         },
-    ]), []);
+    ]), [schools]);
 
     async function handleCreateSchool() {
         await registerSchool({

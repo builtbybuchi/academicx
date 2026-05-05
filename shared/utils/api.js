@@ -51,6 +51,7 @@ export const COLLECTIONS = {
     CONTACT_MESSAGES: 'contact_messages',
     SCHOOL_FEES: 'school_fees',
     WHATSAPP_REMINDERS: 'whatsapp_reminders',
+    WITHDRAWAL_REQUESTS: 'withdrawal_requests',
     SYSTEM_CONFIG: 'system_config',
 };
 
@@ -118,7 +119,9 @@ export async function invokeBackendFunction(action, payload = {}) {
     const result = text ? JSON.parse(text) : {};
 
     if (!response.ok || result.success === false) {
-        throw new Error(result.error || 'Backend function request failed.');
+        const error = new Error(result.error || 'Backend function request failed.');
+        Object.assign(error, result); // Attach all fields from result (e.g., paymentRequired, data)
+        throw error;
     }
 
     return result.data ?? result;
@@ -358,6 +361,19 @@ export async function updateAcademicSession(docId, data) {
     return databases.updateDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, docId, data);
 }
 
+export async function listPromotionCriteria(schoolId) {
+    const queries = [Query.limit(100)];
+    if (schoolId) queries.push(Query.equal('schoolId', schoolId));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.PROMOTION_CRITERIA, queries);
+}
+
+export async function savePromotionCriteria(data) {
+    if (data.$id) {
+        return databases.updateDocument(DATABASE_ID, COLLECTIONS.PROMOTION_CRITERIA, data.$id, data);
+    }
+    return databases.createDocument(DATABASE_ID, COLLECTIONS.PROMOTION_CRITERIA, ID.unique(), data);
+}
+
 export async function deleteAcademicSession(docId) {
     return databases.deleteDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS, docId);
 }
@@ -510,7 +526,11 @@ export async function listResults(schoolId, filters = {}) {
 }
 
 export async function getStudentResults(studentId, term, session) {
-    const queries = [Query.equal('studentId', studentId), Query.limit(200)];
+    const queries = [
+        Query.equal('studentId', studentId),
+        Query.equal('isPublished', true),
+        Query.limit(200)
+    ];
     if (term) queries.push(Query.equal('term', term));
     if (session) queries.push(Query.equal('session', session));
     return databases.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS, queries);
@@ -910,6 +930,12 @@ export async function verifyAndSaveAdminBankDetails(payload) {
 
 export async function requestSchoolFeeWithdrawal(payload = {}) {
     return invokeBackendFunction('requestSchoolFeeWithdrawal', payload);
+}
+
+export async function listWithdrawalRequests(schoolId) {
+    const queries = [Query.orderDesc('requestedAt'), Query.limit(100)];
+    if (schoolId) queries.push(Query.equal('schoolId', schoolId));
+    return databases.listDocuments(DATABASE_ID, COLLECTIONS.WITHDRAWAL_REQUESTS, queries);
 }
 
 export async function updateSchoolBackend(data) {

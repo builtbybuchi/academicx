@@ -31,7 +31,7 @@ jobs:
 
           JSON=$(printf '%s\n' "${APPS[@]}" | jq -R . | jq -sc .)
           echo "apps=$JSON" >> $GITHUB_OUTPUT
-          echo "✅ Found apps: $JSON"
+          echo "Found apps: $JSON"
 
   deploy:
     needs: discover
@@ -65,11 +65,11 @@ jobs:
           for DIR in dist out build .next/static public; do
             if [ -d "$DIR" ]; then
               echo "out_dir=${{ matrix.app }}/$DIR" >> $GITHUB_OUTPUT
-              echo "✅ Build output: $DIR"
+              echo "Build output: $DIR"
               exit 0
             fi
           done
-          echo "❌ Could not detect build output directory"
+          echo "Could not detect build output directory"
           exit 1
 
       - name: Generate bucket name
@@ -82,7 +82,7 @@ jobs:
           BUCKET=$(echo "$BUCKET" | cut -c1-63 | sed 's/--*/-/g' | sed 's/-$//')
           echo "name=$BUCKET" >> $GITHUB_OUTPUT
           echo "slug=$APP_SLUG" >> $GITHUB_OUTPUT
-          echo "✅ Bucket name: $BUCKET"
+          echo "Bucket name: $BUCKET"
 
       - name: Create R2 bucket (idempotent)
         env:
@@ -96,9 +96,9 @@ jobs:
             -d "{\"name\": \"${{ steps.bucket.outputs.name }}\"}")
 
           if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "409" ]; then
-            echo "✅ Bucket ready (HTTP $RESPONSE)"
+            echo "Bucket ready (HTTP $RESPONSE)"
           else
-            echo "❌ Unexpected response: $RESPONSE"
+            echo "Unexpected response: $RESPONSE"
             exit 1
           fi
 
@@ -252,9 +252,9 @@ jobs:
           import sys, json
           d = json.load(sys.stdin)
           if d.get('success'):
-              print('✅ Worker deployed')
+              print('Worker deployed')
           else:
-              print('❌ Worker deploy failed:', d.get('errors'))
+              print('Worker deploy failed:', d.get('errors'))
               sys.exit(1)
           "
 
@@ -273,7 +273,7 @@ jobs:
 
           WORKER_URL="https://${WORKER_NAME}.${SUBDOMAIN}.workers.dev"
           echo "worker_url=${WORKER_URL}" >> $GITHUB_OUTPUT
-          echo "✅ Worker URL: ${WORKER_URL}"
+          echo "Worker URL: ${WORKER_URL}"
 
       - name: Save result
         env:

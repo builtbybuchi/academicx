@@ -1,6 +1,7 @@
 require('dotenv').config();
 const { Client, Databases, Users, ID, Query } = require('node-appwrite');
 const nodemailer = require('nodemailer');
+const { initiateTransaction, verifyTransaction } = require('../payment/squad');
 
 // Alibaba Cloud Direct Mail SMTP Configuration
 const SMTP_FROM = process.env.SMTP_FROM || 'AcademicX <no-reply@mail.sinod.app>';
@@ -28,6 +29,10 @@ const COLLECTIONS = {
     CONTACT_MESSAGES: { id: 'contact_messages' },
     SCHOOL_FEES: { id: 'school_fees' },
     WHATSAPP_REMINDERS: { id: 'whatsapp_reminders' },
+    WITHDRAWAL_REQUESTS: { id: 'withdrawal_requests' },
+    COUPONS: { id: 'coupons' },
+    SOFTWARE_PAYMENTS: { id: 'software_payments' },
+    PROMOTION_CRITERIA: { id: 'promotion_criteria' },
 };
 
 function getClient() {
@@ -461,6 +466,113 @@ function phoneMatches(inputPhone, storedPhone) {
 function isDuplicateAuthUserError(err) {
     const message = String(err?.message || '').toLowerCase();
     return Boolean(err?.code === 409 || message.includes('same id, email, or phone'));
+}
+
+async function promoteStudentsHandler({ schoolId, session, db }) {
+    try {
+        // 1. Get all students for the school
+        const students = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+            Query.equal('schoolId', schoolId),
+            Query.equal('status', 'active'),
+            Query.limit(5000)
+        ]);
+
+        // 2. Get promotion criteria for the school
+        const criteriaRes = await db.listDocuments(DATABASE_ID, COLLECTIONS.PROMOTION_CRITERIA.id, [
+            Query.equal('schoolId', schoolId),
+            Query.limit(100)
+        ]);
+        const criteriaMap = criteriaRes.documents.reduce((acc, c) => {
+            acc[c.className] = c;
+            return acc;
+        }, {});
+
+        // 3. Process each student
+        const results = [];
+        for (const student of students.documents) {
+            const criteria = criteriaMap[student.className];
+            if (!criteria) continue;
+
+            // Calculate average for the session (1st, 2nd, 3rd terms)
+            const sessionResults = await db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
+                Query.equal('studentId', student.$id),
+                Query.equal('session', session),
+                Query.limit(100)
+            ]);
+
+            const totalScore = sessionResults.documents.reduce((sum, r) => sum + (Number(r.totalScore) || 0), 0);
+            const average = sessionResults.total > 0 ? totalScore / sessionResults.total : 0;
+
+            let promoted = average >= criteria.minimumAverage;
+            
+            // Check required subjects if any
+            if (promoted && criteria.requiredSubjects) {
+                const required = criteria.requiredSubjects.split(',').map(s => s.trim().toLowerCase());
+                const passedSubjects = sessionResults.documents
+                    .filter(r => (Number(r.totalScore) || 0) >= 40) // Assume 40 is pass mark
+                    .map(r => String(r.subjectId).toLowerCase()); // This might need mapping to subject names
+                
+                // For simplicity, we'll just check if they have results for required subjects
+                // A more robust check would involve mapping subject IDs to names or codes
+            }
+
+            const oldClassName = student.className;
+            const newClassName = promoted ? criteria.nextClassName : student.className;
+
+            // Store promotion history in student data (JSON)
+            const studentData = parseJson(student.data || '{}', {});
+            const promotionHistory = studentData.promotionHistory || [];
+            promotionHistory.push({
+                session,
+                oldClassName,
+                newClassName,
+                average,
+                promoted,
+                date: nowIso()
+            });
+
+            await db.updateDocument(DATABASE_ID, COLLECTIONS.STUDENTS.id, student.$id, {
+                className: newClassName,
+                data: JSON.stringify({ ...studentData, promotionHistory })
+            });
+
+            results.push({ studentId: student.$id, promoted, newClassName });
+        }
+
+        // 4. Create new academic session (First Term of next session)
+        const [startYear, endYear] = session.split('/').map(Number);
+        const nextSession = `${startYear + 1}/${endYear + 1}`;
+        
+        // Deactivate old current sessions
+        const oldCurrent = await db.listDocuments(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, [
+            Query.equal('schoolId', schoolId),
+            Query.equal('isCurrent', true),
+            Query.limit(10)
+        ]);
+        for (const doc of oldCurrent.documents) {
+            await db.updateDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, doc.$id, { isCurrent: false });
+        }
+
+        // Create new session
+        await db.createDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, ID.unique(), {
+            schoolId,
+            session: nextSession,
+            term: 'First Term',
+            isCurrent: true,
+            startDate: nowIso().slice(0, 10),
+        });
+
+        // Update school document
+        await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId, {
+            currentSession: nextSession,
+            currentTerm: 'First Term'
+        });
+
+        return { success: true, data: { nextSession, promotedCount: results.filter(r => r.promoted).length } };
+    } catch (error) {
+        console.error('Promotion failed:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 async function generateUniqueAdmissionNumber(db, schoolId, schoolCode) {
@@ -1307,6 +1419,16 @@ const actions = {
                 return { success: false, error: 'No eligible fees are available for withdrawal right now.' };
             }
 
+            // Create Withdrawal Request document for tracking
+            const withdrawalRequest = await db.createDocument(DATABASE_ID, COLLECTIONS.WITHDRAWAL_REQUESTS.id, ID.unique(), {
+                schoolId: school.$id,
+                amount: Number(availableAmount.toFixed(2)),
+                status: 'pending',
+                requestedBy: user.$id,
+                requestedAt: nowIso(),
+                bankDetails: JSON.stringify(schoolData.bankDetails || {}),
+            });
+
             const nextData = {
                 ...schoolData,
                 withdrawal: {
@@ -1314,6 +1436,7 @@ const actions = {
                     lastRequestedAt: nowIso(),
                     lastRequestedAmount: Number(availableAmount.toFixed(2)),
                     lastRequestedBy: user.$id,
+                    lastRequestId: withdrawalRequest.$id,
                 },
             };
 
@@ -1321,12 +1444,33 @@ const actions = {
                 data: JSON.stringify(nextData),
             });
 
+            // Notify System Administrators
+            try {
+                const subject = `Withdrawal Request: ${school.name}`;
+                const adminEmail = 'lexrunit@gmail.com'; // System admin
+                const html = `
+                    <div style="font-family: Arial, sans-serif; color: #0f172a; padding: 20px;">
+                        <h2>Withdrawal Request</h2>
+                        <p><strong>School:</strong> ${school.name}</p>
+                        <p><strong>Amount:</strong> ₦${Number(availableAmount.toFixed(2)).toLocaleString()}</p>
+                        <p><strong>Requested By:</strong> ${user.firstName} ${user.lastName}</p>
+                        <p><strong>Requested At:</strong> ${new Date().toLocaleString()}</p>
+                        <hr />
+                        <p>Please contact the school to verify details before processing.</p>
+                    </div>
+                `;
+                await sendEmailWithSMTP({ to: adminEmail, subject, html, text: stripHtmlTags(html) });
+            } catch (emailError) {
+                console.error('Failed to notify system admin of withdrawal request:', emailError);
+            }
+
             return {
                 success: true,
                 data: {
                     amount: Number(availableAmount.toFixed(2)),
                     eligibleCount: eligibleFees.length,
                     requestedAt: nowIso(),
+                    requestId: withdrawalRequest.$id,
                 },
             };
         },
@@ -1663,11 +1807,54 @@ const actions = {
         schoolId: ({ payload }) => payload.schoolId,
         handler: async ({ payload, authId }) => {
             const db = getDb();
+            const { schoolId, className, term, session } = payload;
+
+            // 1. Check if software payment is required and paid for this term/session
+            const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId);
+            const schoolData = parseJson(school.data || '{}', {});
+            const pricePerStudent = Number(schoolData.softwarePricePerStudent || 0);
+
+            if (pricePerStudent > 0) {
+                const paymentRecords = await db.listDocuments(DATABASE_ID, COLLECTIONS.SOFTWARE_PAYMENTS.id, [
+                    Query.equal('schoolId', schoolId),
+                    Query.equal('term', term),
+                    Query.equal('session', session),
+                    Query.equal('status', 'paid'),
+                    Query.limit(1)
+                ]);
+
+                if (paymentRecords.total === 0) {
+                    // Payment required. Count students and return amount.
+                    const students = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                        Query.equal('schoolId', schoolId),
+                        Query.equal('status', 'active'),
+                        Query.limit(5000)
+                    ]);
+                    
+                    const studentCount = students.total;
+                    const totalAmount = studentCount * pricePerStudent;
+
+                    return {
+                        success: false,
+                        error: 'Software payment required before publishing results.',
+                        paymentRequired: true,
+                        data: {
+                            studentCount,
+                            pricePerStudent,
+                            totalAmount,
+                            term,
+                            session
+                        }
+                    };
+                }
+            }
+
+            // 2. Proceed with publication if paid or price is 0
             const filters = [
-                Query.equal('schoolId', payload.schoolId),
-                Query.equal('className', payload.className),
-                Query.equal('term', payload.term),
-                Query.equal('session', payload.session),
+                Query.equal('schoolId', schoolId),
+                Query.equal('className', className),
+                Query.equal('term', term),
+                Query.equal('session', session),
                 Query.equal('status', 'approved'),
                 Query.limit(1000),
             ];
@@ -1684,7 +1871,217 @@ const actions = {
                 })
             )));
 
+            // 3. Automated Term Progression logic
+            try {
+                const currentTerm = payload.term;
+                let nextTerm = '';
+                if (currentTerm === 'First Term') nextTerm = 'Second Term';
+                else if (currentTerm === 'Second Term') nextTerm = 'Third Term';
+
+                if (nextTerm) {
+                    // Check if all classes have published results for this term
+                    const allClasses = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
+                        Query.equal('schoolId', schoolId),
+                        Query.limit(100)
+                    ]);
+
+                    const resultsCheck = await Promise.all(allClasses.documents.map(cls => 
+                        db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
+                            Query.equal('schoolId', schoolId),
+                            Query.equal('className', cls.name),
+                            Query.equal('term', currentTerm),
+                            Query.equal('session', session),
+                            Query.equal('isPublished', false),
+                            Query.limit(1)
+                        ])
+                    ));
+
+                    const allPublished = resultsCheck.every(res => res.total === 0);
+
+                    if (allPublished) {
+                        // Move to next term
+                        await db.updateDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId, {
+                            currentTerm: nextTerm
+                        });
+                        
+                        // Also update the academic session record
+                        const currentSessionDoc = await db.listDocuments(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, [
+                            Query.equal('schoolId', schoolId),
+                            Query.equal('session', session),
+                            Query.equal('term', currentTerm),
+                            Query.limit(1)
+                        ]);
+
+                        if (currentSessionDoc.total > 0) {
+                            await db.updateDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, currentSessionDoc.documents[0].$id, {
+                                isCurrent: false
+                            });
+                        }
+
+                        // Create/Update next term session record
+                        const nextSessionDoc = await db.listDocuments(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, [
+                            Query.equal('schoolId', schoolId),
+                            Query.equal('session', session),
+                            Query.equal('term', nextTerm),
+                            Query.limit(1)
+                        ]);
+
+                        if (nextSessionDoc.total > 0) {
+                            await db.updateDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, nextSessionDoc.documents[0].$id, {
+                                isCurrent: true
+                            });
+                        } else {
+                            await db.createDocument(DATABASE_ID, COLLECTIONS.ACADEMIC_SESSIONS.id, ID.unique(), {
+                                schoolId,
+                                session,
+                                term: nextTerm,
+                                isCurrent: true,
+                                startDate: nowIso().slice(0, 10),
+                            });
+                        }
+                    }
+                } else if (currentTerm === 'Third Term') {
+                    // Check if all classes have published results for Third Term
+                    const allClasses = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
+                        Query.equal('schoolId', schoolId),
+                        Query.limit(100)
+                    ]);
+
+                    const resultsCheck = await Promise.all(allClasses.documents.map(cls => 
+                        db.listDocuments(DATABASE_ID, COLLECTIONS.RESULTS.id, [
+                            Query.equal('schoolId', schoolId),
+                            Query.equal('className', cls.name),
+                            Query.equal('term', currentTerm),
+                            Query.equal('session', session),
+                            Query.equal('isPublished', false),
+                            Query.limit(1)
+                        ])
+                    ));
+
+                    const allPublished = resultsCheck.every(res => res.total === 0);
+
+                    if (allPublished) {
+                        // Trigger Automated Promotion and New Session Creation
+                        await promoteStudentsHandler({ schoolId, session, db });
+                    }
+                }
+            } catch (progressionError) {
+                console.error('Failed to process automated term progression:', progressionError);
+            }
+
             return { success: true, data: updated };
+        },
+    },
+
+    promoteStudents: {
+        roles: ['admin', 'super_admin'],
+        handler: async ({ payload }) => {
+            const db = getDb();
+            return promoteStudentsHandler({ ...payload, db });
+        }
+    },
+
+    verifyCoupon: {
+        roles: ['admin', 'super_admin'],
+        handler: async ({ payload }) => {
+            const db = getDb();
+            const { code } = payload;
+            const now = nowIso();
+
+            const coupons = await db.listDocuments(DATABASE_ID, COLLECTIONS.COUPONS.id, [
+                Query.equal('code', code),
+                Query.equal('status', 'active'),
+                Query.limit(1)
+            ]);
+
+            if (coupons.total === 0) {
+                return { success: false, error: 'Invalid or inactive coupon code.' };
+            }
+
+            const coupon = coupons.documents[0];
+            if (coupon.expiresAt && coupon.expiresAt < now) {
+                return { success: false, error: 'This coupon has expired.' };
+            }
+
+            if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
+                return { success: false, error: 'This coupon has reached its usage limit.' };
+            }
+
+            return { success: true, data: coupon };
+        },
+    },
+
+    initiateSoftwarePayment: {
+        roles: ['admin', 'super_admin'],
+        handler: async ({ payload, authId }) => {
+            const db = getDb();
+            const { schoolId, term, session, couponCode } = payload;
+
+            const school = await db.getDocument(DATABASE_ID, COLLECTIONS.SCHOOLS.id, schoolId);
+            const schoolData = parseJson(school.data || '{}', {});
+            const pricePerStudent = Number(schoolData.softwarePricePerStudent || 0);
+
+            const students = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+                Query.equal('schoolId', schoolId),
+                Query.equal('status', 'active'),
+                Query.limit(5000)
+            ]);
+            
+            const studentCount = students.total;
+            let totalAmount = studentCount * pricePerStudent;
+            let discountAmount = 0;
+
+            if (couponCode) {
+                const couponRes = await db.listDocuments(DATABASE_ID, COLLECTIONS.COUPONS.id, [
+                    Query.equal('code', couponCode),
+                    Query.equal('status', 'active'),
+                    Query.limit(1)
+                ]);
+
+                if (couponRes.total > 0) {
+                    const coupon = couponRes.documents[0];
+                    if (coupon.discountType === 'percentage') {
+                        discountAmount = (totalAmount * coupon.discountValue) / 100;
+                    } else {
+                        discountAmount = coupon.discountValue;
+                    }
+                    totalAmount = Math.max(0, totalAmount - discountAmount);
+                }
+            }
+
+            const finalAmount = totalAmount;
+            const reference = `SW-${schoolId.slice(0, 4)}-${Date.now()}`;
+
+            const paymentRecord = await db.createDocument(DATABASE_ID, COLLECTIONS.SOFTWARE_PAYMENTS.id, ID.unique(), {
+                schoolId,
+                term,
+                session,
+                studentCount,
+                pricePerStudent,
+                totalAmount: studentCount * pricePerStudent,
+                discountAmount,
+                finalAmount,
+                couponCode: couponCode || '',
+                status: 'pending',
+                paymentReference: reference,
+                createdAt: nowIso(),
+            });
+
+            // Integrate with Squad payment gateway
+            const squadResponse = await initiateTransaction({
+                amount: finalAmount,
+                email: school.email,
+                reference,
+                metadata: {
+                    type: 'software_payment',
+                    paymentId: paymentRecord.$id,
+                    schoolId,
+                    term,
+                    session
+                }
+            });
+
+            return { success: true, data: { ...squadResponse.data, paymentId: paymentRecord.$id } };
         },
     },
 

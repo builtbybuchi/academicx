@@ -22,6 +22,7 @@ const SchoolFeesManagement = () => {
     const [processingPayment, setProcessingPayment] = useState(false);
     const [withdrawing, setWithdrawing] = useState(false);
     const [showWithdrawInfo, setShowWithdrawInfo] = useState(false);
+    const [withdrawalRequests, setWithdrawalRequests] = useState([]);
 
     useEffect(() => {
         loadData();
@@ -40,6 +41,9 @@ const SchoolFeesManagement = () => {
             
             const sessionsData = await getAcademicSessions();
             setAcademicSessions(Array.isArray(sessionsData) ? sessionsData : []);
+
+            const withdrawals = await listWithdrawalRequests(schoolData.$id);
+            setWithdrawalRequests(withdrawals.documents || []);
             
             if (schoolData.currentTerm && schoolData.currentSession) {
                 setSelectedTerm(schoolData.currentTerm);
@@ -557,6 +561,51 @@ const SchoolFeesManagement = () => {
                 <p>Bi-weekly WhatsApp reminders are automatically sent to parents about unpaid fees.</p>
                 <p>Next reminder date: {new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
             </div>
+
+            {/* Withdrawal History */}
+            {financialSummary.platformCollected > 0 && (
+                <div className="card" style={{ marginBottom: 24 }}>
+                    <div className="card-header">
+                        <h3>Withdrawal Request History</h3>
+                    </div>
+                    <div className="card-body">
+                        {withdrawalRequests.length === 0 ? (
+                            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>No withdrawal requests yet.</p>
+                        ) : (
+                            <div className="table-container">
+                                <table className="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                            <th>Processed At</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {withdrawalRequests.map((req) => (
+                                            <tr key={req.$id}>
+                                                <td>{new Date(req.requestedAt).toLocaleDateString()}</td>
+                                                <td>{formatCurrency(req.amount)}</td>
+                                                <td>
+                                                    <span className={`badge badge-${
+                                                        req.status === 'processed' ? 'success' : 
+                                                        req.status === 'approved' ? 'primary' : 
+                                                        req.status === 'rejected' ? 'danger' : 'warning'
+                                                    }`}>
+                                                        {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                                                    </span>
+                                                </td>
+                                                <td>{req.processedAt ? new Date(req.processedAt).toLocaleDateString() : '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Students Table */}
             <div className="card">

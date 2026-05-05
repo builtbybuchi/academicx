@@ -3,16 +3,15 @@
  * Runs bi-weekly to generate and send fee reminders
  */
 
-const { processPendingReminders, generateBiWeeklyReminders } = require('../whatsapp/reminder-service');
+const { processPendingReminders, generateScheduledReminders } = require('../whatsapp/reminder-service');
 
 /**
  * Main cron job function
  * This should be scheduled to run every 15 minutes for processing pending messages
- * and every 2 weeks for generating new reminders
+ * and daily for generating scheduled reminders
  */
 async function runWhatsAppCron() {
     const now = new Date();
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
     const hour = now.getHours();
     
     console.log(`Running WhatsApp cron job at ${now.toISOString()}`);
@@ -21,10 +20,10 @@ async function runWhatsAppCron() {
         // Process pending reminders every 15 minutes
         await processPendingReminders();
         
-        // Generate new bi-weekly reminders every Monday at 9 AM
-        if (dayOfWeek === 1 && hour === 9) {
-            console.log('Generating bi-weekly fee reminders...');
-            await generateBiWeeklyReminders();
+        // Generate scheduled reminders daily at 9 AM
+        if (hour === 9) {
+            console.log('Generating scheduled fee reminders...');
+            await generateScheduledReminders();
         }
         
         console.log('WhatsApp cron job completed successfully');
@@ -41,7 +40,7 @@ module.exports = {
     
     // Individual functions for testing
     processPendingReminders,
-    generateBiWeeklyReminders
+    generateScheduledReminders
 };
 
 // Run directly if called as script

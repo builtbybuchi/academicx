@@ -76,6 +76,8 @@ export interface SchoolDataJson {
     }[];
     welcomeAddress: string;
     contact: SchoolDataContact;
+    /** Whether online fee collection is enabled for this school */
+    onlineFeesEnabled?: boolean;
     /** Optional keys per template for dynamic admin forms */
     templateFields?: Partial<Record<TemplateId, Record<string, unknown>>>;
 }

@@ -246,18 +246,27 @@ export function FeesPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                                 </div>
                         </div>
 
-                        <Button
-                            className="w-full bg-[var(--school-primary)] text-white py-8 rounded-2xl text-lg font-bold shadow-lg mt-8"
-                            onClick={handlePayFees}
-                            disabled={paying || outstanding <= 0}
-                        >
-                            {paying ? <ButtonBarLoader /> : <><CreditCard className="mr-2" /> Pay with SquadCo</>}
-                        </Button>
-                        
-                        <div className="flex items-center justify-center gap-2 text-slate-400 text-xs mt-4">
-                            <ShieldCheck size={14} />
-                            <span>Securely processed via Squad by GTBank</span>
-                        </div>
+                        {(school as any).data?.onlineFeesEnabled !== false ? (
+                            <>
+                                <Button
+                                    className="w-full bg-[var(--school-primary)] text-white py-8 rounded-2xl text-lg font-bold shadow-lg mt-8"
+                                    onClick={handlePayFees}
+                                    disabled={paying || outstanding <= 0}
+                                >
+                                    {paying ? <ButtonBarLoader /> : <><CreditCard className="mr-2" /> Pay with SquadCo</>}
+                                </Button>
+                                
+                                <div className="flex items-center justify-center gap-2 text-slate-400 text-xs mt-4">
+                                    <ShieldCheck size={14} />
+                                    <span>Securely processed via Squad by GTBank</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="mt-8 p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center">
+                                <p className="text-slate-600 font-semibold">Online payment is currently disabled for this school.</p>
+                                <p className="text-slate-400 text-sm mt-1">Please visit the school admin office for manual payment recording.</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : !loading && (

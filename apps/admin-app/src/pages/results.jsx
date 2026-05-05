@@ -16,6 +16,12 @@ export default function Results() {
     const [subjects, setSubjects] = useState([]);
     const [working, setWorking] = useState(false);
     const [publishModalOpen, setPublishModalOpen] = useState(false);
+    const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+    const [paymentInfo, setPaymentInfo] = useState(null);
+    const [couponCode, setCouponCode] = useState('');
+    const [couponData, setCouponData] = useState(null);
+    const [verifyingCoupon, setVerifyingCoupon] = useState(false);
+    const [initiatingPayment, setInitiatingPayment] = useState(false);
 
     async function loadData() {
         if (!schoolId) return;
@@ -126,7 +132,18 @@ export default function Results() {
             setPublishModalOpen(false);
             toast({ type: 'success', title: 'Results published', message: `${approvedGroups.length} result group(s) were published. Students can now view their results.` });
         } catch (error) {
-            toast({ type: 'error', title: 'Publish failed', message: error.message });
+            if (error.paymentRequired || error.message?.includes('payment required')) {
+                // If it's a payment required error, the error object should contain the data
+                // But invokeBackendFunction might not be returning the full error object if it's just a message.
+                // I need to ensure the backend returns the data in the error response.
+                // For now, I'll try to get it from the error message or a separate call if needed.
+                // Actually, I'll update invokeBackendFunction to include data in error.
+                setPaymentInfo(error.data || { studentCount: 0, totalAmount: 0, term: approvedGroups[0].split('|')[1], session: approvedGroups[0].split('|')[2] });
+                setPaymentModalOpen(true);
+                setPublishModalOpen(false);
+            } else {
+                toast({ type: 'error', title: 'Publish failed', message: error.message });
+            }
         } finally {
             setWorking(false);
         }
@@ -157,6 +174,54 @@ export default function Results() {
 
     const allApproved = resultGroups.length > 0 && resultGroups.every(g => g.approved === g.total);
     const anyPublished = resultGroups.some(g => g.published);
+
+    const handleVerifyCoupon = async () => {
+        if (!couponCode) return;
+        setVerifyingCoupon(true);
+        try {
+            const result = await invokeBackendFunction('verifyCoupon', { code: couponCode });
+            setCouponData(result);
+            toast({ type: 'success', title: 'Coupon Applied', message: `Discount of ${result.discountType === 'percentage' ? result.discountValue + '%' : '₦' + result.discountValue} applied.` });
+        } catch (error) {
+            toast({ type: 'error', title: 'Invalid Coupon', message: error.message });
+            setCouponData(null);
+        } finally {
+            setVerifyingCoupon(false);
+        }
+    };
+
+    const handleInitiatePayment = async () => {
+        if (!paymentInfo) return;
+        setInitiatingPayment(true);
+        try {
+            const result = await invokeBackendFunction('initiateSoftwarePayment', {
+                schoolId,
+                term: paymentInfo.term,
+                session: paymentInfo.session,
+                couponCode: couponData?.code || null
+            });
+            if (result.checkoutUrl) {
+                window.open(result.checkoutUrl, '_blank');
+                toast({ type: 'info', title: 'Payment Initiated', message: 'Please complete the payment in the new tab.' });
+                setPaymentModalOpen(false);
+            }
+        } catch (error) {
+            toast({ type: 'error', title: 'Payment Failed', message: error.message });
+        } finally {
+            setInitiatingPayment(false);
+        }
+    };
+
+    const discountedAmount = useMemo(() => {
+        if (!paymentInfo || !couponData) return paymentInfo?.totalAmount || 0;
+        let amount = paymentInfo.totalAmount;
+        if (couponData.discountType === 'percentage') {
+            amount -= (amount * couponData.discountValue) / 100;
+        } else {
+            amount -= couponData.discountValue;
+        }
+        return Math.max(0, amount);
+    }, [paymentInfo, couponData]);
 
     return (
         <div>
@@ -290,6 +355,82 @@ export default function Results() {
                             <p style={{ margin: 0, fontSize: 13, color: '#F59E0B' }}>
                                 ⚠️ Some result groups are not fully approved. Please approve all results before publishing.
                             </p>
+                        </div>
+                    )}
+                </div>
+            </Modal>
+
+            {/* Software Payment Modal */}
+            <Modal
+                open={paymentModalOpen}
+                onClose={() => setPaymentModalOpen(false)}
+                title="Software Payment Required"
+                footer={
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                        <button className="btn btn-glass btn-sm" onClick={() => setPaymentModalOpen(false)} disabled={initiatingPayment}>
+                            Cancel
+                        </button>
+                        <button
+                            className="btn btn-primary btn-sm"
+                            onClick={handleInitiatePayment}
+                            disabled={initiatingPayment}
+                        >
+                            {initiatingPayment ? 'Processing...' : `💳 Pay ₦${discountedAmount.toLocaleString()}`}
+                        </button>
+                    </div>
+                }
+            >
+                <div style={{ padding: '10px 0' }}>
+                    <div style={{ background: 'rgba(59, 130, 246, 0.1)', padding: 16, borderRadius: 12, marginBottom: 20, border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                        <h4 style={{ margin: '0 0 8px', color: '#fff' }}>Payment Summary</h4>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+                            <span style={{ color: 'rgba(255,255,255,0.6)' }}>Student Count</span>
+                            <span style={{ color: '#fff', fontWeight: 600 }}>{paymentInfo?.studentCount}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 4 }}>
+                            <span style={{ color: 'rgba(255,255,255,0.6)' }}>Price per Student</span>
+                            <span style={{ color: '#fff', fontWeight: 600 }}>₦{paymentInfo?.pricePerStudent}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span style={{ color: '#fff', fontWeight: 700 }}>Total Amount</span>
+                            <span style={{ color: '#fff', fontWeight: 700 }}>₦{paymentInfo?.totalAmount.toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 16 }}>
+                        To publish results for <strong>{paymentInfo?.term} {paymentInfo?.session}</strong>, a software usage fee is required based on your school's student count.
+                    </p>
+
+                    <div style={{ marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6, textTransform: 'uppercase' }}>Coupon Code</label>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                            <input 
+                                type="text" 
+                                className="form-control" 
+                                placeholder="Enter coupon code" 
+                                value={couponCode}
+                                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                style={{ flex: 1 }}
+                            />
+                            <button 
+                                className="btn btn-glass btn-sm" 
+                                onClick={handleVerifyCoupon}
+                                disabled={verifyingCoupon || !couponCode}
+                            >
+                                {verifyingCoupon ? '...' : 'Apply'}
+                            </button>
+                        </div>
+                        {couponData && (
+                            <p style={{ fontSize: 12, color: '#10B981', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                ✓ {couponData.discountType === 'percentage' ? `${couponData.discountValue}% discount applied` : `₦${couponData.discountValue} discount applied`}
+                            </p>
+                        )}
+                    </div>
+
+                    {couponData && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 800, padding: '12px 0', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span style={{ color: '#fff' }}>Final Amount</span>
+                            <span style={{ color: '#10B981' }}>₦{discountedAmount.toLocaleString()}</span>
                         </div>
                     )}
                 </div>

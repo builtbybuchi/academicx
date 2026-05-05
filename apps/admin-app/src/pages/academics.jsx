@@ -13,6 +13,8 @@ import {
     listClasses,
     listStaff,
     listSubjects,
+    listPromotionCriteria,
+    savePromotionCriteria,
     updateAcademicSession,
     upsertClassNames,
     upsertSubjects,
@@ -230,6 +232,7 @@ export default function Academics() {
     const [classes, setClasses] = useState([]);
     const [subjects, setSubjects] = useState([]);
     const [staff, setStaff] = useState([]);
+    const [promotionCriteria, setPromotionCriteria] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterClass, setFilterClass] = useState('');
 
@@ -270,16 +273,18 @@ export default function Academics() {
 
     async function loadData() {
         if (!schoolId) return;
-        const [sessionRes, classRes, subjectRes, staffRes] = await Promise.all([
+        const [sessionRes, classRes, subjectRes, staffRes, criteriaRes] = await Promise.all([
             listAcademicSessions(schoolId),
             listClasses(schoolId),
             listSubjects(schoolId),
             listStaff(schoolId),
+            listPromotionCriteria(schoolId),
         ]);
         setSessions(sessionRes.documents || []);
         setClasses(classRes.documents || []);
         setSubjects(subjectRes.documents || []);
         setStaff(staffRes.documents || []);
+        setPromotionCriteria(criteriaRes.documents || []);
     }
 
     useEffect(() => {
@@ -969,6 +974,7 @@ export default function Academics() {
                         { id: 'classes', label: 'Classes & Arms' },
                         { id: 'subjects', label: 'Subjects & Mappings' },
                         { id: 'terms-details', label: 'Terms Details' },
+                        { id: 'promotion-criteria', label: 'Promotion Criteria' },
                     ].map((tab, index) => (
                         <React.Fragment key={tab.id}>
                             <button
@@ -987,7 +993,7 @@ export default function Academics() {
                             >
                                 {tab.label}
                             </button>
-                            {index < 3 && (
+                            {index < 4 && (
                                 <ChevronRight size={16} color="#D1D5DB" />
                             )}
                         </React.Fragment>
@@ -1456,6 +1462,90 @@ export default function Academics() {
                                 >
                                     {saving ? 'Saving...' : 'Save Changes'}
                                 </button>
+                            </div>
+                        </LiquidGlassPanel>
+                    </div>
+                )}
+
+                {/* Tab 5: Promotion Criteria */}
+                {activeTab === 'promotion-criteria' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                        <LiquidGlassPanel hover={false} style={{ padding: '24px' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '18px', fontWeight: 600 }}>
+                                Student Promotion Criteria
+                            </h3>
+                            <p style={{ color: '#6B7280', fontSize: '14px', marginBottom: '24px' }}>
+                                Set the minimum requirements for students to be promoted to the next class at the end of the 3rd term.
+                            </p>
+
+                            <div className="table-container">
+                                <table className="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Current Class</th>
+                                            <th>Minimum Average (%)</th>
+                                            <th>Promote To</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {classNames.map(className => {
+                                            const criteria = promotionCriteria.find(c => c.className === className) || {
+                                                className,
+                                                minimumAverage: 40,
+                                                nextClassName: ''
+                                            };
+                                            return (
+                                                <tr key={className}>
+                                                    <td style={{ fontWeight: 600 }}>{className}</td>
+                                                    <td>
+                                                        <input
+                                                            type="number"
+                                                            className="form-control form-control-sm"
+                                                            value={criteria.minimumAverage}
+                                                            onChange={(e) => {
+                                                                const updated = [...promotionCriteria];
+                                                                const idx = updated.findIndex(c => c.className === className);
+                                                                if (idx >= 0) updated[idx].minimumAverage = Number(e.target.value);
+                                                                else updated.push({ className, minimumAverage: Number(e.target.value), nextClassName: '' });
+                                                                setPromotionCriteria(updated);
+                                                            }}
+                                                            style={{ width: '80px' }}
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <select
+                                                            className="form-control form-control-sm"
+                                                            value={criteria.nextClassName}
+                                                            onChange={(e) => {
+                                                                const updated = [...promotionCriteria];
+                                                                const idx = updated.findIndex(c => c.className === className);
+                                                                if (idx >= 0) updated[idx].nextClassName = e.target.value;
+                                                                else updated.push({ className, minimumAverage: 40, nextClassName: e.target.value });
+                                                                setPromotionCriteria(updated);
+                                                            }}
+                                                        >
+                                                            <option value="">Select Next Class</option>
+                                                            {classNames.filter(c => c !== className).map(c => (
+                                                                <option key={c} value={c}>{c}</option>
+                                                            ))}
+                                                            <option value="Graduated">Graduated</option>
+                                                        </select>
+                                                    </td>
+                                                    <td>
+                                                        <button
+                                                            className="btn btn-primary btn-sm"
+                                                            onClick={() => handleSaveCriteria(criteria)}
+                                                            disabled={saving}
+                                                        >
+                                                            Save
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
                             </div>
                         </LiquidGlassPanel>
                     </div>

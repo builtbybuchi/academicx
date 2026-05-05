@@ -512,6 +512,12 @@ const COLLECTIONS = {
             required: false,
             type: 'boolean',
             default: false,
+        },
+        {
+            key: 'feeDueDate',
+            required: false,
+            type: 'string',
+            size: 10,
         }
         ],
         indexes: [
@@ -1783,6 +1789,242 @@ const COLLECTIONS = {
         { key: 'idx_student_term', type: 'key', attributes: ["studentId","term","session"] },
         { key: 'idx_next_retry', type: 'key', attributes: ["nextRetryAt"] },
         { key: 'idx_created_at', type: 'key', attributes: ["createdAt"] }
+        ],
+    },
+
+    // Withdrawal Requests
+    WITHDRAWAL_REQUESTS: {
+        id: 'withdrawal_requests',
+        name: 'Withdrawal Requests',
+        attributes: [
+        {
+            key: 'schoolId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'amount',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'status',
+            required: true,
+            type: 'enum',
+            elements: ["pending", "approved", "processed", "rejected"],
+            default: 'pending',
+        },
+        {
+            key: 'requestedBy',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'requestedAt',
+            required: true,
+            type: 'datetime',
+        },
+        {
+            key: 'processedAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'notes',
+            required: false,
+            type: 'string',
+            size: 1000,
+        },
+        {
+            key: 'bankDetails',
+            required: false,
+            type: 'string',
+            size: 2000,
+        }
+        ],
+         indexes: [
+         { key: 'idx_school_status', type: 'key', attributes: ["schoolId","status"] },
+         { key: 'idx_requestedAt', type: 'key', attributes: ["requestedAt"] }
+         ],
+     },
+
+    // Coupons
+    COUPONS: {
+        id: 'coupons',
+        name: 'Coupons',
+        attributes: [
+        {
+            key: 'code',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'discountType',
+            required: true,
+            type: 'enum',
+            elements: ["fixed","percentage"],
+        },
+        {
+            key: 'discountValue',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'expiresAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'usageLimit',
+            required: false,
+            type: 'integer',
+            default: 1,
+        },
+        {
+            key: 'usageCount',
+            required: false,
+            type: 'integer',
+            default: 0,
+        },
+        {
+            key: 'status',
+            required: false,
+            type: 'enum',
+            elements: ["active","inactive"],
+            default: 'active',
+        }
+        ],
+        indexes: [
+        { key: 'idx_code', type: 'unique', attributes: ["code"] }
+        ],
+    },
+
+    // Software Payments
+    SOFTWARE_PAYMENTS: {
+        id: 'software_payments',
+        name: 'Software Payments',
+        attributes: [
+        {
+            key: 'schoolId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'term',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'session',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'studentCount',
+            required: true,
+            type: 'integer',
+        },
+        {
+            key: 'pricePerStudent',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'totalAmount',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'discountAmount',
+            required: false,
+            type: 'float',
+            default: 0,
+        },
+        {
+            key: 'finalAmount',
+            required: true,
+            type: 'float',
+        },
+        {
+            key: 'couponCode',
+            required: false,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'status',
+            required: false,
+            type: 'enum',
+            elements: ["pending","paid","failed"],
+            default: 'pending',
+        },
+        {
+            key: 'paymentReference',
+            required: false,
+            type: 'string',
+            size: 100,
+        },
+        {
+            key: 'paidAt',
+            required: false,
+            type: 'datetime',
+        },
+        {
+            key: 'createdAt',
+            required: true,
+            type: 'datetime',
+        }
+        ],
+         indexes: [
+         { key: 'idx_school_term_session', type: 'unique', attributes: ["schoolId","term","session"] },
+         { key: 'idx_payment_ref', type: 'key', attributes: ["paymentReference"] }
+         ],
+     },
+
+    // Promotion Criteria
+    PROMOTION_CRITERIA: {
+        id: 'promotion_criteria',
+        name: 'Promotion Criteria',
+        attributes: [
+        {
+            key: 'schoolId',
+            required: true,
+            type: 'string',
+            size: 36,
+        },
+        {
+            key: 'className',
+            required: true,
+            type: 'string',
+            size: 20,
+        },
+        {
+            key: 'minimumAverage',
+            required: true,
+            type: 'float',
+            default: 40,
+        },
+        {
+            key: 'requiredSubjects',
+            required: false,
+            type: 'string',
+            size: 1000,
+        },
+        {
+            key: 'nextClassName',
+            required: true,
+            type: 'string',
+            size: 20,
+        }
+        ],
+        indexes: [
+        { key: 'idx_school_class', type: 'unique', attributes: ["schoolId","className"] }
         ],
     },
 
