@@ -1219,6 +1219,7 @@ const actions = {
                     loginEmail: userDoc.email,
                     loginPassword: parentCredential,
                     studentId: student.admissionNumber,
+                    studentDocId: student.$id,
                 },
             };
         },
