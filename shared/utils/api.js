@@ -7,15 +7,15 @@ import { Client, Account, Databases, Storage, Realtime, ID, Query } from 'appwri
 // ── Appwrite Client ───────────────────────────────────────
 const client = new Client();
 client
-    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT || 'https://fra.cloud.appwrite.io/v1')
-    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID || 'fullacademicx');
+    .setEndpoint(import.meta.env.VITE_APPWRITE_ENDPOINT)
+    .setProject(import.meta.env.VITE_APPWRITE_PROJECT_ID);
 
 export const account = new Account(client);
 export const databases = new Databases(client);
 export const storage = new Storage(client);
 
-// The Appwrite function is deleted, we use the backend on fly.io instead.
-const FLY_BACKEND_URL = 'https://academicx.fly.dev';
+// This was a fallback used in earlier developent
+const FLY_BACKEND_URL = '';
 let FUNCTION_URL = import.meta.env.VITE_APPWRITE_FUNCTION_URL || FLY_BACKEND_URL;
 
 // If the configured URL is known to be the deleted Appwrite function, override it.
@@ -53,6 +53,9 @@ export const COLLECTIONS = {
     WHATSAPP_REMINDERS: 'whatsapp_reminders',
     WITHDRAWAL_REQUESTS: 'withdrawal_requests',
     SYSTEM_CONFIG: 'system_config',
+    PROMOTION_CRITERIA: 'promotion_criteria',
+    COUPONS: 'coupons',
+    SOFTWARE_PAYMENTS: 'software_payments',
 };
 
 // ── Auth Helpers ──────────────────────────────────────────
@@ -314,6 +317,15 @@ export async function listStudents(schoolId, className) {
 
 export async function getStudent(docId) {
     return databases.getDocument(DATABASE_ID, COLLECTIONS.STUDENTS, docId);
+}
+
+export async function getStudentByAdmissionNumber(schoolId, admissionNumber) {
+    const res = await databases.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS, [
+        Query.equal('schoolId', schoolId),
+        Query.equal('admissionNumber', admissionNumber),
+        Query.limit(1),
+    ]);
+    return res.documents[0] || null;
 }
 
 export async function updateStudent(docId, data) {

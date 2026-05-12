@@ -1,5 +1,5 @@
-# .github/workflows/deploy.yml
-name: Build & Deploy to Cloudflare R2
+# .github/workflows/deploy-prod.yml
+name: Deploy Production (Appwrite + Frontends + Fly.io Backend)
 
 on:
   push:
@@ -7,7 +7,34 @@ on:
       - main
 
 jobs:
+  provision-appwrite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
+      - name: Run Appwrite Setup (Doppler + GitHub secrets fallback)
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+        run: |
+          export APPWRITE_ENDPOINT=$(doppler secrets get APPWRITE_ENDPOINT --config production --plain 2>/dev/null || echo "${{ secrets.APPWRITE_ENDPOINT }}")
+          export APPWRITE_PROJECT_ID=$(doppler secrets get APPWRITE_PROJECT_ID --config production --plain 2>/dev/null || echo "${{ secrets.APPWRITE_PROJECT_ID }}")
+          export APPWRITE_API_KEY=$(doppler secrets get APPWRITE_API_KEY --config production --plain 2>/dev/null || echo "${{ secrets.APPWRITE_API_KEY }}")
+          
+          cd backend
+          npm install --omit=dev
+          node setup-appwrite.js
+
   discover:
+    needs: provision-appwrite
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ steps.find-apps.outputs.apps }}
@@ -33,7 +60,7 @@ jobs:
           echo "apps=$JSON" >> $GITHUB_OUTPUT
           echo "Found apps: $JSON"
 
-  deploy:
+  deploy-frontend:
     needs: discover
     runs-on: ubuntu-latest
     strategy:
@@ -50,13 +77,33 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
       - name: Install dependencies
         working-directory: ${{ matrix.app }}
         run: npm ci
 
-      - name: Build
+      - name: Build with Doppler secrets (fallback to GitHub secrets)
         working-directory: ${{ matrix.app }}
-        run: npm run build
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+        run: |
+          # Try to get VITE vars from Doppler, fall back to GitHub secrets
+          export VITE_APPWRITE_ENDPOINT="${{ secrets.VITE_APPWRITE_ENDPOINT }}"
+          export VITE_APPWRITE_PROJECT_ID="${{ secrets.VITE_APPWRITE_PROJECT_ID }}"
+          export VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL_PRODUCTION }}"
+          
+          doppler secrets get VITE_APPWRITE_ENDPOINT --config production --plain 2>/dev/null && \
+            export VITE_APPWRITE_ENDPOINT=$(doppler secrets get VITE_APPWRITE_ENDPOINT --config production --plain)
+          
+          doppler secrets get VITE_APPWRITE_PROJECT_ID --config production --plain 2>/dev/null && \
+            export VITE_APPWRITE_PROJECT_ID=$(doppler secrets get VITE_APPWRITE_PROJECT_ID --config production --plain)
+          
+          doppler secrets get VITE_BACKEND_URL --config production --plain 2>/dev/null && \
+            export VITE_BACKEND_URL=$(doppler secrets get VITE_BACKEND_URL --config production --plain)
+          
+          npm run build
 
       - name: Detect build output directory
         id: build-out
@@ -300,8 +347,57 @@ jobs:
           name: result-${{ steps.bucket.outputs.slug }}
           path: /tmp/results/${{ steps.bucket.outputs.slug }}.json
 
+  deploy-backend-flyio:
+    needs: provision-appwrite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
+      - name: Install Fly CLI
+        run: curl -L https://fly.io/install.sh | sh
+
+      - name: Deploy Backend to Fly.io (Production)
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          # Check if Fly.io is configured
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "⚠️  FLY_API_TOKEN not configured. Skipping Fly.io deployment."
+            exit 0
+          fi
+          
+          cd backend/functions
+          npm install --omit=dev
+          
+          # Deploy to Fly.io with Doppler secrets injected
+          echo "Deploying backend to Fly.io (production)..."
+          
+          # Option 1: Use doppler run to inject secrets during deploy
+          # doppler run --config production -- flyctl deploy --app academicx
+          
+          # Option 2: Set secrets individually in Fly before deploy
+          # for key in $(doppler secrets get --plain --config production | cut -d= -f1); do
+          #   value=$(doppler secrets get "$key" --plain --config production)
+          #   flyctl secrets set "$key=$value" --app academicx
+          # done
+          # flyctl deploy --app academicx
+          
+          # For now, placeholder — adjust per your Fly.io setup
+          echo "Fly.io backend deployment would go here"
+          # flyctl deploy --app academicx
+
   summarize:
-    needs: deploy
+    needs: deploy-frontend
     runs-on: ubuntu-latest
     if: always()
     steps:

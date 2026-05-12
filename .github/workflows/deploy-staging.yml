@@ -21,25 +21,29 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
 
-      - name: Run Appwrite Setup (Doppler staging config)
+      - name: Run Appwrite Setup (Doppler + GitHub secrets fallback)
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          # GitHub secrets fallback (used if Doppler fails)
-          APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
-          APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
-          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
         run: |
+          # Try Doppler first; fall back to GitHub secrets if not found
+          export_secret() {
+            local key=$1
+            local doppler_value=$(doppler secrets get "$key" --plain 2>/dev/null || echo "")
+            if [ -z "$doppler_value" ]; then
+              # Fallback to GitHub secrets (use env var from inputs)
+              eval "echo \$$key"
+            else
+              echo "$doppler_value"
+            fi
+          }
+          
+          export APPWRITE_ENDPOINT=$(doppler secrets get APPWRITE_ENDPOINT --config staging --plain 2>/dev/null || echo "${{ secrets.APPWRITE_ENDPOINT }}")
+          export APPWRITE_PROJECT_ID=$(doppler secrets get APPWRITE_PROJECT_ID --config staging --plain 2>/dev/null || echo "${{ secrets.APPWRITE_PROJECT_ID }}")
+          export APPWRITE_API_KEY=$(doppler secrets get APPWRITE_API_KEY --config staging --plain 2>/dev/null || echo "${{ secrets.APPWRITE_API_KEY }}")
+          
           cd backend
           npm install --omit=dev
-          
-          # Use doppler run to inject all staging secrets automatically
-          # If DOPPLER_TOKEN is not set or fails, script will use GitHub secrets fallback
-          if [ -z "$DOPPLER_TOKEN" ]; then
-            echo "⚠️  DOPPLER_TOKEN not set, using GitHub secrets fallback"
-            node setup-appwrite.js
-          else
-            doppler run --config staging -- node setup-appwrite.js
-          fi
+          node setup-appwrite.js
 
   discover:
     needs: provision-appwrite
@@ -96,19 +100,27 @@ jobs:
         working-directory: ${{ matrix.app }}
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-          # GitHub secrets fallback
-          VITE_APPWRITE_ENDPOINT: ${{ secrets.VITE_APPWRITE_ENDPOINT }}
-          VITE_APPWRITE_PROJECT_ID: ${{ secrets.VITE_APPWRITE_PROJECT_ID }}
-          VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL_STAGING }}
         run: |
-          # Use doppler run to inject VITE_* variables from staging config
-          # If DOPPLER_TOKEN is not set, npm run build will use GitHub secrets fallback
-          if [ -z "$DOPPLER_TOKEN" ]; then
-            echo "⚠️  DOPPLER_TOKEN not set, using GitHub secrets fallback"
-            npm run build
-          else
-            doppler run --config staging -- npm run build
-          fi
+          # Export Doppler secrets as env vars; fall back to GitHub secrets
+          export_doppler_var() {
+            local key=$1
+            local doppler_value=$(doppler secrets get "$key" --config staging --plain 2>/dev/null || echo "")
+            if [ -n "$doppler_value" ]; then
+              export "$key=$doppler_value"
+            fi
+          }
+          
+          # Try to get VITE vars from Doppler, fall back to GitHub secrets
+          export VITE_APPWRITE_ENDPOINT="${{ secrets.VITE_APPWRITE_ENDPOINT }}"
+          export VITE_APPWRITE_PROJECT_ID="${{ secrets.VITE_APPWRITE_PROJECT_ID }}"
+          export VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL }}"
+          export VITE_APPWRITE_FUNCTION_URL="${{ secrets.VITE_APPWRITE_FUNCTION_URL }}"
+          
+          export_doppler_var VITE_APPWRITE_ENDPOINT
+          export_doppler_var VITE_APPWRITE_PROJECT_ID
+          export_doppler_var VITE_APPWRITE_FUNCTION_URL
+          
+          npm run build
 
       - name: Detect build output directory
         id: build-out
