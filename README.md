@@ -1,5 +1,4 @@
-# AcademicX Platform
-
+# AcademicX School management Platform
 
 ## Architecture
 
@@ -15,6 +14,7 @@ academicx/
 │   ├── functions/         → Auth, results, PINs, notifications
 │   ├── database/          → Schema definitions & sample data
 │   ├── auth/              → RBAC middleware
+│   ├── cron/              → whatsapp cron job for school fees reminders
 │   └── payment/           → Squad (GTBank) integration
 └── shared/
     ├── components/        → Reusable React + CSS (liquid glass)
@@ -27,28 +27,31 @@ academicx/
 ### Prerequisites
 - Node.js 18+
 - npm 9+
+- docker 
+- appwrite locally running on docker 
+- redis locally running on docker
+
+### Note 
+- For development ensure to run your appwrite and redis on the correct specified port. 
+- application secrets are managed with dopler, 
+- Guide on installing Docker https://docs.docker.com/engine/install/ubuntu/ ,
+- Guide on installing appwrite https://appwrite.io/docs/advanced/self-hosting/installation and
+- Guide on installing redis https://redis.io/docs/latest/operate/oss_and_stack/install/install-stack/docker/ 
 
 ### Run any app locally
 
 ```bash
-# 1. Navigate to an app
-cd apps/landing-page   # or admin-app, staff-app, etc.
-
-# 2. Install dependencies
+cd apps/landing-page 
 npm install
-
-# 3. Start dev server
 npm run dev
 ```
-
-Each app runs independently on its own port (3000-3004).
 
 ### Build for production
 
 ```bash
 cd apps/landing-page
-npm run build    # Output in dist/
-npm run preview  # Preview production build
+npm run build    
+npm run preview  
 ```
 
 ## Tech Stack
@@ -57,7 +60,6 @@ npm run preview  # Preview production build
 |-----------|-----------|
 | Frontend  | React 18 + Vite |
 | Routing   | React Router v7 |
-| Styling   | Liquid Glass CSS (custom) |
 | Backend   | Appwrite (planned) |
 | Payments  | Squad by GTBank |
 | Realtime  | Appwrite Realtime (planned) |
@@ -65,7 +67,7 @@ npm run preview  # Preview production build
 ## Apps Overview
 
 ### Landing Page
-Marketing site with hero, features, pricing, and school signup CTA. Full liquid glass design with animated background orbs and SVG refraction effects.
+Marketing site with hero, features, pricing, and school signup CTA.
 
 ### Admin App
 - **Dashboard**: Stats, recent activity, quick actions
@@ -113,13 +115,13 @@ All backend functions are stubbed with `TODO` comments marking Appwrite SDK inte
 - **RBAC**: `backend/auth/middleware.js` → Role hierarchy
 
 ## Payment Setup (Squad)
+Squadco sandbox is used for the development and staging stage, only deployment stage uses real keys
+ Sandbox URL: `https://sandbox-api-d.squadco.com`
+ Production URL: `https://api.squadco.com`
 
-1. Create a Squad account at [squadco.com](https://squadco.com)
-2. Get your API keys from the Squad dashboard
-3. Set keys in Super Admin > System > Squad Payment Config
-4. Sandbox URL: `https://sandbox-api-d.squadco.com`
-5. Production URL: `https://api.squadco.com`
+f9bad4d0347a2dfc91df972be35cf81ce9501715b11b866b6f99642811a8dc6f 
 
-## License
+24a1c7bebac2e272b280e9d48a50b389fb50264b0d32e8987fa9f25d5c79fe2a
 
-Proprietary. All rights reserved.
+
+This is my secret key for my local appwrite setup. 

@@ -2007,6 +2007,7 @@ const COLLECTIONS = {
             required: true,
             type: 'datetime',
         }
+        ],
         indexes: [
          { key: 'idx_school_term_session', type: 'unique', attributes: ["schoolId","term","session"] },
          { key: 'idx_payment_ref', type: 'key', attributes: ["paymentReference"] }
