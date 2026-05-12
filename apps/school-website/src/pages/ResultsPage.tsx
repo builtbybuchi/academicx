@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SchoolSubPage } from '@/components/school/SchoolSubPage';
 import { StudentAppPrompt } from '@/components/school/StudentAppPrompt';
 import { useSchoolSite } from '@/context/SchoolSiteContext';
 import { Button } from '@/components/ui/button';
-import { getStudentResults } from '@/lib/api';
+import { getStudentResults, getStudentByAdmissionNumber, listSubjects } from '@/lib/api';
 import { useBasePath } from '@/hooks/useBasePath';
 import { BookLoader, ButtonBarLoader } from '@/components/ui/BookLoader';
+import { ReportCard } from '@/components/school/ReportCard';
 
 export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
     const { school, sessions } = useSchoolSite();
@@ -16,6 +17,8 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
     const [selectedTerm, setSelectedTerm] = useState('First Term');
     const [loading, setLoading] = useState(true);
     const [results, setResults] = useState<any[]>([]);
+    const [student, setStudent] = useState<any>(null);
+    const [subjects, setSubjects] = useState<any[]>([]);
     const [fetchingResults, setFetchingResults] = useState(false);
     const [popup, setPopup] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
@@ -24,17 +27,42 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
         .map((item) => ({ $id: String(item.$id || item.id || item.name || 'session'), name: String(item.name || '').trim() }))
         .filter((item) => item.name.length > 0);
 
+    const subjectsById = useMemo(() => {
+        return subjects.reduce((acc, sub) => {
+            acc[sub.$id] = sub.name;
+            return acc;
+        }, {} as Record<string, string>);
+    }, [subjects]);
+
     useEffect(() => {
         if (!studentId && !isEmbedded) {
             navigate(`${basePath}/login`);
             return;
         }
-        const fallbackSession = String((school as any)?.currentSession || '').trim();
-        const fallbackTerm = String((school as any)?.currentTerm || '').trim();
-        const optionSession = sessionOptions.length > 0 ? sessionOptions[0].name : fallbackSession;
-        setSelectedSession(optionSession || '');
-        if (fallbackTerm) setSelectedTerm(fallbackTerm);
-        setLoading(false);
+        
+        const loadInitialData = async () => {
+            if (studentId && school?.$id) {
+                try {
+                    const [studentData, subjectsData] = await Promise.all([
+                        getStudentByAdmissionNumber(school.$id, studentId),
+                        listSubjects(school.$id)
+                    ]);
+                    setStudent(studentData);
+                    setSubjects(subjectsData.documents || []);
+                } catch (err) {
+                    console.error('Failed to load student/subjects:', err);
+                }
+            }
+            
+            const fallbackSession = String((school as any)?.currentSession || '').trim();
+            const fallbackTerm = String((school as any)?.currentTerm || '').trim();
+            const optionSession = sessionOptions.length > 0 ? sessionOptions[0].name : fallbackSession;
+            setSelectedSession(optionSession || '');
+            if (fallbackTerm) setSelectedTerm(fallbackTerm);
+            setLoading(false);
+        };
+
+        loadInitialData();
     }, [school, sessionOptions, studentId, navigate, basePath, isEmbedded]);
 
     const sessionOptionsFallback = sessionOptions.length > 0
@@ -52,17 +80,20 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
         try {
             const res = await getStudentResults(studentId, selectedTerm, selectedSession);
             const rows = res.documents || [];
-            const approvedRows = rows.filter((item: any) => ['approved', 'published'].includes(String(item.status || '').toLowerCase()));
+            
+            // In the student app, we already updated getStudentResults to only return published results
+            // But we filter here just in case, and to handle the "not published" message
+            const publishedRows = rows.filter((item: any) => item.isPublished === true);
 
-            if (approvedRows.length > 0) {
-                setResults(approvedRows);
-                setPopup({ type: 'success', message: `Loaded ${approvedRows.length} result record${approvedRows.length > 1 ? 's' : ''} for ${selectedTerm}, ${selectedSession}.` });
+            if (publishedRows.length > 0) {
+                setResults(publishedRows);
+                setPopup({ type: 'success', message: `Loaded ${publishedRows.length} result record${publishedRows.length > 1 ? 's' : ''} for ${selectedTerm}, ${selectedSession}.` });
             } else if (rows.length > 0) {
                 setResults([]);
-                setPopup({ type: 'warning', message: 'Result not published yet for the selected term and session.' });
+                setPopup({ type: 'warning', message: 'Results for this term have not been published by the school administration yet.' });
             } else {
                 setResults([]);
-                setPopup({ type: 'error', message: 'We cannot access this result for the selected term and session.' });
+                setPopup({ type: 'error', message: 'No result records found for the selected term and session.' });
             }
         } catch (err) {
             console.error('Failed to fetch results:', err);
@@ -77,7 +108,7 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
 
     const content = (
         <div className={`space-y-12 ${isEmbedded ? '' : 'max-w-4xl mx-auto'}`}>
-            <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-xl shadow-black/5 grid md:grid-cols-3 gap-6 items-end">
+            <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-xl shadow-black/5 grid md:grid-cols-3 gap-6 items-end no-print">
                 <div className="space-y-2">
                     <label className="text-sm font-bold text-slate-500 uppercase tracking-widest">Academic Session</label>
                     <select 
@@ -110,7 +141,7 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
             </div>
 
             {popup && (
-                <div className={`rounded-2xl border px-6 py-4 ${
+                <div className={`rounded-2xl border px-6 py-4 no-print ${
                     popup.type === 'success'
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                         : popup.type === 'warning'
@@ -132,24 +163,24 @@ export function ResultsPage({ isEmbedded = false }: { isEmbedded?: boolean }) {
                 </div>
             ) : results.length > 0 ? (
                 <div className="grid gap-6">
-                    {/* Render results list */}
-                    {results.map((res, i) => (
-                        <div key={i} className="p-6 bg-white border border-slate-100 rounded-2xl shadow-sm flex items-center justify-between">
-                            <div>
-                                <h4 className="font-bold text-lg">{res.subjectName}</h4>
-                                <p className="text-sm text-slate-500">Score: {res.totalScore} | Grade: {res.grade}</p>
-                            </div>
-                            <Button variant="outline" size="sm">Download PDF</Button>
-                        </div>
-                    ))}
+                    <ReportCard 
+                        data={{
+                            results,
+                            student,
+                            term: selectedTerm,
+                            session: selectedSession
+                        }}
+                        subjectsById={subjectsById}
+                        school={school}
+                    />
                 </div>
             ) : !loading && (
-                <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                <div className="py-20 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200 no-print">
                     <p className="text-slate-400">Select session and term, then click Check Results.</p>
                 </div>
             )}
 
-            {!isEmbedded && <StudentAppPrompt schoolId={school.$id} />}
+            {!isEmbedded && <div className="no-print"><StudentAppPrompt schoolId={school.$id} /></div>}
         </div>
     );
 
