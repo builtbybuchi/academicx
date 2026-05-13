@@ -119,9 +119,51 @@ Squadco sandbox is used for the development and staging stage, only deployment s
  Sandbox URL: `https://sandbox-api-d.squadco.com`
  Production URL: `https://api.squadco.com`
 
-f9bad4d0347a2dfc91df972be35cf81ce9501715b11b866b6f99642811a8dc6f 
+## Contribution guide 
+The environment vairables are managed with doppler for the all stages. 
 
-24a1c7bebac2e272b280e9d48a50b389fb50264b0d32e8987fa9f25d5c79fe2a
+You are required to create your own database, and test all you production steps locally. before pushing the code to dev. 
+
+That is to say that evey code changes should be made on a seperate branch and PR should be madde to dev, never to stag or main
 
 
-This is my secret key for my local appwrite setup. 
+After your changes is accepted and commited to staging, you can view it in one of the links below. 
+
+You can login with the logins in the projecttarge.md
+
+
+{
+  "deployments": [
+    {
+      "app": "admin-app-stg",
+      "bucket": "academicx-admin-app-stg-215587",
+      "url": "https://academicx-admin-app-stg.ocbuchi.workers.dev"
+    },
+    {
+      "app": "landing-page-stg",
+      "bucket": "academicx-landing-page-stg-604102",
+      "url": "https://academicx-landing-page-stg.ocbuchi.workers.dev"
+    },
+    {
+      "app": "school-website-stg",
+      "bucket": "academicx-school-website-stg-594721",
+      "url": "https://academicx-school-website-stg.ocbuchi.workers.dev"
+    },
+    {
+      "app": "staff-app-stg",
+      "bucket": "academicx-staff-app-stg-542366",
+      "url": "https://academicx-staff-app-stg.ocbuchi.workers.dev"
+    },
+    {
+      "app": "student-parent-app-stg",
+      "bucket": "academicx-student-parent-app-stg-424948",
+      "url": "https://academicx-student-parent-app-stg.ocbuchi.workers.dev"
+    },
+    {
+      "app": "super-admin-web-stg",
+      "bucket": "academicx-super-admin-web-stg-701938",
+      "url": "https://academicx-super-admin-web-stg.ocbuchi.workers.dev"
+    }
+  ],
+  "timestamp": "2026-05-13T18:43:43.923889Z"
+}
