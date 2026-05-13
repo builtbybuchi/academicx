@@ -21,29 +21,13 @@ jobs:
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
 
-      - name: Run Appwrite Setup (Doppler + GitHub secrets fallback)
+      - name: Run Appwrite Setup with Doppler
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          # Try Doppler first; fall back to GitHub secrets if not found
-          export_secret() {
-            local key=$1
-            local doppler_value=$(doppler secrets get "$key" --plain 2>/dev/null || echo "")
-            if [ -z "$doppler_value" ]; then
-              # Fallback to GitHub secrets (use env var from inputs)
-              eval "echo \$$key"
-            else
-              echo "$doppler_value"
-            fi
-          }
-          
-          export APPWRITE_ENDPOINT=$(doppler secrets get APPWRITE_ENDPOINT --config staging --plain 2>/dev/null || echo "${{ secrets.APPWRITE_ENDPOINT }}")
-          export APPWRITE_PROJECT_ID=$(doppler secrets get APPWRITE_PROJECT_ID --config staging --plain 2>/dev/null || echo "${{ secrets.APPWRITE_PROJECT_ID }}")
-          export APPWRITE_API_KEY=$(doppler secrets get APPWRITE_API_KEY --config staging --plain 2>/dev/null || echo "${{ secrets.APPWRITE_API_KEY }}")
-          
           cd backend
           npm install --omit=dev
-          node setup-appwrite.js
+          doppler run --project academicx --config stg -- node setup-appwrite.js
 
   discover:
     needs: provision-appwrite
@@ -96,31 +80,12 @@ jobs:
         working-directory: ${{ matrix.app }}
         run: npm ci
 
-      - name: Build with Doppler secrets (fallback to GitHub secrets)
+      - name: Build with Doppler
         working-directory: ${{ matrix.app }}
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          # Export Doppler secrets as env vars; fall back to GitHub secrets
-          export_doppler_var() {
-            local key=$1
-            local doppler_value=$(doppler secrets get "$key" --config staging --plain 2>/dev/null || echo "")
-            if [ -n "$doppler_value" ]; then
-              export "$key=$doppler_value"
-            fi
-          }
-          
-          # Try to get VITE vars from Doppler, fall back to GitHub secrets
-          export VITE_APPWRITE_ENDPOINT="${{ secrets.VITE_APPWRITE_ENDPOINT }}"
-          export VITE_APPWRITE_PROJECT_ID="${{ secrets.VITE_APPWRITE_PROJECT_ID }}"
-          export VITE_BACKEND_URL="${{ secrets.VITE_BACKEND_URL }}"
-          export VITE_APPWRITE_FUNCTION_URL="${{ secrets.VITE_APPWRITE_FUNCTION_URL }}"
-          
-          export_doppler_var VITE_APPWRITE_ENDPOINT
-          export_doppler_var VITE_APPWRITE_PROJECT_ID
-          export_doppler_var VITE_APPWRITE_FUNCTION_URL
-          
-          npm run build
+          doppler run --project academicx --config stg -- npm run build
 
       - name: Detect build output directory
         id: build-out
