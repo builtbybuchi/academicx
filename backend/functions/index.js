@@ -2,6 +2,20 @@ require('dotenv').config();
 const { Client, Databases, Users, ID, Query } = require('node-appwrite');
 const nodemailer = require('nodemailer');
 const { initiateTransaction, verifyTransaction } = require('../payment/squad');
+const {
+    acquireLock,
+    buildCacheKey,
+    buildCachePattern,
+    cacheGetJson,
+    cacheGetOrSet,
+    cacheSetJson,
+    deleteByPattern,
+    incrementRateLimit,
+    releaseLock,
+    requestIp,
+    stableHash,
+    stableStringify,
+} = require('./runtime-redis');
 
 // Alibaba Cloud Direct Mail SMTP Configuration
 const SMTP_FROM = process.env.SMTP_FROM || 'AcademicX <no-reply@mail.sinod.app>';
@@ -75,6 +89,399 @@ function computePaymentFees(amount) {
         totalFee: Number((squadFee + platformFee).toFixed(2)),
         totalCharge: Number((numericAmount + squadFee + platformFee).toFixed(2)),
     };
+}
+
+const DEFAULT_PUBLIC_RATE_LIMITS = [
+    { scope: 'ip', limit: 60, windowSeconds: 60 },
+    { scope: 'fingerprint', limit: 40, windowSeconds: 60 },
+];
+
+const DEFAULT_AUTH_RATE_LIMITS = [
+    { scope: 'user', limit: 120, windowSeconds: 60 },
+    { scope: 'ip', limit: 240, windowSeconds: 60 },
+    { scope: 'school', limit: 240, windowSeconds: 60 },
+];
+
+const ACTION_RATE_LIMIT_OVERRIDES = {
+    submitContactMessage: {
+        public: [
+            { scope: 'ip', limit: 5, windowSeconds: 60 },
+            { scope: 'fingerprint', limit: 5, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 3600 },
+        ],
+        dedupeSeconds: 30,
+    },
+    resolveStudentLogin: {
+        public: [
+            { scope: 'ip', limit: 5, windowSeconds: 300 },
+            { scope: 'fingerprint', limit: 5, windowSeconds: 300 },
+            { scope: 'student', limit: 5, windowSeconds: 300 },
+        ],
+    },
+    createSchoolFeePayment: {
+        auth: [
+            { scope: 'user', limit: 8, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    initiateStudentFeePayment: {
+        auth: [
+            { scope: 'user', limit: 8, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+            { scope: 'student', limit: 6, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    verifySchoolFeePayment: {
+        public: [
+            { scope: 'ip', limit: 15, windowSeconds: 60 },
+            { scope: 'fingerprint', limit: 15, windowSeconds: 60 },
+            { scope: 'transaction', limit: 3, windowSeconds: 300 },
+        ],
+        auth: [
+            { scope: 'user', limit: 15, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'transaction', limit: 3, windowSeconds: 300 },
+        ],
+    },
+    verifySquadCoPayment: {
+        auth: [
+            { scope: 'user', limit: 10, windowSeconds: 60 },
+            { scope: 'ip', limit: 15, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 15,
+    },
+    sendChatMessage: {
+        auth: [
+            { scope: 'user', limit: 20, windowSeconds: 60 },
+            { scope: 'ip', limit: 60, windowSeconds: 60 },
+            { scope: 'school', limit: 120, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 10,
+    },
+    submitResult: {
+        auth: [
+            { scope: 'user', limit: 80, windowSeconds: 60 },
+            { scope: 'ip', limit: 120, windowSeconds: 60 },
+            { scope: 'school', limit: 300, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 10,
+    },
+    approveResults: {
+        auth: [
+            { scope: 'user', limit: 20, windowSeconds: 60 },
+            { scope: 'ip', limit: 40, windowSeconds: 60 },
+            { scope: 'school', limit: 60, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 10,
+    },
+    publishResults: {
+        auth: [
+            { scope: 'user', limit: 10, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 30, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    publishResultsWithPins: {
+        auth: [
+            { scope: 'user', limit: 8, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    sendBulkEmailToParents: {
+        auth: [
+            { scope: 'user', limit: 5, windowSeconds: 3600 },
+            { scope: 'ip', limit: 10, windowSeconds: 3600 },
+            { scope: 'school', limit: 10, windowSeconds: 3600 },
+        ],
+        dedupeSeconds: 60,
+    },
+    sendSchoolAnnouncement: {
+        auth: [
+            { scope: 'user', limit: 5, windowSeconds: 3600 },
+            { scope: 'ip', limit: 10, windowSeconds: 3600 },
+            { scope: 'school', limit: 10, windowSeconds: 3600 },
+        ],
+        dedupeSeconds: 60,
+    },
+    addStaff: {
+        auth: [
+            { scope: 'user', limit: 20, windowSeconds: 60 },
+            { scope: 'ip', limit: 40, windowSeconds: 60 },
+            { scope: 'school', limit: 40, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    enrollStudent: {
+        auth: [
+            { scope: 'user', limit: 20, windowSeconds: 60 },
+            { scope: 'ip', limit: 40, windowSeconds: 60 },
+            { scope: 'school', limit: 40, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    updateProfile: {
+        auth: [
+            { scope: 'user', limit: 60, windowSeconds: 60 },
+            { scope: 'ip', limit: 120, windowSeconds: 60 },
+            { scope: 'school', limit: 120, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 10,
+    },
+    recordManualSchoolFeePayment: {
+        auth: [
+            { scope: 'user', limit: 20, windowSeconds: 60 },
+            { scope: 'ip', limit: 40, windowSeconds: 60 },
+            { scope: 'school', limit: 60, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    requestSchoolFeeWithdrawal: {
+        auth: [
+            { scope: 'user', limit: 5, windowSeconds: 3600 },
+            { scope: 'ip', limit: 10, windowSeconds: 3600 },
+            { scope: 'school', limit: 5, windowSeconds: 3600 },
+        ],
+        dedupeSeconds: 60,
+    },
+    generateSchoolPins: {
+        auth: [
+            { scope: 'user', limit: 10, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    purchaseStudentPin: {
+        auth: [
+            { scope: 'user', limit: 10, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+            { scope: 'student', limit: 8, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    createSchoolAdmin: {
+        auth: [
+            { scope: 'user', limit: 10, windowSeconds: 60 },
+            { scope: 'ip', limit: 20, windowSeconds: 60 },
+            { scope: 'school', limit: 20, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+    registerSchool: {
+        public: [
+            { scope: 'ip', limit: 5, windowSeconds: 60 },
+            { scope: 'fingerprint', limit: 5, windowSeconds: 60 },
+        ],
+        dedupeSeconds: 30,
+    },
+};
+
+const ACTION_CACHE_TTLS = {
+    getStaffPortalData: 45,
+    getStudentPortalData: 45,
+    getSuperAdminPortalData: 20,
+    listChatMessages: 10,
+    getSchoolFeesReport: 30,
+    getStudentFeeStatus: 15,
+    listEmailSends: 20,
+    getEmailTemplate: 60,
+    verifySchoolFeePayment: 300,
+};
+
+const MUTATING_ACTIONS = new Set([
+    'registerSchool',
+    'createSchoolAdmin',
+    'assignFormTeacher',
+    'setStaffAttendanceOfficer',
+    'addStaff',
+    'enrollStudent',
+    'updateProfile',
+    'verifyAndSaveAdminBankDetails',
+    'requestSchoolFeeWithdrawal',
+    'markStudentAttendance',
+    'staffCheckIn',
+    'staffCheckOut',
+    'markStaffAttendance',
+    'staffSetExcused',
+    'submitResult',
+    'approveResults',
+    'publishResults',
+    'promoteStudents',
+    'generateSchoolPins',
+    'purchaseStudentPin',
+    'verifyPin',
+    'sendBulkEmailToParents',
+    'sendSchoolAnnouncement',
+    'resendEmail',
+    'createSquadCoPayment',
+    'verifySquadCoPayment',
+    'publishResultsWithPins',
+    'sendChatMessage',
+    'createSchoolFeePayment',
+    'recordManualSchoolFeePayment',
+    'initiateStudentFeePayment',
+    'handleSchoolFeeWebhook',
+    'verifySchoolFeePayment',
+    'submitContactMessage',
+]);
+
+function getEffectiveSchoolId(payload, user, result) {
+    return String(
+        payload?.schoolId
+        || user?.schoolId
+        || result?.data?.schoolId
+        || result?.data?.school?.$id
+        || ''
+    ).trim();
+}
+
+function buildActionCacheKey(action, payload, authId, user, result) {
+    const schoolId = getEffectiveSchoolId(payload, user, result) || 'global';
+    const base = { action, authId: authId || '', schoolId };
+
+    if (action === 'listChatMessages') {
+        base.channel = String(payload?.channel || 'general').trim();
+        base.limit = Number(payload?.limit || 100);
+    } else if (action === 'getSchoolFeesReport') {
+        base.term = String(payload?.term || '').trim();
+        base.session = String(payload?.session || '').trim();
+    } else if (action === 'getStudentFeeStatus') {
+        base.studentId = String(payload?.studentId || '').trim();
+        base.term = String(payload?.term || '').trim();
+        base.session = String(payload?.session || '').trim();
+    } else if (action === 'getEmailTemplate' || action === 'resendEmail') {
+        base.emailId = String(payload?.emailId || '').trim();
+    } else if (action === 'verifySchoolFeePayment') {
+        base.transactionRef = String(payload?.transactionRef || payload?.reference || '').trim();
+    }
+
+    return buildCacheKey(['cache', 'action', action, schoolId, authId || 'public', stableHash(base)]);
+}
+
+function buildRateLimitKey(scope, action, payload, authId, req, user) {
+    const ip = requestIp(req);
+    const schoolId = getEffectiveSchoolId(payload, user, null) || String(payload?.schoolId || '').trim();
+    const channel = String(payload?.channel || 'general').trim();
+    const studentId = String(payload?.studentId || payload?.admissionNumber || '').trim();
+    const transactionRef = String(payload?.transactionRef || payload?.reference || '').trim();
+    const userKey = authId ? authId : 'public';
+    const fingerprint = stableHash({ action, ip, userAgent: String(req?.userAgent || req?.headers?.['user-agent'] || ''), schoolId, userKey });
+
+    if (scope === 'ip') return buildCacheKey(['limit', action, 'ip', ip]);
+    if (scope === 'user') return buildCacheKey(['limit', action, 'user', authId || 'public']);
+    if (scope === 'school') return buildCacheKey(['limit', action, 'school', schoolId || 'none']);
+    if (scope === 'fingerprint') return buildCacheKey(['limit', action, 'fingerprint', fingerprint]);
+    if (scope === 'channel') return buildCacheKey(['limit', action, 'channel', channel, schoolId || 'none']);
+    if (scope === 'student') return buildCacheKey(['limit', action, 'student', studentId || stableHash({ action, ip, schoolId })]);
+    if (scope === 'transaction') return buildCacheKey(['limit', action, 'transaction', transactionRef || stableHash({ action, ip, schoolId, authId })]);
+    if (scope === 'dedupe') return buildCacheKey(['limit', action, 'dedupe', stableHash({ action, authId: authId || 'public', payload, schoolId })]);
+    return buildCacheKey(['limit', action, scope, stableHash({ action, scope, payload, authId, ip, schoolId })]);
+}
+
+function buildRateLimitRules(action, payload, req, authId, user) {
+    const override = ACTION_RATE_LIMIT_OVERRIDES[action] || {};
+    const baseRules = authId ? DEFAULT_AUTH_RATE_LIMITS : DEFAULT_PUBLIC_RATE_LIMITS;
+    const rules = [
+        ...baseRules,
+        ...(authId ? (override.auth || []) : (override.public || [])),
+    ];
+
+    return rules.map((rule) => ({
+        ...rule,
+        key: buildRateLimitKey(rule.scope, action, payload, authId, req, user),
+    }));
+}
+
+async function enforceActionGuard(action, payload, req, authId, user) {
+    const rules = buildRateLimitRules(action, payload, req, authId, user);
+
+    for (const rule of rules) {
+        const result = await incrementRateLimit(rule.key, rule.windowSeconds);
+        if (result && Number(result.current) > Number(rule.limit)) {
+            return {
+                allowed: false,
+                status: 429,
+                error: `Rate limit exceeded for ${action}. Please try again in ${Math.max(Number(result.ttl || rule.windowSeconds), 1)} seconds.`,
+            };
+        }
+    }
+
+    const override = ACTION_RATE_LIMIT_OVERRIDES[action];
+    if (override?.dedupeSeconds) {
+        const dedupeKey = buildRateLimitKey('dedupe', action, payload, authId, req, user);
+        const token = await acquireLock(dedupeKey, override.dedupeSeconds);
+        if (!token) {
+            return {
+                allowed: false,
+                status: 409,
+                error: 'Duplicate request detected. Please wait a moment before retrying.',
+            };
+        }
+
+        return { allowed: true, dedupeKey, dedupeToken: token };
+    }
+
+    return { allowed: true };
+}
+
+function isCacheableAction(action) {
+    return Boolean(ACTION_CACHE_TTLS[action]);
+}
+
+async function invalidateActionCaches(action, payload, authId, user, result) {
+    if (!MUTATING_ACTIONS.has(action)) {
+        return;
+    }
+
+    const schoolId = getEffectiveSchoolId(payload, user, result);
+    const patterns = [];
+    const relatedUserDocIds = new Set();
+
+    for (const candidate of [result?.data?.user, result?.data?.admin, result?.data]) {
+        if (candidate && typeof candidate === 'object' && candidate.$id && candidate.authId) {
+            relatedUserDocIds.add(candidate.$id);
+        }
+    }
+
+    if (schoolId) {
+        patterns.push(buildCachePattern(['cache', 'action', '*', schoolId, '*', '*']));
+        patterns.push(buildCachePattern(['cache', 'action', 'getSuperAdminPortalData', 'global', '*', '*']));
+    }
+
+    if (['addStaff', 'enrollStudent', 'updateProfile', 'createSchoolAdmin', 'registerSchool'].includes(action) && authId) {
+        patterns.push(buildCacheKey(['auth', 'user', authId]));
+        patterns.push(buildCacheKey(['auth', 'role', authId]));
+    }
+
+    for (const userDocId of relatedUserDocIds) {
+        patterns.push(buildCacheKey(['student', 'user', userDocId]));
+        patterns.push(buildCacheKey(['staff', 'user', userDocId]));
+    }
+
+    if (action === 'assignFormTeacher') {
+        const classId = String(payload?.classId || '').trim();
+        const className = String(payload?.className || '').trim();
+        if (classId) {
+            patterns.push(buildCacheKey(['class', 'id', classId]));
+        }
+        if (schoolId && className) {
+            patterns.push(buildCacheKey(['class', 'school', schoolId, 'name', className]));
+        }
+    }
+
+    const uniquePatterns = [...new Set(patterns.filter(Boolean))];
+    for (const pattern of uniquePatterns) {
+        await deleteByPattern(pattern);
+    }
 }
 
 async function createPaymentAttemptRecord(db, data) {
@@ -622,22 +1029,28 @@ async function setAuthUserTags(usersApi, authUserId, role, schoolId) {
 }
 
 async function getUserByAuthId(authId) {
-    const db = getDb();
-    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.USERS.id, [
-        Query.equal('authId', authId),
-        Query.limit(1),
-    ]);
-    return res.documents[0] || null;
+    const cacheKey = buildCacheKey(['auth', 'user', authId]);
+    return cacheGetOrSet(cacheKey, 120, async () => {
+        const db = getDb();
+        const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.USERS.id, [
+            Query.equal('authId', authId),
+            Query.limit(1),
+        ]);
+        return res.documents[0] || null;
+    }, { cacheNull: true });
 }
 
 async function getTaggedRole(authId) {
-    try {
-        const users = getUsersApi();
-        const authUser = await users.get(authId);
-        return extractRoleFromTags(authUser);
-    } catch {
-        return null;
-    }
+    const cacheKey = buildCacheKey(['auth', 'role', authId]);
+    return cacheGetOrSet(cacheKey, 120, async () => {
+        try {
+            const users = getUsersApi();
+            const authUser = await users.get(authId);
+            return extractRoleFromTags(authUser);
+        } catch {
+            return null;
+        }
+    }, { cacheNull: true });
 }
 
 async function requireRole(authId, allowedRoles) {
@@ -704,36 +1117,44 @@ async function ensureAuth(definition, authId, payload) {
 }
 
 async function safeGetSchoolByCode(db, schoolCode) {
-    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOLS.id, [
-        Query.equal('schoolCode', schoolCode),
-        Query.limit(1),
-    ]);
-    return res.documents[0] || null;
+    return cacheGetOrSet(buildCacheKey(['school', 'code', schoolCode]), 300, async () => {
+        const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.SCHOOLS.id, [
+            Query.equal('schoolCode', schoolCode),
+            Query.limit(1),
+        ]);
+        return res.documents[0] || null;
+    }, { cacheNull: true });
 }
 
 async function getStudentDocByUser(db, userDocId) {
-    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
-        Query.equal('userId', userDocId),
-        Query.limit(1),
-    ]);
-    return res.documents[0] || null;
+    return cacheGetOrSet(buildCacheKey(['student', 'user', userDocId]), 90, async () => {
+        const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.STUDENTS.id, [
+            Query.equal('userId', userDocId),
+            Query.limit(1),
+        ]);
+        return res.documents[0] || null;
+    }, { cacheNull: true });
 }
 
 async function getStaffDocByUser(db, userDocId) {
-    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF.id, [
-        Query.equal('userId', userDocId),
-        Query.limit(1),
-    ]);
-    return res.documents[0] || null;
+    return cacheGetOrSet(buildCacheKey(['staff', 'user', userDocId]), 90, async () => {
+        const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.STAFF.id, [
+            Query.equal('userId', userDocId),
+            Query.limit(1),
+        ]);
+        return res.documents[0] || null;
+    }, { cacheNull: true });
 }
 
 async function getClassByIdOrName(db, schoolId, classId, className) {
     if (classId) {
-        const classDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, classId);
-        if (classDoc.schoolId !== schoolId) {
-            throw new Error('Class does not belong to this school.');
-        }
-        return classDoc;
+        return cacheGetOrSet(buildCacheKey(['class', 'id', classId]), 120, async () => {
+            const classDoc = await db.getDocument(DATABASE_ID, COLLECTIONS.CLASSES.id, classId);
+            if (classDoc.schoolId !== schoolId) {
+                throw new Error('Class does not belong to this school.');
+            }
+            return classDoc;
+        }, { cacheNull: true });
     }
 
     const normalized = String(className || '').trim();
@@ -741,15 +1162,17 @@ async function getClassByIdOrName(db, schoolId, classId, className) {
         throw new Error('classId or className is required.');
     }
 
-    const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
-        Query.equal('schoolId', schoolId),
-        Query.equal('name', normalized),
-        Query.limit(1),
-    ]);
-    if (res.total === 0) {
-        throw new Error('Class not found.');
-    }
-    return res.documents[0];
+    return cacheGetOrSet(buildCacheKey(['class', 'school', schoolId, 'name', normalized]), 120, async () => {
+        const res = await db.listDocuments(DATABASE_ID, COLLECTIONS.CLASSES.id, [
+            Query.equal('schoolId', schoolId),
+            Query.equal('name', normalized),
+            Query.limit(1),
+        ]);
+        if (res.total === 0) {
+            throw new Error('Class not found.');
+        }
+        return res.documents[0];
+    }, { cacheNull: true });
 }
 
 function isAdminRole(role) {
@@ -3462,15 +3885,47 @@ const actions = {
         handler: async ({ payload }) => {
             const db = getDb();
             const { event, data } = payload;
+            const transactionRef = String(data?.transaction_ref || data?.reference || '').trim();
             
             try {
                 if (event === 'charge_successful' && data.metadata?.type === 'school_fee') {
+                    if (transactionRef) {
+                        const lockKey = buildCacheKey(['lock', 'payment', transactionRef]);
+                        const lockToken = await acquireLock(lockKey, 30);
+                        if (!lockToken) {
+                            return { success: true, data: { alreadyProcessing: true } };
+                        }
+
+                        try {
+                            await finalizeSchoolFeePayment(db, {
+                                transactionRef,
+                                metadata: data.metadata,
+                                paymentDate: nowIso(),
+                            });
+                        } finally {
+                            await releaseLock(lockKey, lockToken);
+                        }
+                        return {
+                            success: true,
+                            data: {
+                                schoolId: String(data.metadata?.schoolId || '').trim(),
+                                transactionRef,
+                            },
+                        };
+                    }
+
                     await finalizeSchoolFeePayment(db, {
                         transactionRef: data.transaction_ref,
                         metadata: data.metadata,
                         paymentDate: nowIso(),
                     });
-                    return { success: true };
+                    return {
+                        success: true,
+                        data: {
+                            schoolId: String(data.metadata?.schoolId || '').trim(),
+                            transactionRef: data.transaction_ref,
+                        },
+                    };
                 }
 
                 if ((event === 'charge_failed' || event === 'transaction_failed' || event === 'payment_failed') && data?.transaction_ref) {
@@ -3521,72 +3976,83 @@ const actions = {
                 return { success: false, error: 'transactionRef is required.' };
             }
 
-            const squad = require('./payment-squad');
-            const verification = await squad.verifyTransaction(transactionRef);
-            if (!verification.success) {
-                return { success: false, error: verification.error || 'Unable to verify payment at this time.' };
+            const lockKey = buildCacheKey(['lock', 'payment', transactionRef]);
+            const lockToken = await acquireLock(lockKey, 30);
+            if (!lockToken) {
+                return { success: false, error: 'Payment verification is already in progress. Please retry shortly.', status: 409 };
             }
 
-            const status = String(verification.data?.status || '').toLowerCase();
-            
-            // Try to get metadata from our payment record in DB (Squad may not return it)
-            let metadata = {};
             try {
-                const paymentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS.id, [
-                    Query.equal('reference', transactionRef),
-                    Query.limit(1),
-                ]);
-                if (paymentRows.total > 0) {
-                    const paymentRecord = paymentRows.documents[0];
-                    const storedMeta = parseJson(paymentRecord.metadata || '{}', {});
-                    metadata = storedMeta;
-                    console.log('Verified payment record found in DB:', { reference: transactionRef, metadata });
-                } else {
-                    console.warn('No payment record found in DB for reference:', transactionRef);
+                const squad = require('./payment-squad');
+                const verification = await squad.verifyTransaction(transactionRef);
+                if (!verification.success) {
+                    return { success: false, error: verification.error || 'Unable to verify payment at this time.' };
                 }
-            } catch (err) {
-                console.error('Error looking up payment record:', err?.message || err);
-                // Fall back to verification response metadata if DB lookup fails
-                metadata = verification.data?.metadata || {};
-            }
-            
-            // Check for either 'type' or 'kind' field for backwards compatibility
-            const isSchoolFeePayment = metadata?.type === 'school_fee' || metadata?.kind === 'school_fee';
-            if (!isSchoolFeePayment) {
-                console.error('Payment metadata validation failed:', { 
-                    reference: transactionRef,
-                    metadata,
-                    status
-                });
-                return { success: false, error: 'Verified transaction is not a school fee payment or metadata not found.' };
-            }
 
-            if (!['success', 'successful', 'approved', 'paid'].includes(status)) {
+                const status = String(verification.data?.status || '').toLowerCase();
+                
+                // Try to get metadata from our payment record in DB (Squad may not return it)
+                let metadata = {};
+                try {
+                    const paymentRows = await db.listDocuments(DATABASE_ID, COLLECTIONS.PAYMENTS.id, [
+                        Query.equal('reference', transactionRef),
+                        Query.limit(1),
+                    ]);
+                    if (paymentRows.total > 0) {
+                        const paymentRecord = paymentRows.documents[0];
+                        const storedMeta = parseJson(paymentRecord.metadata || '{}', {});
+                        metadata = storedMeta;
+                        console.log('Verified payment record found in DB:', { reference: transactionRef, metadata });
+                    } else {
+                        console.warn('No payment record found in DB for reference:', transactionRef);
+                    }
+                } catch (err) {
+                    console.error('Error looking up payment record:', err?.message || err);
+                    // Fall back to verification response metadata if DB lookup fails
+                    metadata = verification.data?.metadata || {};
+                }
+                
+                // Check for either 'type' or 'kind' field for backwards compatibility
+                const isSchoolFeePayment = metadata?.type === 'school_fee' || metadata?.kind === 'school_fee';
+                if (!isSchoolFeePayment) {
+                    console.error('Payment metadata validation failed:', { 
+                        reference: transactionRef,
+                        metadata,
+                        status
+                    });
+                    return { success: false, error: 'Verified transaction is not a school fee payment or metadata not found.' };
+                }
+
+                if (!['success', 'successful', 'approved', 'paid'].includes(status)) {
+                    return {
+                        success: false,
+                        error: `Payment is not successful yet (status: ${status || 'unknown'}).`,
+                        data: {
+                            status,
+                            reference: verification.data?.reference || transactionRef,
+                        },
+                    };
+                }
+
+                const result = await finalizeSchoolFeePayment(db, {
+                    transactionRef,
+                    metadata,
+                    paymentDate: verification.data?.paidAt || nowIso(),
+                });
+
                 return {
-                    success: false,
-                    error: `Payment is not successful yet (status: ${status || 'unknown'}).`,
+                    success: true,
                     data: {
+                        verified: true,
+                        reference: transactionRef,
                         status,
-                        reference: verification.data?.reference || transactionRef,
+                        alreadyProcessed: Boolean(result.alreadyProcessed),
+                        schoolId: String(metadata?.schoolId || '').trim(),
                     },
                 };
+            } finally {
+                await releaseLock(lockKey, lockToken);
             }
-
-            const result = await finalizeSchoolFeePayment(db, {
-                transactionRef,
-                metadata,
-                paymentDate: verification.data?.paidAt || nowIso(),
-            });
-
-            return {
-                success: true,
-                data: {
-                    verified: true,
-                    reference: transactionRef,
-                    status,
-                    alreadyProcessed: Boolean(result.alreadyProcessed),
-                },
-            };
         },
     },
 
@@ -3682,16 +4148,51 @@ module.exports = async (arg1, arg2, arg3) => {
         }
 
         const definition = actions[action];
+        const guardResult = await enforceActionGuard(action, payload, req, authId, null);
+        if (!guardResult.allowed) {
+            return respondJson(res, { success: false, error: guardResult.error }, guardResult.status || 429, corsHeaders);
+        }
+
+        const canUsePreAuthCache = definition.auth === false && (!definition.roles || definition.roles.length === 0);
+        const preAuthCacheKey = (canUsePreAuthCache && isCacheableAction(action))
+            ? buildActionCacheKey(action, payload, authId, null, null)
+            : null;
+        if (preAuthCacheKey) {
+            const cachedResult = await cacheGetJson(preAuthCacheKey);
+            if (cachedResult && cachedResult.hit) {
+                const cachedStatus = Number(cachedResult.value?.status || (cachedResult.value?.success === false ? 400 : 200));
+                return respondJson(res, cachedResult.value, cachedStatus, corsHeaders);
+            }
+        }
+
         const authResult = await ensureAuth(definition, authId, payload);
 
         if (!authResult.authorized) {
             return respondJson(res, { success: false, error: authResult.error }, 403, corsHeaders);
         }
 
+        const cachedKey = (!canUsePreAuthCache && isCacheableAction(action))
+            ? buildActionCacheKey(action, payload, authId, authResult.user || null, null)
+            : preAuthCacheKey;
+        if (cachedKey && !preAuthCacheKey) {
+            const cachedResult = await cacheGetJson(cachedKey);
+            if (cachedResult && cachedResult.hit) {
+                const cachedStatus = Number(cachedResult.value?.status || (cachedResult.value?.success === false ? 400 : 200));
+                return respondJson(res, cachedResult.value, cachedStatus, corsHeaders);
+            }
+        }
+
         const result = await definition.handler({ payload, authId, user: authResult.user || null });
         const bodyResult = result && Object.prototype.hasOwnProperty.call(result, 'success') ? result : { success: true, data: result };
 
-        return respondJson(res, bodyResult, bodyResult.success === false ? 400 : 200, corsHeaders);
+        if (cachedKey && bodyResult.success !== false) {
+            await cacheSetJson(cachedKey, bodyResult, ACTION_CACHE_TTLS[action]);
+        }
+
+        await invalidateActionCaches(action, payload, authId, authResult.user || null, bodyResult);
+
+        const responseStatus = Number(bodyResult.status || (bodyResult.success === false ? 400 : 200));
+        return respondJson(res, bodyResult, responseStatus, corsHeaders);
     } catch (err) {
         if (typeof error === 'function') {
             error(err.message);

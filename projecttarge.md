@@ -154,22 +154,6 @@ The title of the website should be the school name and the favicon should be the
 
 Implement event, news and gallery fetching detials from the DB. 
 
-Build the student login flow on the school website. So they have two options, to pay school fees and to view result. So they select academic session, before school fees are paid, check the DB to be sure they are not paying for same term twice. School fees are published by the school, school fees not published by the school should not be accessible to the students. After the fees are paid. The charge for payment should be 1.9% 1.2 percent is squadco charge and 0.5% is platform fee. The fee is capped at 2500
-
-
-Add buy custom domain for the school as an app in the admin page website section. They should see that domains are managed by Drave Registry. With drave registry logo boldly displayed on the pop up(). Only allow .com(15 dollars, renews at 17 dollars), .org(10 dollars), .com.ng(9 dollars, renews at 11 dollars), .ng(15 dollars, renews at 17 dollars), .org.ng(6 dollars, renews at 8 dollars), .sch.ng(9 dollars, renews at 11 dollars). Use an check-domain npm library to check domain name availability before the schools are directed to make payment. Use exchange-rate-api to convert the dollars to naira. The dollars converted should be stored on the website, when prices are requested on the frontend, it should check the exchange rate, if the rates are not contained in the website then they fetch from the api and update it so subsequent requests don't need to call the api again. The only currency of interest at the moment is naira so they can make the payment in naira via squad co. After successful payment. The super admin should receive a notification that a domain is requested. And should receive an email to info@lexrunit.com. After they have made the payment they should see a pop-up that Drave Registry would update their website in less than 7 working days. The new/custom domain name chooses should be stored in the DB. 
-
-In the school admin panel add a financial tab, for tracking fees payment. 
-
-After publishing result for a term schools are requested to set the school fees for the next term, these schools fees can include a school fees breakdown, this is authomatically emailed to all parents. After publishing result for the last semester, admin should be reminded to setup the app for the next academic session. At this stage, the students are upgraded to the next class automatically. Then subjects can be updated, though all defaults from the previous session is used as the default to make edits easier. 
-
 Staffs and students can be suspended or sacked or expelled. This should soft delete the staff or students details. 
 
 
-Build the scores recording process in the staff app. Build the attendance marking flow in the staff app. 
-
-Build the staff attendance taking in the staff app. This feature is only accessible to the staff with the previledge to take staff attendance and not all staffs. 
-
-Add a view checkins section for staff app and view attendance section section in the students app. 
-
-Build the fees section in the student app so they can view all the fees they have apid in the school from that section, they can also see if they have paid for the current section. 

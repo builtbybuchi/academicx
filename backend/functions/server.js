@@ -47,12 +47,18 @@ const server = http.createServer((req, res) => {
             const rawBody = Buffer.concat(chunks).toString('utf8');
             const requestUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
             const query = Object.fromEntries(requestUrl.searchParams.entries());
+            const forwardedFor = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+            const realIp = String(req.headers['x-real-ip'] || '').trim();
+            const socketIp = String(req.socket?.remoteAddress || req.connection?.remoteAddress || '').trim();
 
             const normalizedReq = {
                 method: req.method,
                 headers: req.headers,
                 body: rawBody,
                 queryString: JSON.stringify(query),
+                path: requestUrl.pathname,
+                ip: forwardedFor || realIp || socketIp || 'unknown',
+                userAgent: req.headers['user-agent'] || '',
             };
 
             const wrappedRes = createResponse(res);
