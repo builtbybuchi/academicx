@@ -20,7 +20,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { Client, Databases } from 'node-appwrite';
+import { Client, Databases, Query } from 'node-appwrite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -112,7 +112,10 @@ async function fetchAllSchools() {
   const databases = new Databases(client);
 
   try {
-    const response = await databases.listDocuments(DATABASE_ID, SCHOOLS_COLLECTION_ID);
+    const response = await databases.listDocuments(DATABASE_ID, SCHOOLS_COLLECTION_ID, [
+      Query.equal('status', 'active'),
+      Query.limit(1000),
+    ]);
     const activeSchools = response.documents.filter(doc => doc.status !== 'inactive');
     return activeSchools;
   } catch (error) {
@@ -149,13 +152,17 @@ async function selectSchools(allSchools, filterCode) {
 
 // ── Build Orchestration ───────────────────────────────────
 
-async function buildSchoolStudentApp(schoolCode, schoolName) {
+async function buildSchoolStudentApp(schoolCode, schoolName, logoUrl) {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`📱 Building Student App for: ${schoolCode} (${schoolName})`);
   console.log('='.repeat(60));
 
   try {
-    run('node', ['scripts/build-tauri-apps.mjs', '--school-code', schoolCode], ROOT);
+    const commandArgs = ['scripts/build-tauri-apps.mjs', '--school-code', schoolCode];
+    if (logoUrl) {
+      commandArgs.push('--logo-url', logoUrl);
+    }
+    run('node', commandArgs, ROOT);
     console.log(`✅ Successfully built student app for ${schoolCode}`);
   } catch (error) {
     console.error(`❌ Failed to build student app for ${schoolCode}:`, error.message);
@@ -237,7 +244,7 @@ async function main() {
 
   // Build per-school student apps
   for (const school of schoolsToBuild) {
-    await buildSchoolStudentApp(school.schoolCode, school.name);
+    await buildSchoolStudentApp(school.schoolCode, school.name, school.logo);
     renameBuiltInstallers(school.schoolCode);
   }
 

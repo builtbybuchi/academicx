@@ -23,22 +23,11 @@ on:
         description: 'Upload artifacts to Cloudflare R2 and update Appwrite'
         type: boolean
         default: true
-      school_code:
-        description: 'School code to build for (e.g., SHMCE or ACADEMIX for role apps)'
-        type: string
-        default: 'ACADEMIX'
-      logo_url:
-        description: 'School logo URL (leave blank to use default AcademicX logo)'
-        type: string
-        default: ''
 
 jobs:
-  # ─── WINDOWS BUILD ────────────────────────────────────────────────────────
-
   build-windows:
     if: inputs.build_windows
     runs-on: windows-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,14 +68,16 @@ jobs:
       - name: Install root dependencies
         run: npm install
 
-      - name: Build Windows apps
+      - name: Build Windows apps from Appwrite schools
         shell: powershell
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          $logoArg = ""
-          if ("${{ inputs.logo_url }}" -ne "") {
-            $logoArg = "--logo-url ${{ inputs.logo_url }}"
+          $uploadArg = ""
+          if ("${{ inputs.upload_to_r2 }}" -eq "true") {
+            $uploadArg = "--upload-r2"
           }
-          Invoke-Expression "node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $logoArg"
+          Invoke-Expression "doppler run --project academicx --config stg -- node scripts/build-all-schools.mjs $uploadArg"
 
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
@@ -95,12 +86,9 @@ jobs:
           path: installers/win32/
           retention-days: 30
 
-  # ─── LINUX BUILD ──────────────────────────────────────────────────────────
-
   build-linux:
     if: inputs.build_linux
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -137,13 +125,15 @@ jobs:
       - name: Install root dependencies
         run: npm install
 
-      - name: Build Linux apps
+      - name: Build Linux apps from Appwrite schools
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          LOGO_ARG=""
-          if [ -n "${{ inputs.logo_url }}" ]; then
-            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+          uploadArg=""
+          if [ "${{ inputs.upload_to_r2 }}" = "true" ]; then
+            uploadArg="--upload-r2"
           fi
-          node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $LOGO_ARG
+          doppler run --project academicx --config stg -- node scripts/build-all-schools.mjs $uploadArg
 
       - name: Upload Linux installers
         uses: actions/upload-artifact@v4
@@ -152,12 +142,9 @@ jobs:
           path: installers/linux/
           retention-days: 30
 
-  # ─── MACOS BUILD ──────────────────────────────────────────────────────────
-
   build-macos:
     if: inputs.build_macos
     runs-on: macos-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -182,13 +169,15 @@ jobs:
       - name: Install root dependencies
         run: npm install
 
-      - name: Build macOS apps
+      - name: Build macOS apps from Appwrite schools
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          LOGO_ARG=""
-          if [ -n "${{ inputs.logo_url }}" ]; then
-            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
+          uploadArg=""
+          if [ "${{ inputs.upload_to_r2 }}" = "true" ]; then
+            uploadArg="--upload-r2"
           fi
-          node scripts/build-tauri-apps.mjs --school-code ${{ inputs.school_code }} $LOGO_ARG
+          doppler run --project academicx --config stg -- node scripts/build-all-schools.mjs $uploadArg
 
       - name: Upload macOS installers
         uses: actions/upload-artifact@v4
@@ -197,12 +186,9 @@ jobs:
           path: installers/darwin/
           retention-days: 30
 
-  # ─── ANDROID APK BUILD ────────────────────────────────────────────────────
-
   build-android:
     if: inputs.build_android
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -273,192 +259,22 @@ jobs:
             cd ${{ github.workspace }}
           done
 
-      - name: Build and sign Android APKs
+      - name: Build and sign Android APKs from Appwrite schools
         env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
-          for APP in admin-app staff-app student-parent-app; do
-            echo "=== Building Android APK for $APP ==="
-            cd ${{ github.workspace }}/apps/$APP
-            npm install
-
-            cat >> src-tauri/gen/android/local.properties << EOF
-          storeFile=${{ github.workspace }}/academicx-release.jks
-          storePassword=${ANDROID_STORE_PASSWORD}
-          keyAlias=${ANDROID_KEY_ALIAS}
-          keyPassword=${ANDROID_KEY_PASSWORD}
-          EOF
-
-            npm run build
-            npm exec -- tauri android build --apk
-
-            cd ${{ github.workspace }}
-          done
-
-      - name: Collect Android APKs
-        run: |
-          mkdir -p ${{ github.workspace }}/installers/android
-          for APP in admin-app staff-app student-parent-app; do
-            mkdir -p ${{ github.workspace }}/installers/android/$APP
-            find ${{ github.workspace }}/apps/$APP/src-tauri/gen/android \
-              -name "*.apk" \
-              -exec cp {} ${{ github.workspace }}/installers/android/$APP/ \;
-          done
-
-      - name: Verify APKs were created
-        run: |
-          echo "=== APK files found ==="
-          find ${{ github.workspace }}/installers/android -name "*.apk" -ls
-          APK_COUNT=$(find ${{ github.workspace }}/installers/android -name "*.apk" | wc -l)
-          if [ "$APK_COUNT" -eq 0 ]; then
-            echo "ERROR: No APK files were generated!"
-            exit 1
+          uploadArg=""
+          if [ "${{ inputs.upload_to_r2 }}" = "true" ]; then
+            uploadArg="--upload-r2"
           fi
-          echo "Total APKs: $APK_COUNT"
+          doppler run --project academicx --config stg -- node scripts/build-android-schools.mjs $uploadArg
 
       - name: Upload Android APKs
         uses: actions/upload-artifact@v4
         with:
           name: android-apks
-          path: installers/android/
-          retention-days: 30
-
-  # ─── R2 UPLOAD & APPWRITE UPDATE ──────────────────────────────────────────
-
-  upload-to-r2:
-    if: inputs.upload_to_r2 && (inputs.build_windows || inputs.build_linux || inputs.build_macos || inputs.build_android)
-    needs: [build-windows, build-linux, build-macos, build-android]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Install dependencies
-        run: |
-          npm install
-          npm install @aws-sdk/client-s3
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: installers
-
-      - name: Organize artifacts
-        run: |
-          # Flatten the artifact structure
-          mkdir -p installers-organized/win32 installers-organized/linux installers-organized/darwin installers-organized/android
-          
-          # Move Windows artifacts
-          [ -d "installers/windows-installers" ] && cp -r installers/windows-installers/* installers-organized/win32/ || true
-          
-          # Move Linux artifacts
-          [ -d "installers/linux-installers" ] && cp -r installers/linux-installers/* installers-organized/linux/ || true
-          
-          # Move macOS artifacts
-          [ -d "installers/macos-installers" ] && cp -r installers/macos-installers/* installers-organized/darwin/ || true
-          
-          # Move Android artifacts
-          [ -d "installers/android-apks" ] && cp -r installers/android-apks/* installers-organized/android/ || true
-          
-          mv installers-organized installers-final
-          ls -la installers-final/
-
-      - name: Upload to R2
-        env:
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_ACCESS_KEY_SECRET: ${{ secrets.R2_ACCESS_KEY_SECRET }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || 'academicx-apps' }}
-          APPWRITE_ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
-          APPWRITE_PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
-          APPWRITE_API_KEY: ${{ secrets.APPWRITE_API_KEY }}
-        run: |
-          node scripts/upload-to-r2.mjs \
-            --school-code "${{ inputs.school_code }}" \
-            --installers-path "./installers-final"
-
-  # ─── iOS BUILD (disabled — enable when Apple Developer account is ready) ──
-
-  build-ios:
-    if: false
-    runs-on: macos-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-ios,x86_64-apple-ios
-
-      - name: Install Apple signing certificate
-        env:
-          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE }}
-          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: temp-keychain-password
-        run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
-          echo "$CERTIFICATE_BASE64" | base64 --decode > $RUNNER_TEMP/cert.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security import $RUNNER_TEMP/cert.p12 -P "$CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-
-      - name: Install provisioning profile
-        env:
-          PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
-        run: |
-          PP_PATH=$RUNNER_TEMP/profile.mobileprovision
-          echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode > $PP_PATH
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/
-
-      - name: Install root dependencies
-        run: npm install
-
-      - name: Build iOS IPAs
-        run: |
-          LOGO_ARG=""
-          if [ -n "${{ inputs.logo_url }}" ]; then
-            LOGO_ARG="--logo-url ${{ inputs.logo_url }}"
-          fi
-          for APP in admin-app staff-app student-parent-app; do
-            echo "=== Building iOS IPA for $APP ==="
-            cd apps/$APP
-            npm install
-            npm exec -- tauri ios build
-            cd ../..
-          done
-
-      - name: Collect iOS IPAs
-        run: |
-          mkdir -p installers/ios
-          for APP in admin-app staff-app student-parent-app; do
-            mkdir -p installers/ios/$APP
-            find apps/$APP/src-tauri/gen/apple -name "*.ipa" \
-              -exec cp {} installers/ios/$APP/ \;
-          done
-
-      - name: Upload iOS IPAs
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-ipas
-          path: installers/ios/
+          path: installers/
           retention-days: 30

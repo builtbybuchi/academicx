@@ -21,8 +21,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { AppwriteException, Client, Databases } from 'node-appwrite';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { Client, Databases, Query } from 'node-appwrite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -109,8 +109,25 @@ function fileExists(filePath) {
   }
 }
 
-function collectInstallers(installersPath) {
+function sanitizeSegment(input) {
+  return String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+function getTargetAppFolders(schoolCode) {
+  if (String(schoolCode || '').trim().toUpperCase() === 'ACADEMIX') {
+    return ['academix-admin', 'academix-staff', 'academix-student-portal'];
+  }
+
+  return [`${sanitizeSegment(schoolCode)}-student`];
+}
+
+function collectInstallers(installersPath, schoolCode) {
   const installers = {};
+  const allowedFolders = new Set(getTargetAppFolders(schoolCode));
   
   if (!fileExists(installersPath)) {
     console.warn(`⚠️  Installers path does not exist: ${installersPath}`);
@@ -131,7 +148,7 @@ function collectInstallers(installersPath) {
       const appPath = path.join(platformPath, appFolder);
       const appStat = fs.statSync(appPath);
       
-      if (!appStat.isDirectory()) continue;
+      if (!appStat.isDirectory() || !allowedFolders.has(appFolder)) continue;
 
       const files = fs.readdirSync(appPath);
       
@@ -219,10 +236,11 @@ async function initAppwrite() {
 async function findSchoolByCode(databases, schoolCode) {
   try {
     const response = await databases.listDocuments(DATABASE_ID, SCHOOLS_COLLECTION_ID, [
-      // Using a simple query to find by schoolCode
+      Query.equal('schoolCode', schoolCode),
+      Query.limit(1),
     ]);
 
-    const school = response.documents.find(doc => doc.schoolCode === schoolCode);
+    const school = response.documents[0];
     return school || null;
   } catch (error) {
     console.error('Error listing schools:', error.message);
@@ -312,7 +330,7 @@ async function main() {
   console.log(`📁 Installers path: ${installersPath}\n`);
 
   // Collect installer files
-  const installers = collectInstallers(installersPath);
+  const installers = collectInstallers(installersPath, schoolCode);
   const installerCount = Object.keys(installers).length;
 
   if (installerCount === 0) {
