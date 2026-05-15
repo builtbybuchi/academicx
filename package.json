@@ -1,9 +1,13 @@
 {
   "scripts": {
     "tauri:build:apps": "node scripts/build-tauri-apps.mjs",
-    "tauri:build:apps:default": "node scripts/build-tauri-apps.mjs --school-code ACADEMICX"
+    "tauri:build:apps:default": "node scripts/build-tauri-apps.mjs --school-code ACADEMICX",
+    "build:all-schools": "node scripts/build-all-schools.mjs",
+    "build:all-schools:upload-r2": "node scripts/build-all-schools.mjs --upload-r2",
+    "upload:r2": "node scripts/upload-to-r2.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
     "appwrite": "^23.0.0",
     "framer-motion": "^12.36.0"
   }

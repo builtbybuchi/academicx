@@ -11,11 +11,22 @@ const INSTALLERS_ROOT = path.join(ROOT, 'installers');
 const DEFAULT_LOGO = path.join(ROOT, 'apps', 'landing-page', 'public', 'logo.png');
 const DEFAULT_LOGO_URL = 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_png/square-image_butlfh';
 
-const APP_DEFINITIONS = [
-  { dir: 'admin-app', userType: 'admin', appIdSuffix: 'admin' },
-  { dir: 'staff-app', userType: 'staff', appIdSuffix: 'staff' },
-  { dir: 'student-parent-app', userType: 'student', appIdSuffix: 'student' },
-];
+// App definitions based on school code
+// For ACADEMIX: Build all role apps (admin, staff, student) named "academiX - Role"
+// For other schools: Build only student app with school code as app name
+function getAppDefinitions(schoolCode) {
+  if (schoolCode.toUpperCase() === 'ACADEMIX') {
+    return [
+      { dir: 'admin-app', appName: 'academiX - Admin', appIdSuffix: 'admin' },
+      { dir: 'staff-app', appName: 'academiX - Staff', appIdSuffix: 'staff' },
+      { dir: 'student-parent-app', appName: 'academiX - Student Portal', appIdSuffix: 'student' },
+    ];
+  }
+  // For school-specific builds, only build student app
+  return [
+    { dir: 'student-parent-app', appName: schoolCode, appIdSuffix: 'student' },
+  ];
+}
 
 function parseArgs(argv) {
   const args = {};
@@ -157,8 +168,8 @@ function detectPlatformBundleTargets() {
   throw new Error(`Unsupported platform: ${process.platform}`);
 }
 
-function installerAlreadyExists(schoolCode, userType) {
-  const appOutputLabel = `${sanitizeSegment(schoolCode)}-${userType}`;
+function installerAlreadyExists(appName, appIdSuffix) {
+  const appOutputLabel = `${sanitizeSegment(appName)}-${appIdSuffix}`;
   const platformLabel = os.platform();
   const destination = path.join(INSTALLERS_ROOT, platformLabel, appOutputLabel);
   return dirHasFiles(destination);
@@ -303,14 +314,12 @@ async function downloadLogo(logoUrl) {
   return filePath;
 }
 
-function buildSingleApp(definition, schoolCode, baseLogoPath, bundleTargets) {
+function buildSingleApp(definition, appName, appIdentifier, baseLogoPath, bundleTargets) {
   const appDir = path.join(APPS_ROOT, definition.dir);
-  const appName = `${schoolCode} - ${definition.userType}`;
-  const appIdentifier = `com.academicx.${sanitizeSegment(schoolCode)}.${definition.appIdSuffix}`;
-  const appOutputLabel = `${sanitizeSegment(schoolCode)}-${definition.userType}`;
+  const appOutputLabel = `${sanitizeSegment(appName)}-${definition.appIdSuffix}`;
 
   // Skip if installers already exist for this app
-  if (installerAlreadyExists(schoolCode, definition.userType)) {
+  if (installerAlreadyExists(appName, definition.appIdSuffix)) {
     console.log(`\n=== Skipping ${appName} — installers already exist. Delete installers/${os.platform()}/${appOutputLabel} to rebuild. ===`);
     return;
   }
@@ -337,12 +346,21 @@ Usage:
   node scripts/build-tauri-apps.mjs --school-code SHMCE [--logo path/to/logo.png] [--logo-url https://...]
 
 Options:
-  --school-code   Required. Used for app naming (e.g., SHMCE - student)
-  --logo          Optional. If omitted, downloads the default AcademicX logo.
-  --logo-url      Optional. Downloads a custom logo before building.
+  --school-code   Required. School code or 'ACADEMIX' for role apps
+  --logo          Optional. Path to logo file.
+  --logo-url      Optional. URL to download logo from.
+
+Examples:
+  # Build ACADEMIX role apps (Admin, Staff, Super Admin)
+  node scripts/build-tauri-apps.mjs --school-code ACADEMIX
+
+  # Build school-specific student app
+  node scripts/build-tauri-apps.mjs --school-code SHMCE
 
 Notes:
-  - To rebuild an app, delete its folder inside installers/<platform>/<school-code>-<type>/
+  - ACADEMIX builds Admin, Staff, and Super Admin apps
+  - Other school codes build only the Student/Parent app
+  - To rebuild an app, delete its folder inside installers/<platform>/<app-name>-<type>/
   - Builds are platform-specific: Windows produces .exe/.msi, Linux produces .deb/.appimage,
     macOS produces .dmg. Cross-platform builds require a CI pipeline (e.g. GitHub Actions).
 `);
@@ -448,8 +466,14 @@ async function main() {
 
   ensureDir(INSTALLERS_ROOT);
 
-  for (const appDef of APP_DEFINITIONS) {
-    buildSingleApp(appDef, schoolCode, logoArg, bundleTargets);
+  // Get app definitions based on school code
+  const appDefinitions = getAppDefinitions(schoolCode);
+
+  // Build each app
+  for (const appDef of appDefinitions) {
+    const appName = appDef.appName;
+    const appIdentifier = `com.academicx.${sanitizeSegment(schoolCode)}.${appDef.appIdSuffix}`;
+    buildSingleApp(appDef, appName, appIdentifier, logoArg, bundleTargets);
   }
 
   console.log(`\nAll done. Installers are in: ${path.relative(ROOT, INSTALLERS_ROOT)}`);
