@@ -4,7 +4,6 @@ import { LayoutDashboard, Users, BookOpen, Settings, ClipboardList, MessageSquar
 import Sidebar from 'shared/components/Sidebar.jsx';
 import { useAuth } from 'shared/utils/auth.jsx';
 import AuthPage from 'shared/components/AuthPage.jsx';
-import { registerSchool } from 'shared/utils/api.js';
 import Dashboard from './pages/dashboard.jsx';
 import Enrollment from './pages/enrollment.jsx';
 import Academics from './pages/academics.jsx';
@@ -72,25 +71,13 @@ export default function App() {
                 brand="academicX"
                 title="Manage your school operations"
                 subtitle="Manage enrollment, academics, results, and communication from one admin control center."
-                allowSignup={true}
+                allowSignup={false}
                 highlights={[
                     'Create and manage school staff and students',
                     'Approve and publish term results',
                     'Send school-wide communication to parents',
                 ]}
                 onLogin={({ email, password }) => login(email, password)}
-                onSignup={async ({ firstName, lastName, email, password, organization, schoolCode }) => {
-                    await registerSchool({
-                        firstName,
-                        lastName,
-                        adminEmail: email,
-                        adminPassword: password,
-                        schoolName: organization || 'My School',
-                        schoolCode,
-                        schoolEmail: email,
-                    });
-                    await login(email, password);
-                }}
             />
         );
     }
