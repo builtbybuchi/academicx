@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
 import { Client, Databases, Query } from 'node-appwrite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ const ROOT = path.resolve(__dirname, '..');
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
 const R2_ACCESS_KEY_SECRET = process.env.R2_ACCESS_KEY_SECRET || process.env.R2_SECRET_ACCESS_KEY || '';
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || process.env.CF_R2_BUCKET || process.env.CF_BUCKET || 'academicx-apps';
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || process.env.CF_R2_BUCKET || process.env.CF_BUCKET || '';
 const R2_REGION = 'wnam'; // Cloudflare's default region
 
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || '';
@@ -111,6 +111,47 @@ async function checkBucketExists(s3Client, bucketName) {
   - error: ${name}
   - http status: ${status}
 `);
+    return false;
+  }
+}
+
+function normalizeEnvironment(environment) {
+  const env = String(environment || '').trim().toLowerCase();
+  if (['stg', 'stage', 'staging'].includes(env)) return 'staging';
+  if (['prd', 'prod', 'production'].includes(env)) return 'production';
+  return 'production';
+}
+
+function resolveBucketName(args) {
+  const explicit = String(args['bucket-name'] || '').trim();
+  if (explicit) return explicit;
+
+  if (R2_BUCKET_NAME) return R2_BUCKET_NAME;
+
+  const normalizedEnv = normalizeEnvironment(
+    args.environment || process.env.UPLOAD_ENV || process.env.DEPLOY_ENV || process.env.NODE_ENV
+  );
+
+  return normalizedEnv === 'staging' ? 'academicx-apps-staging' : 'academicx-apps';
+}
+
+async function ensureBucketExists(s3Client, bucketName, autoCreate) {
+  const exists = await checkBucketExists(s3Client, bucketName);
+  if (exists) return true;
+
+  if (!autoCreate) return false;
+
+  console.log(`🪣 Creating missing R2 bucket: ${bucketName}`);
+  try {
+    await s3Client.send(new CreateBucketCommand({ Bucket: bucketName }));
+    console.log(`✅ Created R2 bucket: ${bucketName}`);
+    return true;
+  } catch (error) {
+    const status = error?.$metadata?.httpStatusCode || error?.statusCode || error?.status || 'unknown';
+    const name = error?.name || error?.code || 'Error';
+    console.error(`❌ Failed to create R2 bucket: ${bucketName}`);
+    console.error(`  - error: ${name}`);
+    console.error(`  - http status: ${status}`);
     return false;
   }
 }
@@ -202,7 +243,7 @@ function collectInstallers(installersPath, schoolCode) {
 
 // ── R2 Upload ─────────────────────────────────────────────
 
-async function uploadToR2(s3Client, schoolCode, installers) {
+async function uploadToR2(s3Client, bucketName, schoolCode, installers) {
   const uploadedFiles = [];
 
   console.log(`\n📤 Uploading ${Object.keys(installers).length} installer files to R2...`);
@@ -215,14 +256,14 @@ async function uploadToR2(s3Client, schoolCode, installers) {
 
       await s3Client.send(
         new PutObjectCommand({
-          Bucket: R2_BUCKET_NAME,
+          Bucket: bucketName,
           Key: r2Key,
           Body: fileContent,
           ContentType: getContentType(filePath),
         })
       );
 
-      const r2Url = `https://${R2_BUCKET_NAME}.${R2_ACCOUNT_ID}.r2.dev/${r2Key}`;
+      const r2Url = `https://${bucketName}.${R2_ACCOUNT_ID}.r2.dev/${r2Key}`;
       uploadedFiles.push({
         platform: relativePath.split('/')[0],
         path: relativePath,
@@ -366,6 +407,9 @@ async function main() {
   const schoolCode = String(args['school-code'] || '').trim();
   const installersPath = String(args['installers-path'] || './installers').trim();
   const allSchools = args['all-schools'] === 'true';
+  const autoCreateBucket = args['create-bucket'] !== 'false';
+  const bucketName = resolveBucketName(args);
+  const targetEnvironment = normalizeEnvironment(args.environment || process.env.UPLOAD_ENV || process.env.DEPLOY_ENV || process.env.NODE_ENV);
 
   if (!schoolCode && !allSchools) {
     console.error('❌ Missing required argument: --school-code or --all-schools');
@@ -376,17 +420,19 @@ async function main() {
   validateEnv();
 
   console.log(`\n🚀 Starting R2 upload${allSchools ? ' for all active schools' : ` for school: ${schoolCode}`}`);
+  console.log(`🗂️  Target environment: ${targetEnvironment}`);
+  console.log(`🪣 Target bucket: ${bucketName}`);
   console.log(`📁 Installers path: ${installersPath}\n`);
 
   const s3Client = createS3Client();
-  // Verify the target bucket exists before attempting uploads
+  // Verify/create the target bucket before attempting uploads
   const r2Endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-  const bucketOk = await checkBucketExists(s3Client, R2_BUCKET_NAME);
+  const bucketOk = await ensureBucketExists(s3Client, bucketName, autoCreateBucket);
   if (!bucketOk) {
-    console.error(`\n❌ The specified R2 bucket does not exist: ${R2_BUCKET_NAME}`);
+    console.error(`\n❌ The specified R2 bucket is unavailable: ${bucketName}`);
     console.error(`  - R2_ACCOUNT_ID: ${R2_ACCOUNT_ID ? 'set' : 'MISSING'}\n  - Using endpoint: ${r2Endpoint}\n`);
-    console.error('Please verify the bucket name and that the R2 credentials/Account ID correspond to the account that owns the bucket.');
-    console.error('Common env names to check: R2_BUCKET_NAME, R2_BUCKET, CF_R2_BUCKET, CF_BUCKET');
+    console.error('Please verify the bucket name and that the R2 credentials/Account ID can access bucket create/list permissions.');
+    console.error('Common env names: R2_BUCKET_NAME, R2_BUCKET, CF_R2_BUCKET, CF_BUCKET');
     process.exit(1);
   }
   const databases = await initAppwrite();
@@ -412,7 +458,7 @@ async function main() {
       }
 
       console.log(`✓ Found ${installerCount} installer files`);
-      const uploadedFiles = await uploadToR2(s3Client, school.schoolCode, installers);
+      const uploadedFiles = await uploadToR2(s3Client, bucketName, school.schoolCode, installers);
       const downloads = await updateSchoolDownloads(databases, school.$id, uploadedFiles);
       printSummary(school.schoolCode, downloads);
     }
@@ -439,7 +485,7 @@ async function main() {
 
     console.log(`✓ Found school: ${school.name}`);
 
-    const uploadedFiles = await uploadToR2(s3Client, schoolCode, installers);
+    const uploadedFiles = await uploadToR2(s3Client, bucketName, schoolCode, installers);
     const downloads = await updateSchoolDownloads(databases, school.$id, uploadedFiles);
     printSummary(schoolCode, downloads);
   }

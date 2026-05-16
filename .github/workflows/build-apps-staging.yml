@@ -87,9 +87,8 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          Invoke-Expression "doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --installers-path installers"
+          Invoke-Expression "doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers"
 
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
@@ -154,9 +153,8 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --installers-path installers
+          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers
 
       - name: Upload Linux installers
         uses: actions/upload-artifact@v4
@@ -209,9 +207,8 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --installers-path installers
+          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers
 
       - name: Upload macOS installers
         uses: actions/upload-artifact@v4
@@ -302,9 +299,8 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --installers-path installers
+          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers
 
       - name: Upload Android APKs
         uses: actions/upload-artifact@v4
