@@ -223,23 +223,24 @@ function collectAndroidInstallers(appDir, appOutputLabel) {
   const destination = path.join(INSTALLERS_ROOT, 'android', appOutputLabel);
   ensureDir(destination);
 
-  for (const entry of fs.readdirSync(bundleRoot)) {
-    const source = path.join(bundleRoot, entry);
-    const target = path.join(destination, entry);
-    if (fs.statSync(source).isDirectory()) {
-      ensureDir(target);
-      for (const subEntry of fs.readdirSync(source)) {
-        const subSource = path.join(source, subEntry);
-        const subTarget = path.join(target, subEntry);
-        if (fs.statSync(subSource).isDirectory()) {
-          continue;
-        }
-        if (subEntry.endsWith('.apk')) {
-          fs.copyFileSync(subSource, subTarget);
-        }
+  // Recursively find and copy any .apk files under the android gen directory.
+  const stack = [bundleRoot];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const name of fs.readdirSync(current)) {
+      const abs = path.join(current, name);
+      const stat = fs.statSync(abs);
+      if (stat.isDirectory()) {
+        stack.push(abs);
+        continue;
       }
-    } else if (entry.endsWith('.apk')) {
-      fs.copyFileSync(source, target);
+      if (stat.isFile() && name.endsWith('.apk')) {
+        // preserve relative path under the destination to avoid collisions
+        const rel = path.relative(bundleRoot, abs);
+        const target = path.join(destination, rel);
+        ensureDir(path.dirname(target));
+        fs.copyFileSync(abs, target);
+      }
     }
   }
 }
