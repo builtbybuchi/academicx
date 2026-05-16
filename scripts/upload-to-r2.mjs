@@ -119,7 +119,14 @@ function sanitizeSegment(input) {
 
 function getTargetAppFolders(schoolCode) {
   if (String(schoolCode || '').trim().toUpperCase() === 'ACADEMIX') {
-    return ['academix-admin', 'academix-staff', 'academix-student-portal'];
+    return [
+      'academix-admin',
+      'academix-staff',
+      'academix-student-portal',
+      'academix-admin-admin',
+      'academix-staff-staff',
+      'academix-student-portal-student',
+    ];
   }
 
   return [`${sanitizeSegment(schoolCode)}-student`];

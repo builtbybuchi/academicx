@@ -201,6 +201,21 @@ function writeAndroidSigningConfig(appDir) {
   ].join('\n'), 'utf8');
 }
 
+function ensureAndroidProject(appDir, identifier) {
+  const androidRoot = path.join(appDir, 'src-tauri', 'gen', 'android');
+  const packagePath = path.join(androidRoot, 'app', 'src', 'main', 'java', ...String(identifier || '').split('.'));
+
+  if (!fileExists(androidRoot)) {
+    run('npx', ['@tauri-apps/cli', 'android', 'init'], appDir);
+    return;
+  }
+
+  if (!fileExists(packagePath)) {
+    fs.rmSync(androidRoot, { recursive: true, force: true });
+    run('npx', ['@tauri-apps/cli', 'android', 'init'], appDir);
+  }
+}
+
 function collectAndroidInstallers(appDir, appOutputLabel) {
   const bundleRoot = path.join(appDir, 'src-tauri', 'gen', 'android');
   if (!fileExists(bundleRoot)) return;
@@ -248,13 +263,15 @@ async function fetchSchools() {
   return response.documents.filter((doc) => doc.status !== 'inactive');
 }
 
-function updateSchoolConfig(appDir, schoolCode, appName, logoPath) {
-  const appIdentifier = `com.academicx.${sanitizeSegment(schoolCode)}.student`;
+function updateSchoolConfig(appDir, schoolCode, appName, logoPath, appIdSuffix) {
+  const suffix = sanitizeSegment(appIdSuffix || 'student') || 'student';
+  const appIdentifier = `com.academicx.${sanitizeSegment(schoolCode)}.${suffix}`;
   ensureAppDependencies(appDir);
   ensureTauriCli(appDir);
   ensureTauriProject(appDir, appName);
   ensureTauriScript(appDir);
   writeTauriConfig(appDir, appName, appIdentifier, logoPath);
+  ensureAndroidProject(appDir, appIdentifier);
   writeAndroidSigningConfig(appDir);
 }
 
@@ -264,7 +281,7 @@ async function buildOneApp(definition, schoolCode, logoUrl) {
   const appOutputLabel = `${sanitizeSegment(appName)}-${definition.appIdSuffix}`;
   const logoPath = logoUrl ? await downloadLogo(logoUrl) : resolveLogoPath('');
 
-  updateSchoolConfig(appDir, schoolCode, appName, logoPath);
+  updateSchoolConfig(appDir, schoolCode, appName, logoPath, definition.appIdSuffix);
   run('npx', ['vite', 'build'], appDir);
   run('npx', ['@tauri-apps/cli', 'android', 'build', '--apk'], appDir);
   collectAndroidInstallers(appDir, appOutputLabel);
