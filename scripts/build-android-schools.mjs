@@ -83,7 +83,7 @@ function sanitizeSegment(input) {
 
 function ensureAppDependencies(appDir) {
   if (!fileExists(path.join(appDir, 'node_modules'))) {
-    run('npm', ['install'], appDir);
+    run('npm', ['install', '--include=dev'], appDir);
   }
 }
 
@@ -93,8 +93,8 @@ function ensureTauriCli(appDir) {
   const hasCli = Boolean(pkg.devDependencies && pkg.devDependencies['@tauri-apps/cli']) || Boolean(pkg.dependencies && pkg.dependencies['@tauri-apps/cli']);
 
   if (!hasCli) {
-    run('npm', ['install', '--save-dev', '@tauri-apps/cli'], appDir);
-    run('npm', ['install', '@tauri-apps/api'], appDir);
+    run('npm', ['install', '--include=dev', '--save-dev', '@tauri-apps/cli'], appDir);
+    run('npm', ['install', '--include=dev', '@tauri-apps/api'], appDir);
   }
 }
 
@@ -113,14 +113,14 @@ function ensureTauriProject(appDir, appName) {
   if (fileExists(tauriConf)) return;
 
   run(
-    'npm',
+    'npx',
     [
-      'exec', '--', 'tauri', 'init', '--ci', '--app-name', appName,
+      '@tauri-apps/cli', 'init', '--ci', '--app-name', appName,
       '--window-title', appName,
       '--frontend-dist', '../dist',
       '--dev-url', 'http://localhost:5173',
-      '--before-dev-command', 'npm run dev',
-      '--before-build-command', 'npm run build',
+      '--before-dev-command', 'npx vite',
+      '--before-build-command', 'npx vite build',
     ],
     appDir,
   );
@@ -153,6 +153,9 @@ function writeTauriConfig(appDir, appName, identifier, logoFilePath) {
 
   data.productName = appName;
   data.mainBinaryName = sanitizeSegment(`${appName}-desktop`) || 'academicx-desktop';
+  data.build = data.build || {};
+  data.build.beforeDevCommand = 'npx vite';
+  data.build.beforeBuildCommand = 'npx vite build';
   data.bundle = data.bundle || {};
   data.bundle.active = true;
   data.identifier = identifier;
@@ -167,7 +170,7 @@ function writeTauriConfig(appDir, appName, identifier, logoFilePath) {
     const iconsDir = path.join(appDir, 'src-tauri', 'icons');
     ensureDir(iconsDir);
     try {
-      run('npm', ['exec', '--', 'tauri', 'icon', logoFilePath, '--output', iconsDir], appDir);
+      run('npx', ['@tauri-apps/cli', 'icon', logoFilePath, '--output', iconsDir], appDir);
     } catch {
       // Keep existing icons if custom generation fails.
     }
@@ -262,8 +265,8 @@ async function buildOneApp(definition, schoolCode, logoUrl) {
   const logoPath = logoUrl ? await downloadLogo(logoUrl) : resolveLogoPath('');
 
   updateSchoolConfig(appDir, schoolCode, appName, logoPath);
-  run('npm', ['run', 'build'], appDir);
-  run('npm', ['exec', '--', 'tauri', 'android', 'build', '--apk'], appDir);
+  run('npx', ['vite', 'build'], appDir);
+  run('npx', ['@tauri-apps/cli', 'android', 'build', '--apk'], appDir);
   collectAndroidInstallers(appDir, appOutputLabel);
 }
 

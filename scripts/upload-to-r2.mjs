@@ -150,15 +150,25 @@ function collectInstallers(installersPath, schoolCode) {
       
       if (!appStat.isDirectory() || !allowedFolders.has(appFolder)) continue;
 
-      const files = fs.readdirSync(appPath);
-      
-      for (const file of files) {
-        const filePath = path.join(appPath, file);
-        const fileStat = fs.statSync(filePath);
-        
-        if (!fileStat.isFile()) continue;
+      const stack = [{ abs: appPath, rel: `${platform}/${appFolder}` }];
+      while (stack.length > 0) {
+        const current = stack.pop();
+        const entries = fs.readdirSync(current.abs);
 
-        installers[`${platform}/${appFolder}/${file}`] = filePath;
+        for (const entry of entries) {
+          const absPath = path.join(current.abs, entry);
+          const relPath = `${current.rel}/${entry}`;
+          const entryStat = fs.statSync(absPath);
+
+          if (entryStat.isDirectory()) {
+            stack.push({ abs: absPath, rel: relPath });
+            continue;
+          }
+
+          if (entryStat.isFile()) {
+            installers[relPath] = absPath;
+          }
+        }
       }
     }
   }
