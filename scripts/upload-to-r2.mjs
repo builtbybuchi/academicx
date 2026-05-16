@@ -29,9 +29,9 @@ const ROOT = path.resolve(__dirname, '..');
 
 // ── Config ────────────────────────────────────────────────
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
-const R2_ACCESS_KEY_SECRET = process.env.R2_ACCESS_KEY_SECRET || '';
+const R2_ACCESS_KEY_SECRET = process.env.R2_ACCESS_KEY_SECRET || process.env.R2_SECRET_ACCESS_KEY || '';
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'academicx-apps';
 const R2_REGION = 'wnam'; // Cloudflare's default region
 
@@ -248,6 +248,20 @@ async function findSchoolByCode(databases, schoolCode) {
   }
 }
 
+async function listActiveSchools(databases) {
+  try {
+    const response = await databases.listDocuments(DATABASE_ID, SCHOOLS_COLLECTION_ID, [
+      Query.equal('status', 'active'),
+      Query.limit(1000),
+    ]);
+
+    return response.documents.filter((document) => document.status !== 'inactive');
+  } catch (error) {
+    console.error('Error listing schools:', error.message);
+    throw error;
+  }
+}
+
 async function updateSchoolDownloads(databases, schoolId, uploadedFiles) {
   // Organize URLs by platform for easier access
   const downloads = {};
@@ -317,53 +331,74 @@ async function main() {
   const args = parseArgs(process.argv);
   const schoolCode = String(args['school-code'] || '').trim();
   const installersPath = String(args['installers-path'] || './installers').trim();
+  const allSchools = args['all-schools'] === 'true';
 
-  if (!schoolCode) {
-    console.error('❌ Missing required argument: --school-code');
+  if (!schoolCode && !allSchools) {
+    console.error('❌ Missing required argument: --school-code or --all-schools');
     console.log('\nUsage: node scripts/upload-to-r2.mjs --school-code SHMCE --installers-path ./installers\n');
     process.exit(1);
   }
 
   validateEnv();
 
-  console.log(`\n🚀 Starting R2 upload for school: ${schoolCode}`);
+  console.log(`\n🚀 Starting R2 upload${allSchools ? ' for all active schools' : ` for school: ${schoolCode}`}`);
   console.log(`📁 Installers path: ${installersPath}\n`);
 
-  // Collect installer files
-  const installers = collectInstallers(installersPath, schoolCode);
-  const installerCount = Object.keys(installers).length;
-
-  if (installerCount === 0) {
-    console.warn(`⚠️  No installer files found in ${installersPath}`);
-    console.log('Ensure builds completed before running this script.');
-    process.exit(1);
-  }
-
-  console.log(`✓ Found ${installerCount} installer files`);
-
-  // Initialize clients
   const s3Client = createS3Client();
-  const databases = initAppwrite();
+  const databases = await initAppwrite();
 
-  // Find school in Appwrite
-  console.log(`\n🔍 Looking up school "${schoolCode}" in Appwrite...`);
-  const school = await findSchoolByCode(await databases, schoolCode);
+  if (allSchools) {
+    const schools = await listActiveSchools(databases);
+    const roleSchool = await findSchoolByCode(databases, 'ACADEMIX');
+    const schoolsToUpload = roleSchool ? [roleSchool, ...schools] : schools;
+    const seen = new Set();
 
-  if (!school) {
-    console.error(`❌ School not found in Appwrite: ${schoolCode}`);
-    process.exit(1);
+    for (const school of schoolsToUpload) {
+      const normalizedCode = String(school.schoolCode || '').trim().toUpperCase();
+      if (!normalizedCode || seen.has(normalizedCode)) continue;
+      seen.add(normalizedCode);
+
+      console.log(`\n🔍 Looking up school "${school.schoolCode}" in Appwrite...`);
+      const installers = collectInstallers(installersPath, school.schoolCode);
+      const installerCount = Object.keys(installers).length;
+
+      if (installerCount === 0) {
+        console.warn(`⚠️  No installer files found for ${school.schoolCode}`);
+        continue;
+      }
+
+      console.log(`✓ Found ${installerCount} installer files`);
+      const uploadedFiles = await uploadToR2(s3Client, school.schoolCode, installers);
+      const downloads = await updateSchoolDownloads(databases, school.$id, uploadedFiles);
+      printSummary(school.schoolCode, downloads);
+    }
+  } else {
+    // Collect installer files
+    const installers = collectInstallers(installersPath, schoolCode);
+    const installerCount = Object.keys(installers).length;
+
+    if (installerCount === 0) {
+      console.warn(`⚠️  No installer files found in ${installersPath}`);
+      console.log('Ensure builds completed before running this script.');
+      process.exit(1);
+    }
+
+    console.log(`✓ Found ${installerCount} installer files`);
+
+    console.log(`\n🔍 Looking up school "${schoolCode}" in Appwrite...`);
+    const school = await findSchoolByCode(databases, schoolCode);
+
+    if (!school) {
+      console.error(`❌ School not found in Appwrite: ${schoolCode}`);
+      process.exit(1);
+    }
+
+    console.log(`✓ Found school: ${school.name}`);
+
+    const uploadedFiles = await uploadToR2(s3Client, schoolCode, installers);
+    const downloads = await updateSchoolDownloads(databases, school.$id, uploadedFiles);
+    printSummary(schoolCode, downloads);
   }
-
-  console.log(`✓ Found school: ${school.name}`);
-
-  // Upload to R2
-  const uploadedFiles = await uploadToR2(s3Client, schoolCode, installers);
-
-  // Update Appwrite
-  const downloads = await updateSchoolDownloads(await databases, school.$id, uploadedFiles);
-
-  // Print summary
-  printSummary(schoolCode, downloads);
 
   console.log('\n✅ All done!\n');
 }
