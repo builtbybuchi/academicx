@@ -202,10 +202,9 @@ function ensureTauriProject(appDir, appName) {
 
   console.log(`Initializing Tauri in ${path.relative(ROOT, appDir)}...`);
   run(
-    'npm',
+     'npx',
     [
-      'exec', '--',
-      'tauri',
+       '@tauri-apps/cli',
       'init',
       '--ci',
       '--app-name',
@@ -253,7 +252,7 @@ function writeTauriConfig(appDir, appName, identifier, logoFilePath) {
   const iconsDir = path.join(appDir, 'src-tauri', 'icons');
   ensureDir(iconsDir);
   try {
-    run('npm', ['exec', '--', 'tauri', 'icon', logoFilePath, '--output', iconsDir], appDir);
+     run('npx', ['@tauri-apps/cli', 'icon', logoFilePath, '--output', iconsDir], appDir);
   } catch (error) {
     console.warn(
       `Warning: could not generate icons from ${path.basename(logoFilePath)} for ${path.basename(appDir)}. ` +
@@ -335,7 +334,7 @@ function buildSingleApp(definition, appName, appIdentifier, baseLogoPath, bundle
   // Do not pass a custom env here — letting the process inherit the shell
   // environment ensures npm, node, and MSVC tools all remain on PATH.
   // Tauri's CLI handles the Rust/Cargo environment internally.
-  run('npm', ['exec', '--', 'tauri', 'build', '--bundles', bundleTargets.join(',')], appDir);
+    run('npx', ['@tauri-apps/cli', 'build', '--bundles', bundleTargets.join(',')], appDir);
 
   collectInstallers(appDir, INSTALLERS_ROOT, appOutputLabel);
 }
