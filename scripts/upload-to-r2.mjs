@@ -187,7 +187,14 @@ function getTargetAppFolders(schoolCode) {
     ];
   }
 
-  return [`${sanitizeSegment(schoolCode)}-student`];
+  const base = sanitizeSegment(schoolCode);
+  return [
+    `${base}-student`,
+    `${base}-admin`,
+    `${base}-staff`,
+    `${base}-super-admin`,
+    `${base}-student-portal`,
+  ];
 }
 
 function collectInstallers(installersPath, schoolCode) {
@@ -215,6 +222,17 @@ function collectInstallers(installersPath, schoolCode) {
       
       if (!appStat.isDirectory() || !allowedFolders.has(appFolder)) continue;
 
+      // Only upload canonical installer files: executables, msis, dmgs, debs, appimages, apks, zips, tar.gz
+      const canonicalMatchers = [
+        '.exe', '.msi', '.dmg', '.deb', '.appimage', '.apk', '.zip', '.tar.gz', '.appimage'
+      ];
+
+      function isCanonicalFile(p) {
+        const lower = p.toLowerCase();
+        if (lower.endsWith('.tar.gz')) return true;
+        return canonicalMatchers.some((ext) => lower.endsWith(ext));
+      }
+
       const stack = [{ abs: appPath, rel: `${platform}/${appFolder}` }];
       while (stack.length > 0) {
         const current = stack.pop();
@@ -231,7 +249,9 @@ function collectInstallers(installersPath, schoolCode) {
           }
 
           if (entryStat.isFile()) {
-            installers[relPath] = absPath;
+            if (isCanonicalFile(absPath)) {
+              installers[relPath] = absPath;
+            }
           }
         }
       }
