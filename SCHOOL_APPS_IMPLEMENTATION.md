@@ -315,5 +315,3 @@ For issues or questions:
 # Config Name: dev_personal
 # Last Updated: Wed May 13 2026 23:21:50 GMT+0000 (GMT+00:00)
 # Link: https://dashboard.doppler.com/workplace/14b7ba6682dcd617ffe0/projects/academicx/configs/dev_personal
-
-

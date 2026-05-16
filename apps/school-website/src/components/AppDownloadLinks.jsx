@@ -46,7 +46,41 @@ export function AppDownloadLinks({ schoolCode, schoolId }) {
         // Parse downloads from the data field
         try {
           const data = JSON.parse(school.data || '{}');
-          setDownloads(data.downloads || {});
+          const schoolDownloads = data.downloads || {};
+          if (Object.keys(schoolDownloads).length > 0) {
+            setDownloads(schoolDownloads);
+          } else {
+            // Fallback: query `apps` collection for per-school or universal (ACADEMICX) entries
+            try {
+              const appsResp = await fetch(
+                `${APPWRITE_ENDPOINT}/v1/databases/academicx_db/collections/apps/documents?limit=1000`,
+                { headers: { 'X-Appwrite-Project': APPWRITE_PROJECT_ID } }
+              );
+              if (appsResp.ok) {
+                const appsJson = await appsResp.json();
+                const docs = appsJson.documents || [];
+                const byPlatform = {};
+                const codeUpper = String(schoolCode || '').trim().toUpperCase();
+                for (const d of docs) {
+                  const docCode = String(d.code || '').toUpperCase();
+                  if (docCode !== codeUpper && docCode !== 'ACADEMICX') continue;
+                  const platform = String(d.platform || 'unknown').toLowerCase();
+                  byPlatform[platform] = byPlatform[platform] || [];
+                  byPlatform[platform].push({ filename: d.filename, url: d.url, size: d.size });
+                }
+                if (Object.keys(byPlatform).length > 0) {
+                  setDownloads(byPlatform);
+                } else {
+                  setDownloads({});
+                }
+              } else {
+                setDownloads({});
+              }
+            } catch (err) {
+              console.warn('Fallback apps fetch failed:', err);
+              setDownloads({});
+            }
+          }
         } catch {
           setError('Could not parse download data');
         }

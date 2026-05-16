@@ -20,9 +20,9 @@ const DATABASE_ID = 'academicx_db';
 const SCHOOLS_COLLECTION_ID = 'schools';
 
 const ROLE_DEFINITIONS = [
-  { dir: 'admin-app', appName: 'academiX - Admin', appIdSuffix: 'admin' },
-  { dir: 'staff-app', appName: 'academiX - Staff', appIdSuffix: 'staff' },
-  { dir: 'student-parent-app', appName: 'academiX - Student Portal', appIdSuffix: 'student' },
+  { dir: 'admin-app', appName: 'AcademicX - Admin', appIdSuffix: 'admin' },
+  { dir: 'staff-app', appName: 'AcademicX - Staff', appIdSuffix: 'staff' },
+  { dir: 'student-parent-app', appName: 'AcademicX - Student Portal', appIdSuffix: 'student' },
 ];
 
 function parseArgs(argv) {
@@ -278,7 +278,7 @@ function updateSchoolConfig(appDir, schoolCode, appName, logoPath, appIdSuffix) 
 
 async function buildOneApp(definition, schoolCode, logoUrl) {
   const appDir = path.join(APPS_ROOT, definition.dir);
-  const appName = schoolCode === 'ACADEMIX' ? definition.appName : schoolCode;
+  const appName = schoolCode === 'ACADEMICX' ? definition.appName : schoolCode;
   const appOutputLabel = `${sanitizeSegment(appName)}-${definition.appIdSuffix}`;
   const logoPath = logoUrl ? await downloadLogo(logoUrl) : resolveLogoPath('');
 
@@ -290,7 +290,7 @@ async function buildOneApp(definition, schoolCode, logoUrl) {
 
 async function buildRoleApps() {
   for (const definition of ROLE_DEFINITIONS) {
-    await buildOneApp(definition, 'ACADEMIX', '');
+    await buildOneApp(definition, 'ACADEMICX', '');
   }
 }
 
@@ -320,7 +320,7 @@ async function main() {
     for (const school of schoolsToBuild) {
       run('node', ['scripts/upload-to-r2.mjs', '--school-code', school.schoolCode, '--installers-path', './installers'], ROOT);
     }
-    run('node', ['scripts/upload-to-r2.mjs', '--school-code', 'ACADEMIX', '--installers-path', './installers'], ROOT);
+    run('node', ['scripts/upload-to-r2.mjs', '--school-code', 'ACADEMICX', '--installers-path', './installers'], ROOT);
   }
 }
 

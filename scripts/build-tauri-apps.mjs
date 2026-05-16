@@ -15,11 +15,11 @@ const DEFAULT_LOGO_URL = 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_pn
 // For ACADEMIX: Build all role apps (admin, staff, student) named "academiX - Role"
 // For other schools: Build only student app with school code as app name
 function getAppDefinitions(schoolCode) {
-  if (schoolCode.toUpperCase() === 'ACADEMIX') {
+  if (schoolCode.toUpperCase() === 'ACADEMICX') {
     return [
-      { dir: 'admin-app', appName: 'academiX - Admin', appIdSuffix: 'admin' },
-      { dir: 'staff-app', appName: 'academiX - Staff', appIdSuffix: 'staff' },
-      { dir: 'student-parent-app', appName: 'academiX - Student Portal', appIdSuffix: 'student' },
+      { dir: 'admin-app', appName: 'AcademicX - Admin', appIdSuffix: 'admin' },
+      { dir: 'staff-app', appName: 'AcademicX - Staff', appIdSuffix: 'staff' },
+      { dir: 'student-parent-app', appName: 'AcademicX - Student Portal', appIdSuffix: 'student' },
     ];
   }
   // For school-specific builds, only build student app
@@ -348,13 +348,13 @@ Usage:
   node scripts/build-tauri-apps.mjs --school-code SHMCE [--logo path/to/logo.png] [--logo-url https://...]
 
 Options:
-  --school-code   Required. School code or 'ACADEMIX' for role apps
+  --school-code   Required. School code or 'ACADEMICX' for role apps
   --logo          Optional. Path to logo file.
   --logo-url      Optional. URL to download logo from.
 
 Examples:
-  # Build ACADEMIX role apps (Admin, Staff, Super Admin)
-  node scripts/build-tauri-apps.mjs --school-code ACADEMIX
+  # Build ACADEMICX role apps (Admin, Staff, Super Admin)
+  node scripts/build-tauri-apps.mjs --school-code ACADEMICX
 
   # Build school-specific student app
   node scripts/build-tauri-apps.mjs --school-code SHMCE

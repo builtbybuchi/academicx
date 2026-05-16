@@ -1295,6 +1295,70 @@ const COLLECTIONS = {
         ],
     },
 
+    // Apps (installers / downloadable app records)
+    APPS: {
+        id: 'apps',
+        name: 'Apps',
+        attributes: [
+        {
+            key: 'code',
+            required: false,
+            type: 'string',
+            size: 50,
+        },
+        {
+            key: 'role',
+            required: true,
+            type: 'enum',
+            elements: ["admin","staff","student"],
+        },
+        {
+            key: 'platform',
+            required: true,
+            type: 'string',
+            size: 50,
+        },
+        {
+            key: 'filename',
+            required: true,
+            type: 'string',
+            size: 255,
+        },
+        {
+            key: 'url',
+            required: true,
+            type: 'string',
+            size: 2000,
+        },
+        {
+            key: 'size',
+            required: false,
+            type: 'integer',
+        },
+        {
+            key: 'version',
+            required: false,
+            type: 'string',
+            size: 50,
+        },
+        {
+            key: 'isFallback',
+            required: false,
+            type: 'boolean',
+            default: false,
+        },
+        {
+            key: 'createdAt',
+            required: false,
+            type: 'datetime',
+        }
+        ],
+        indexes: [
+        { key: 'idx_role_platform_code', type: 'key', attributes: ["role","platform","code"] },
+        { key: 'idx_createdAt', type: 'key', attributes: ["createdAt"] }
+        ],
+    },
+
     // News
     NEWS: {
         id: 'news',

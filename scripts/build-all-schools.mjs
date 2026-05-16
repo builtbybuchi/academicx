@@ -176,8 +176,8 @@ async function buildRoleApps() {
   console.log('='.repeat(60));
 
   try {
-    // Build all role apps with "academiX" as the school code
-    run('node', ['scripts/build-tauri-apps.mjs', '--school-code', 'academiX'], ROOT);
+    // Build all role apps with "ACADEMICX" as the school code
+    run('node', ['scripts/build-tauri-apps.mjs', '--school-code', 'ACADEMICX'], ROOT);
     console.log('✅ Successfully built all role apps');
   } catch (error) {
     console.error('❌ Failed to build role apps:', error.message);
@@ -189,7 +189,7 @@ async function buildRoleApps() {
 
 function renameBuiltInstallers(schoolCode) {
   const platformLabel = os.platform();
-  const sourceDir = path.join(INSTALLERS_ROOT, platformLabel, `academix-${schoolCode}-student`);
+  const sourceDir = path.join(INSTALLERS_ROOT, platformLabel, `academicx-${schoolCode}-student`);
   const targetDir = path.join(INSTALLERS_ROOT, platformLabel, `${schoolCode}-student`);
 
   if (fs.existsSync(sourceDir) && sourceDir !== targetDir) {
@@ -202,9 +202,9 @@ function renameRoleApps() {
   const platformLabel = os.platform();
   
   const appMappings = [
-    { from: 'academix-admin', to: 'academix-admin' },
-    { from: 'academix-staff', to: 'academix-staff' },
-    { from: 'academix-super-admin', to: 'academix-super-admin' },
+    { from: 'academicx-admin', to: 'academicx-admin' },
+    { from: 'academicx-staff', to: 'academicx-staff' },
+    { from: 'academicx-super-admin', to: 'academicx-super-admin' },
   ];
 
   for (const mapping of appMappings) {
@@ -258,7 +258,7 @@ async function main() {
     try {
       run('node', [
         'scripts/upload-to-r2.mjs',
-        '--school-code', 'ACADEMIX',
+        '--school-code', 'ACADEMICX',
         '--installers-path', INSTALLERS_ROOT,
       ], ROOT);
     } catch (error) {
