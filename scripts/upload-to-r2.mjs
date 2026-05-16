@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { Client, Databases, Query } from 'node-appwrite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ const ROOT = path.resolve(__dirname, '..');
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || process.env.CF_ACCOUNT_ID || '';
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
 const R2_ACCESS_KEY_SECRET = process.env.R2_ACCESS_KEY_SECRET || process.env.R2_SECRET_ACCESS_KEY || '';
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'academicx-apps';
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || process.env.R2_BUCKET || process.env.CF_R2_BUCKET || process.env.CF_BUCKET || 'academicx-apps';
 const R2_REGION = 'wnam'; // Cloudflare's default region
 
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || '';
@@ -96,6 +96,23 @@ function createS3Client() {
       secretAccessKey: R2_ACCESS_KEY_SECRET,
     },
   });
+}
+
+async function checkBucketExists(s3Client, bucketName) {
+  try {
+    await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+    return true;
+  } catch (err) {
+    // AWS SDK for R2 may return different shapes; surface useful details
+    const status = err?.$metadata?.httpStatusCode || err?.statusCode || err?.status || 'unknown';
+    const name = err?.name || err?.code || 'Error';
+    console.error(`
+❗ R2 bucket check failed: ${bucketName}
+  - error: ${name}
+  - http status: ${status}
+`);
+    return false;
+  }
 }
 
 // ── File Operations ───────────────────────────────────────
@@ -362,6 +379,16 @@ async function main() {
   console.log(`📁 Installers path: ${installersPath}\n`);
 
   const s3Client = createS3Client();
+  // Verify the target bucket exists before attempting uploads
+  const r2Endpoint = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const bucketOk = await checkBucketExists(s3Client, R2_BUCKET_NAME);
+  if (!bucketOk) {
+    console.error(`\n❌ The specified R2 bucket does not exist: ${R2_BUCKET_NAME}`);
+    console.error(`  - R2_ACCOUNT_ID: ${R2_ACCOUNT_ID ? 'set' : 'MISSING'}\n  - Using endpoint: ${r2Endpoint}\n`);
+    console.error('Please verify the bucket name and that the R2 credentials/Account ID correspond to the account that owns the bucket.');
+    console.error('Common env names to check: R2_BUCKET_NAME, R2_BUCKET, CF_R2_BUCKET, CF_BUCKET');
+    process.exit(1);
+  }
   const databases = await initAppwrite();
 
   if (allSchools) {
