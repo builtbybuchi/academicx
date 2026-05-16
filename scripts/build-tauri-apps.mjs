@@ -178,7 +178,7 @@ function installerAlreadyExists(appName, appIdSuffix) {
 function ensureAppDependencies(appDir) {
   if (!fileExists(path.join(appDir, 'node_modules'))) {
     console.log(`Installing npm dependencies in ${path.relative(ROOT, appDir)}...`);
-    run('npm', ['install'], appDir);
+    run('npm', ['install', '--include=dev'], appDir);
   }
 }
 
@@ -191,8 +191,8 @@ function ensureTauriCli(appDir) {
 
   if (!hasCli) {
     console.log(`Installing Tauri in ${path.relative(ROOT, appDir)}...`);
-    run('npm', ['install', '--save-dev', '@tauri-apps/cli'], appDir);
-    run('npm', ['install', '@tauri-apps/api'], appDir);
+    run('npm', ['install', '--include=dev', '--save-dev', '@tauri-apps/cli'], appDir);
+    run('npm', ['install', '--include=dev', '@tauri-apps/api'], appDir);
   }
 }
 
