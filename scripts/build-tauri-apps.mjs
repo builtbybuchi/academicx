@@ -216,9 +216,9 @@ function ensureTauriProject(appDir, appName) {
       '--dev-url',
       'http://localhost:5173',
       '--before-dev-command',
-      'npm run dev',
+      'npx vite',
       '--before-build-command',
-      'npm run build',
+      'npx vite build',
     ],
     appDir,
   );
@@ -230,6 +230,9 @@ function writeTauriConfig(appDir, appName, identifier, logoFilePath) {
 
   data.productName = appName;
   data.mainBinaryName = sanitizeSegment(`${appName}-desktop`) || 'academicx-desktop';
+  data.build = data.build || {};
+  data.build.beforeDevCommand = 'npx vite';
+  data.build.beforeBuildCommand = 'npx vite build';
 
   data.bundle = data.bundle || {};
   data.bundle.active = true;
