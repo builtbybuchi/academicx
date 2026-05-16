@@ -68,6 +68,9 @@ jobs:
       - name: Install root dependencies
         run: npm install
 
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v1
+
       - name: Build Windows apps from Appwrite schools
         shell: powershell
         env:
@@ -124,6 +127,10 @@ jobs:
 
       - name: Install root dependencies
         run: npm install
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v1
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v1
 
       - name: Build Linux apps from Appwrite schools
         env:
@@ -168,6 +175,9 @@ jobs:
 
       - name: Install root dependencies
         run: npm install
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v1
 
       - name: Build macOS apps from Appwrite schools
         env:
