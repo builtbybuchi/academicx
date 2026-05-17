@@ -175,9 +175,11 @@ async function buildRoleApps() {
   console.log('🏢 Building Role Apps (Admin, Staff, Super Admin)');
   console.log('='.repeat(60));
 
-  try {
-    // Build all role apps with "ACADEMICX" as the school code
-    run('node', ['scripts/build-tauri-apps.mjs', '--school-code', 'ACADEMICX'], ROOT);
+    try {
+      // Build all role apps with "ACADEMICX" as the school code
+      const args = [];
+      if (process.argv.includes('--force') || process.env.FORCE_REBUILD === 'true') args.push('--force');
+      run('node', ['scripts/build-tauri-apps.mjs', '--school-code', 'ACADEMICX', ...args], ROOT);
     console.log('✅ Successfully built all role apps');
   } catch (error) {
     console.error('❌ Failed to build role apps:', error.message);
@@ -189,7 +191,7 @@ async function buildRoleApps() {
 
 function renameBuiltInstallers(schoolCode) {
   const platformLabel = os.platform();
-  const sourceDir = path.join(INSTALLERS_ROOT, platformLabel, `academicx-${schoolCode}-student`);
+  const sourceDir = path.join(INSTALLERS_ROOT, platformLabel, `${sanitizeSegment(schoolCode)}-student`);
   const targetDir = path.join(INSTALLERS_ROOT, platformLabel, `${schoolCode}-student`);
 
   if (fs.existsSync(sourceDir) && sourceDir !== targetDir) {
@@ -244,8 +246,16 @@ async function main() {
 
   // Build per-school student apps
   for (const school of schoolsToBuild) {
-    await buildSchoolStudentApp(school.schoolCode, school.name, school.logo);
-    renameBuiltInstallers(school.schoolCode);
+    const forceArg = (process.argv.includes('--force') || process.env.FORCE_REBUILD === 'true') ? ['--force'] : [];
+    try {
+      // Delegate to the Tauri builder so it uses the same logic and flags
+      run('node', ['scripts/build-tauri-apps.mjs', '--school-code', school.schoolCode, ...forceArg], ROOT);
+      renameBuiltInstallers(school.schoolCode);
+      console.log(`✅ Successfully built student app for ${school.schoolCode}`);
+    } catch (err) {
+      console.error(`❌ Failed to build student app for ${school.schoolCode}:`, err.message);
+      throw err;
+    }
   }
 
   // Upload to R2 if requested

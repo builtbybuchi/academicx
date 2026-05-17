@@ -169,6 +169,9 @@ function detectPlatformBundleTargets() {
 }
 
 function installerAlreadyExists(appName, appIdSuffix) {
+  // Respect a global force flag to always rebuild
+  if (process.argv.includes('--force') || process.env.FORCE_REBUILD === 'true') return false;
+
   const appOutputLabel = `${sanitizeSegment(appName)}-${appIdSuffix}`;
   const platformLabel = os.platform();
   const destination = path.join(INSTALLERS_ROOT, platformLabel, appOutputLabel);
