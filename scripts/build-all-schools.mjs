@@ -45,6 +45,15 @@ const ROLE_APPS = [
 
 // ── Utilities ─────────────────────────────────────────────
 
+function sanitizeSegment(input) {
+  return String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+
+
 function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i += 1) {
