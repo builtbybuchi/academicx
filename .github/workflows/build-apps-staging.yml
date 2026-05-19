@@ -75,20 +75,13 @@ jobs:
         shell: powershell
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-        run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-all-schools.mjs
-
-      - name: Upload Windows installers to Cloudflare R2
-        if: inputs.upload_to_r2
-        shell: powershell
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          Invoke-Expression "doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers"
+          $uploadFlag = if ('${{ inputs.upload_to_r2 }}' -eq 'true') { '--upload-r2 --environment stg' } else { '' }
+          Invoke-Expression "doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-all-schools.mjs $uploadFlag"
 
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
@@ -142,19 +135,14 @@ jobs:
       - name: Build Linux apps from Appwrite schools
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-        run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-all-schools.mjs
-
-      - name: Upload Linux installers to Cloudflare R2
-        if: inputs.upload_to_r2
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers
+          UPLOAD_FLAG=""
+          if [ "${{ inputs.upload_to_r2 }}" = "true" ]; then UPLOAD_FLAG="--upload-r2 --environment stg"; fi
+          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-all-schools.mjs $UPLOAD_FLAG
 
       - name: Upload Linux installers
         uses: actions/upload-artifact@v4
@@ -196,19 +184,14 @@ jobs:
       - name: Build macOS apps from Appwrite schools
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
-        run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-all-schools.mjs
-
-      - name: Upload macOS installers to Cloudflare R2
-        if: inputs.upload_to_r2
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers
+          UPLOAD_FLAG=""
+          if [ "${{ inputs.upload_to_r2 }}" = "true" ]; then UPLOAD_FLAG="--upload-r2 --environment stg"; fi
+          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-all-schools.mjs $UPLOAD_FLAG
 
       - name: Upload macOS installers
         uses: actions/upload-artifact@v4
@@ -285,22 +268,18 @@ jobs:
       - name: Build and sign Android APKs from Appwrite schools
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/academicx-release.jks
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-        run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-android-schools.mjs
-
-      - name: Upload Android APKs to Cloudflare R2
-        if: inputs.upload_to_r2
-        env:
-          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
-          doppler run --preserve-env=true --project academicx --config stg -- node scripts/upload-to-r2.mjs --all-schools --environment stg --installers-path installers
+          UPLOAD_FLAG=""
+          if [ "${{ inputs.upload_to_r2 }}" = "true" ]; then UPLOAD_FLAG="--upload-r2 --environment stg"; fi
+          doppler run --preserve-env=true --project academicx --config stg -- node scripts/build-android-schools.mjs $UPLOAD_FLAG
 
       - name: Upload Android APKs
         uses: actions/upload-artifact@v4

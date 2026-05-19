@@ -6,6 +6,8 @@
  * Uploads built installer artifacts to Cloudflare R2 and saves download URLs to Appwrite school document.
  * 
  * Usage:
+ *   node scripts/upload-to-r2.mjs --all-schools --installers-path ./installers --environment stg
+ *   node scripts/upload-to-r2.mjs --school-code ACADEMICX --installers-path ./installers
  *   node scripts/upload-to-r2.mjs --school-code SHMCE --installers-path ./installers
  * 
  * Environment variables required:
@@ -130,10 +132,13 @@ function resolveBucketName(args) {
   if (R2_BUCKET_NAME) return R2_BUCKET_NAME;
 
   const normalizedEnv = normalizeEnvironment(
-    args.environment || process.env.UPLOAD_ENV || process.env.DEPLOY_ENV || process.env.NODE_ENV
+    args.environment || process.env.UPLOAD_ENV || process.env.DEPLOY_ENV || process.env.NODE_ENV,
   );
+  const envLabel = normalizedEnv === 'staging' ? 'staging' : 'production';
+  const runId = process.env.GITHUB_RUN_ID || String(Date.now());
 
-  return normalizedEnv === 'staging' ? 'academicx-apps-staging' : 'academicx-apps';
+  // One bucket per CI run (or local invocation) so every build is retained until manually deleted.
+  return `academicx-apps-${envLabel}-${runId}`;
 }
 
 async function ensureBucketExists(s3Client, bucketName, autoCreate) {
@@ -186,13 +191,7 @@ function getTargetAppFolders(schoolCode) {
   }
 
   const base = sanitizeSegment(schoolCode);
-  return [
-    `${base}-student`,
-    `${base}-admin`,
-    `${base}-staff`,
-    `${base}-super-admin`,
-    `${base}-student-portal`,
-  ];
+  return [`${base}-student`];
 }
 
 function collectInstallers(installersPath, schoolCode) {
@@ -338,7 +337,7 @@ function parseAppFolderName(appFolder) {
   let role = 'student';
   if (normalized.includes('-admin')) role = 'admin';
   else if (normalized.includes('-staff')) role = 'staff';
-  else if (normalized.includes('super-admin')) role = 'super_admin';
+  else if (normalized.includes('student-portal')) role = 'student';
 
   // derive code (prefix before the role suffix)
   const parts = normalized.split('-');
@@ -428,43 +427,44 @@ async function listActiveSchools(databases) {
 }
 
 async function updateSchoolDownloads(databases, schoolId, uploadedFiles) {
-  // Organize URLs by platform for easier access
-  const downloads = {};
   const platformMap = {
-    'win32': 'windows',
-    'darwin': 'macos',
-    'linux': 'linux',
-    'android': 'android',
+    win32: 'windows',
+    darwin: 'macos',
+    linux: 'linux',
+    android: 'android',
   };
-
-  for (const file of uploadedFiles) {
-    const platform = platformMap[file.platform] || file.platform;
-    if (!downloads[platform]) {
-      downloads[platform] = [];
-    }
-    downloads[platform].push({
-      filename: path.basename(file.path),
-      url: file.url,
-      size: file.size,
-    });
-  }
 
   try {
     const school = await databases.getDocument(DATABASE_ID, SCHOOLS_COLLECTION_ID, schoolId);
     const data = school.data ? JSON.parse(school.data) : {};
-    
-    // Update downloads in the data field
-    data.downloads = downloads;
+    data.downloads = data.downloads || {};
 
-    await databases.updateDocument(
-      DATABASE_ID,
-      SCHOOLS_COLLECTION_ID,
-      schoolId,
-      { data: JSON.stringify(data) }
-    );
+    for (const file of uploadedFiles) {
+      const platform = platformMap[file.platform] || file.platform;
+      data.downloads[platform] = data.downloads[platform] || [];
 
-    console.log(`\n✅ Updated school document with ${Object.keys(downloads).length} platform download links`);
-    return downloads;
+      const entry = {
+        filename: path.basename(file.path),
+        url: file.url,
+        size: file.size,
+      };
+
+      const existingIndex = data.downloads[platform].findIndex(
+        (item) => item.filename === entry.filename || item.url === entry.url,
+      );
+      if (existingIndex >= 0) {
+        data.downloads[platform][existingIndex] = entry;
+      } else {
+        data.downloads[platform].push(entry);
+      }
+    }
+
+    await databases.updateDocument(DATABASE_ID, SCHOOLS_COLLECTION_ID, schoolId, {
+      data: JSON.stringify(data),
+    });
+
+    console.log(`\n✅ Updated school document (${Object.keys(data.downloads).length} platform(s))`);
+    return data.downloads;
   } catch (error) {
     console.error('Error updating school downloads:', error.message);
     throw error;
@@ -505,6 +505,89 @@ async function updateAllSchoolsWithFallbacks(databases, fallbackFiles) {
       console.warn(`⚠️ Failed to attach fallback apps to ${school.schoolCode}:`, err.message || err);
     }
   }
+}
+
+function downloadsFromUploadedFiles(uploadedFiles) {
+  const downloads = {};
+  const platformMap = {
+    win32: 'windows',
+    darwin: 'macos',
+    linux: 'linux',
+    android: 'android',
+  };
+
+  for (const file of uploadedFiles) {
+    const platform = platformMap[file.platform] || file.platform;
+    if (!downloads[platform]) downloads[platform] = [];
+    downloads[platform].push({
+      filename: path.basename(file.path),
+      url: file.url,
+      size: file.size,
+    });
+  }
+
+  return downloads;
+}
+
+async function upsertAppRecordsFromUpload(databases, uploadedFiles, dryRun) {
+  for (const f of uploadedFiles) {
+    try {
+      const parts = f.path.split('/');
+      const appFolder = parts[1] || '';
+      const { role, code, isFallback } = parseAppFolderName(appFolder);
+      const platform = parts[0] || 'unknown';
+      const filename = path.basename(f.path);
+
+      await upsertAppDocument(
+        databases,
+        {
+          code,
+          role,
+          platform,
+          filename,
+          url: f.url,
+          size: f.size,
+          version: '',
+          isFallback,
+        },
+        dryRun,
+      );
+    } catch (err) {
+      console.warn('⚠️  Failed to write app record for', f.path, err.message || err);
+    }
+  }
+}
+
+async function uploadAcademicxUniversalApps(s3Client, bucketName, installersPath, databases, dryRun) {
+  console.log('\n📦 Uploading universal ACADEMICX fallback apps (no school document required)...');
+  const installers = collectInstallers(installersPath, 'ACADEMICX');
+  const installerCount = Object.keys(installers).length;
+
+  if (installerCount === 0) {
+    console.warn('⚠️  No ACADEMICX installer files found (expected academicx-admin, academicx-staff, academicx-student-portal)');
+    return [];
+  }
+
+  console.log(`✓ Found ${installerCount} ACADEMICX installer file(s)`);
+  const uploadedFiles = await uploadToR2(s3Client, bucketName, 'ACADEMICX', installers, dryRun);
+  await upsertAppRecordsFromUpload(databases, uploadedFiles, dryRun);
+
+  const fallbackFiles = uploadedFiles
+    .map((f) => ({
+      platform: f.platform,
+      filename: path.basename(f.path),
+      url: f.url,
+      size: f.size,
+    }))
+    .filter((f) => !!f.url);
+
+  if (fallbackFiles.length > 0) {
+    await updateAllSchoolsWithFallbacks(databases, fallbackFiles);
+    console.log('✅ Attached universal ACADEMICX app links to all active schools');
+  }
+
+  printSummary('ACADEMICX', downloadsFromUploadedFiles(uploadedFiles));
+  return uploadedFiles;
 }
 
 // ── Summary ───────────────────────────────────────────────
@@ -565,17 +648,14 @@ async function main() {
   const databases = await initAppwrite();
 
   if (allSchools) {
-    const schools = await listActiveSchools(databases);
-    const roleSchool = await findSchoolByCode(databases, 'ACADEMICX');
-    const schoolsToUpload = roleSchool ? [roleSchool, ...schools] : schools;
-    const seen = new Set();
+    await uploadAcademicxUniversalApps(s3Client, bucketName, installersPath, databases, dryRun);
 
-    for (const school of schoolsToUpload) {
-      const normalizedCode = String(school.schoolCode || '').trim().toUpperCase();
-      if (!normalizedCode || seen.has(normalizedCode)) continue;
-      seen.add(normalizedCode);
+    const schools = (await listActiveSchools(databases)).filter(
+      (school) => String(school.schoolCode || '').trim().toUpperCase() !== 'ACADEMICX',
+    );
 
-      console.log(`\n🔍 Looking up school "${school.schoolCode}" in Appwrite...`);
+    for (const school of schools) {
+      console.log(`\n🔍 Uploading student app for school "${school.schoolCode}"...`);
       const installers = collectInstallers(installersPath, school.schoolCode);
       const installerCount = Object.keys(installers).length;
 
@@ -584,52 +664,15 @@ async function main() {
         continue;
       }
 
-      console.log(`✓ Found ${installerCount} installer files`);
+      console.log(`✓ Found ${installerCount} installer file(s)`);
       const uploadedFiles = await uploadToR2(s3Client, bucketName, school.schoolCode, installers, dryRun);
       const downloads = await updateSchoolDownloads(databases, school.$id, uploadedFiles);
-
-      // Create/update app-level records in the `apps` collection
-      for (const f of uploadedFiles) {
-        try {
-          const parts = f.path.split('/');
-          const appFolder = parts[1] || '';
-          const { role, code, isFallback } = parseAppFolderName(appFolder);
-          const platform = parts[0] || 'unknown';
-          const filename = path.basename(f.path);
-
-          await upsertAppDocument(databases, {
-            code,
-            role,
-            platform,
-            filename,
-            url: f.url,
-            size: f.size,
-            version: '',
-            isFallback,
-          }, dryRun);
-        } catch (err) {
-          console.warn('⚠️  Failed to write app record for', f.path, err.message || err);
-        }
-      }
-
-      // If this was the universal role uploads (ACADEMICX), attach fallback links to all schools
-      if (normalizedCode === 'ACADEMICX') {
-        const fallbackFiles = uploadedFiles
-          .map(f => ({ platform: f.platform, filename: path.basename(f.path), url: f.url, size: f.size }))
-          .filter(f => !!f.url);
-
-        try {
-          await updateAllSchoolsWithFallbacks(databases, fallbackFiles);
-          console.log('✅ Attached universal role app links to all schools');
-        } catch (err) {
-          console.warn('⚠️  Failed to attach fallback apps to schools:', err.message || err);
-        }
-      }
-
+      await upsertAppRecordsFromUpload(databases, uploadedFiles, dryRun);
       printSummary(school.schoolCode, downloads);
     }
+  } else if (String(schoolCode || '').trim().toUpperCase() === 'ACADEMICX') {
+    await uploadAcademicxUniversalApps(s3Client, bucketName, installersPath, databases, dryRun);
   } else {
-    // Collect installer files
     const installers = collectInstallers(installersPath, schoolCode);
     const installerCount = Object.keys(installers).length;
 
@@ -639,8 +682,7 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`✓ Found ${installerCount} installer files`);
-
+    console.log(`✓ Found ${installerCount} installer file(s)`);
     console.log(`\n🔍 Looking up school "${schoolCode}" in Appwrite...`);
     const school = await findSchoolByCode(databases, schoolCode);
 
@@ -653,42 +695,7 @@ async function main() {
 
     const uploadedFiles = await uploadToR2(s3Client, bucketName, schoolCode, installers, dryRun);
     const downloads = await updateSchoolDownloads(databases, school.$id, uploadedFiles);
-
-    // Create/update app-level records in the `apps` collection
-    for (const f of uploadedFiles) {
-      try {
-        const parts = f.path.split('/');
-        const appFolder = parts[1] || '';
-        const { role, code, isFallback } = parseAppFolderName(appFolder);
-        const platform = parts[0] || 'unknown';
-        const filename = path.basename(f.path);
-
-        await upsertAppDocument(databases, {
-          code,
-          role,
-          platform,
-          filename,
-          url: f.url,
-          size: f.size,
-          version: '',
-          isFallback,
-        }, dryRun);
-      } catch (err) {
-        console.warn('⚠️  Failed to write app record for', f.path, err.message || err);
-      }
-    }
-
-    // If this was the ACADEMICX universal upload, attach fallbacks to all schools
-    if (String(schoolCode || '').trim().toUpperCase() === 'ACADEMICX') {
-      const fallbackFiles = uploadedFiles.map(f => ({ platform: f.platform, filename: path.basename(f.path), url: f.url, size: f.size }));
-      try {
-        await updateAllSchoolsWithFallbacks(databases, fallbackFiles);
-        console.log('✅ Attached universal role app links to all schools');
-      } catch (err) {
-        console.warn('⚠️  Failed to attach fallback apps to schools:', err.message || err);
-      }
-    }
-
+    await upsertAppRecordsFromUpload(databases, uploadedFiles, dryRun);
     printSummary(schoolCode, downloads);
   }
 

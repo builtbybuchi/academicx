@@ -169,7 +169,7 @@ You can login with the logins in the projecttarge.md
 }
 
 
-The links below are for the production buy tyou can just refer to the official urls. 
+The links below are for the production buy t you can just refer to the official urls after I update it.  
 
 
 {

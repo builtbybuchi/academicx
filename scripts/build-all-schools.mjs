@@ -2,30 +2,21 @@
 
 /**
  * Per-School App Build Orchestrator
- * 
- * Fetches all schools from Appwrite and builds per-school student app variants.
- * Staff, admin, and super-admin apps are built once as "academiX - Role" variants.
- * 
+ *
+ * Fetches active schools from Appwrite and builds a student app per school.
+ * Builds universal ACADEMICX fallback apps (admin, staff, student portal) once.
+ *
  * Usage:
- *   node scripts/build-all-schools.mjs [--upload-r2] [--platform windows|linux|macos|android]
- * 
- * Options:
- *   --upload-r2      Upload artifacts to R2 and update Appwrite after build
- *   --platform       Build for specific platform only (defaults to current platform)
- *   --school-code    Build specific school only (omit to build all)
+ *   node scripts/build-all-schools.mjs [--upload-r2] [--environment stg|prd] [--school-code CODE]
  */
 
-import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { Client, Databases, Query } from 'node-appwrite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-
-// ── Config ────────────────────────────────────────────────
 
 const APPWRITE_ENDPOINT = process.env.APPWRITE_ENDPOINT || '';
 const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || '';
@@ -35,24 +26,8 @@ const DATABASE_ID = 'academicx_db';
 const SCHOOLS_COLLECTION_ID = 'schools';
 
 const INSTALLERS_ROOT = path.join(ROOT, 'installers');
-
-// Apps to build with role labels
-const ROLE_APPS = [
-  { code: 'admin', role: 'Admin' },
-  { code: 'staff', role: 'Staff' },
-  { code: 'super-admin', role: 'Super Admin' },
-];
-
-// ── Utilities ─────────────────────────────────────────────
-
-function sanitizeSegment(input) {
-  return String(input || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
+const ACADEMICX_LOGO_URL =
+  'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
 
 function parseArgs(argv) {
   const args = {};
@@ -90,23 +65,6 @@ function run(command, commandArgs, cwd = ROOT) {
   }
 }
 
-function runCapture(command, commandArgs, cwd = ROOT) {
-  const result = spawnSync(command, commandArgs, {
-    cwd,
-    stdio: 'pipe',
-    encoding: 'utf8',
-    shell: true,
-  });
-
-  if (result.status !== 0) {
-    throw new Error(`Command failed: ${result.stderr || result.stdout}`);
-  }
-
-  return result.stdout.trim();
-}
-
-// ── Appwrite Integration ──────────────────────────────────
-
 async function fetchAllSchools() {
   if (!APPWRITE_ENDPOINT || !APPWRITE_PROJECT_ID || !APPWRITE_API_KEY) {
     console.error('❌ Missing Appwrite environment variables: APPWRITE_ENDPOINT, APPWRITE_PROJECT_ID, APPWRITE_API_KEY');
@@ -125,19 +83,25 @@ async function fetchAllSchools() {
       Query.equal('status', 'active'),
       Query.limit(1000),
     ]);
-    const activeSchools = response.documents.filter(doc => doc.status !== 'inactive');
-    return activeSchools;
+    return response.documents.filter((doc) => doc.status !== 'inactive');
   } catch (error) {
     console.error('❌ Failed to fetch schools from Appwrite:', error.message);
     throw error;
   }
 }
 
-// ── Conditional Build Selection ───────────────────────────
+function selectSchools(allSchools, filterCode) {
+  const withoutAcademicx = allSchools.filter(
+    (school) => String(school.schoolCode || '').trim().toUpperCase() !== 'ACADEMICX',
+  );
 
-async function selectSchools(allSchools, filterCode) {
   if (filterCode) {
-    const school = allSchools.find(s => s.schoolCode === filterCode);
+    const normalized = String(filterCode).trim().toUpperCase();
+    if (normalized === 'ACADEMICX') {
+      console.error('❌ ACADEMICX is the universal fallback app code and is not built from the schools collection.');
+      process.exit(1);
+    }
+    const school = withoutAcademicx.find((s) => s.schoolCode === filterCode);
     if (!school) {
       console.error(`❌ School not found: ${filterCode}`);
       process.exit(1);
@@ -145,157 +109,89 @@ async function selectSchools(allSchools, filterCode) {
     return [school];
   }
 
-  // Interactive selection: show all schools and let user choose
   if (process.stdout.isTTY) {
     console.log('\n📋 Available Schools:\n');
-    allSchools.forEach((school, idx) => {
+    withoutAcademicx.forEach((school, idx) => {
       console.log(`  ${idx + 1}. ${school.schoolCode} — ${school.name}`);
     });
-    console.log('\n⚠️  To build specific schools, use: --school-code SCHOOLCODE');
-    console.log('    To build all, omit --school-code\n');
+    console.log('\n⚠️  To build a specific school: --school-code SCHOOLCODE');
+    console.log('    To build all active schools, omit --school-code\n');
   }
 
-  // For CI/CD, build all; for local, prompt
-  return allSchools;
+  return withoutAcademicx;
 }
 
-// ── Build Orchestration ───────────────────────────────────
-
-async function buildSchoolStudentApp(schoolCode, schoolName, logoUrl) {
+function buildAcademicxApps() {
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`📱 Building Student App for: ${schoolCode} (${schoolName})`);
+  console.log('🏢 Building universal ACADEMICX apps (Admin, Staff, Student Portal)');
   console.log('='.repeat(60));
 
-  try {
-    const commandArgs = ['scripts/build-tauri-apps.mjs', '--school-code', schoolCode];
-    if (logoUrl) {
-      commandArgs.push('--logo-url', logoUrl);
-    }
-    run('node', commandArgs, ROOT);
-    console.log(`✅ Successfully built student app for ${schoolCode}`);
-  } catch (error) {
-    console.error(`❌ Failed to build student app for ${schoolCode}:`, error.message);
-    throw error;
-  }
+  run(
+    'node',
+    [
+      'scripts/build-tauri-apps.mjs',
+      '--school-code',
+      'ACADEMICX',
+      '--logo-url',
+      ACADEMICX_LOGO_URL,
+    ],
+    ROOT,
+  );
+  console.log('✅ Successfully built universal ACADEMICX apps');
 }
 
-async function buildRoleApps() {
+function buildSchoolStudentApp(school) {
+  const schoolCode = school.schoolCode;
+  const logoUrl = String(school.logo || '').trim();
+
   console.log(`\n${'='.repeat(60)}`);
-  console.log('🏢 Building Role Apps (Admin, Staff, Super Admin)');
+  console.log(`📱 Building student app for: ${schoolCode}`);
   console.log('='.repeat(60));
 
-    try {
-      // Build all role apps with "ACADEMICX" as the school code
-      const args = [];
-      if (process.argv.includes('--force') || process.env.FORCE_REBUILD === 'true') args.push('--force');
-      run('node', ['scripts/build-tauri-apps.mjs', '--school-code', 'ACADEMICX', ...args], ROOT);
-    console.log('✅ Successfully built all role apps');
-  } catch (error) {
-    console.error('❌ Failed to build role apps:', error.message);
-    throw error;
+  const commandArgs = ['scripts/build-tauri-apps.mjs', '--school-code', schoolCode];
+  if (logoUrl) {
+    commandArgs.push('--logo-url', logoUrl);
   }
+
+  run('node', commandArgs, ROOT);
+  console.log(`✅ Successfully built student app for ${schoolCode}`);
 }
-
-// ── Cleanup & Organization ──────────────────────────────
-
-function renameBuiltInstallers(schoolCode) {
-  const platformLabel = os.platform();
-  const sourceDir = path.join(INSTALLERS_ROOT, platformLabel, `${sanitizeSegment(schoolCode)}-student`);
-  const targetDir = path.join(INSTALLERS_ROOT, platformLabel, `${schoolCode}-student`);
-
-  if (fs.existsSync(sourceDir) && sourceDir !== targetDir) {
-    fs.renameSync(sourceDir, targetDir);
-    console.log(`  Renamed installer folder to: ${path.basename(targetDir)}`);
-  }
-}
-
-function renameRoleApps() {
-  const platformLabel = os.platform();
-  
-  const appMappings = [
-    { from: 'academicx-admin', to: 'academicx-admin' },
-    { from: 'academicx-staff', to: 'academicx-staff' },
-    { from: 'academicx-super-admin', to: 'academicx-super-admin' },
-  ];
-
-  for (const mapping of appMappings) {
-    const sourceDir = path.join(INSTALLERS_ROOT, platformLabel, mapping.from);
-    const targetDir = path.join(INSTALLERS_ROOT, platformLabel, mapping.to);
-
-    if (fs.existsSync(sourceDir) && sourceDir !== targetDir) {
-      if (fs.existsSync(targetDir)) {
-        fs.rmSync(targetDir, { recursive: true, force: true });
-      }
-      fs.renameSync(sourceDir, targetDir);
-      console.log(`  Renamed ${mapping.from} to ${mapping.to}`);
-    }
-  }
-}
-
-// ── Main Orchestration ────────────────────────────────────
 
 async function main() {
   const args = parseArgs(process.argv);
   const shouldUploadR2 = args['upload-r2'] === 'true';
   const filterSchoolCode = args['school-code'];
+  const environment = String(args.environment || process.env.UPLOAD_ENV || process.env.DEPLOY_ENV || '').trim();
 
   console.log('\n🎯 Per-School App Build Orchestrator\n');
 
-  // Fetch schools
   console.log('📡 Fetching schools from Appwrite...');
   const allSchools = await fetchAllSchools();
-  console.log(`✓ Found ${allSchools.length} active schools\n`);
+  const schoolsToBuild = selectSchools(allSchools, filterSchoolCode);
+  console.log(`✓ Found ${schoolsToBuild.length} school(s) to build\n`);
 
-  // Select schools to build
-  const schoolsToBuild = await selectSchools(allSchools, filterSchoolCode);
+  buildAcademicxApps();
 
-  // Build role apps once
-  await buildRoleApps();
-  renameRoleApps();
-
-  // Build per-school student apps
   for (const school of schoolsToBuild) {
-    const forceArg = (process.argv.includes('--force') || process.env.FORCE_REBUILD === 'true') ? ['--force'] : [];
-    try {
-      // Delegate to the Tauri builder so it uses the same logic and flags
-      run('node', ['scripts/build-tauri-apps.mjs', '--school-code', school.schoolCode, ...forceArg], ROOT);
-      renameBuiltInstallers(school.schoolCode);
-      console.log(`✅ Successfully built student app for ${school.schoolCode}`);
-    } catch (err) {
-      console.error(`❌ Failed to build student app for ${school.schoolCode}:`, err.message);
-      throw err;
-    }
+    buildSchoolStudentApp(school);
   }
 
-  // Upload to R2 if requested
   if (shouldUploadR2) {
     console.log('\n' + '='.repeat(60));
-    console.log('☁️  Uploading to Cloudflare R2');
+    console.log('☁️  Uploading installers to R2 and Appwrite');
     console.log('='.repeat(60));
 
-    // Upload role apps first
-    try {
-      run('node', [
-        'scripts/upload-to-r2.mjs',
-        '--school-code', 'ACADEMICX',
-        '--installers-path', INSTALLERS_ROOT,
-      ], ROOT);
-    } catch (error) {
-      console.warn(`⚠️  Failed to upload role apps to R2: ${error.message}`);
+    const uploadArgs = [
+      'scripts/upload-to-r2.mjs',
+      '--all-schools',
+      '--installers-path',
+      INSTALLERS_ROOT,
+    ];
+    if (environment) {
+      uploadArgs.push('--environment', environment);
     }
 
-    // Upload per-school apps
-    for (const school of schoolsToBuild) {
-      try {
-        run('node', [
-          'scripts/upload-to-r2.mjs',
-          '--school-code', school.schoolCode,
-          '--installers-path', INSTALLERS_ROOT,
-        ], ROOT);
-      } catch (error) {
-        console.warn(`⚠️  Failed to upload ${school.schoolCode} to R2: ${error.message}`);
-      }
-    }
+    run('node', uploadArgs, ROOT);
   }
 
   console.log('\n' + '='.repeat(60));
@@ -304,8 +200,7 @@ async function main() {
   console.log(`\n📦 Installers are in: ${path.relative(ROOT, INSTALLERS_ROOT)}\n`);
 
   if (!shouldUploadR2) {
-    console.log('💡 To upload to R2, run: node scripts/upload-to-r2.mjs --school-code SCHOOLCODE')
-    console.log('   Or use --upload-r2 flag with this script\n');
+    console.log('💡 To upload after build: node scripts/upload-to-r2.mjs --all-schools --installers-path ./installers\n');
   }
 }
 

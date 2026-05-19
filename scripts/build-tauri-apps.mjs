@@ -9,7 +9,9 @@ const ROOT = process.cwd();
 const APPS_ROOT = path.join(ROOT, 'apps');
 const INSTALLERS_ROOT = path.join(ROOT, 'installers');
 const DEFAULT_LOGO = path.join(ROOT, 'apps', 'landing-page', 'public', 'logo.png');
-const DEFAULT_LOGO_URL = 'https://res.cloudinary.com/dlvffw5wt/image/upload/f_png/square-image_butlfh';
+const DEFAULT_LOGO_URL =
+  'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
+const ACADEMICX_LOGO_URL = DEFAULT_LOGO_URL;
 
 // App definitions based on school code
 // For ACADEMIX: Build all role apps (admin, staff, student) named "academiX - Role"
@@ -135,16 +137,6 @@ function fileExists(filePath) {
   }
 }
 
-function dirHasFiles(dirPath) {
-  if (!fileExists(dirPath)) return false;
-  try {
-    const entries = fs.readdirSync(dirPath);
-    return entries.length > 0;
-  } catch {
-    return false;
-  }
-}
-
 function copyRecursive(source, destination) {
   if (!fileExists(source)) return;
 
@@ -166,16 +158,6 @@ function detectPlatformBundleTargets() {
   if (process.platform === 'darwin') return ['dmg', 'app'];
   if (process.platform === 'linux') return ['deb', 'appimage'];
   throw new Error(`Unsupported platform: ${process.platform}`);
-}
-
-function installerAlreadyExists(appName, appIdSuffix) {
-  // Respect a global force flag to always rebuild
-  if (process.argv.includes('--force') || process.env.FORCE_REBUILD === 'true') return false;
-
-  const appOutputLabel = `${sanitizeSegment(appName)}-${appIdSuffix}`;
-  const platformLabel = os.platform();
-  const destination = path.join(INSTALLERS_ROOT, platformLabel, appOutputLabel);
-  return dirHasFiles(destination);
 }
 
 function ensureAppDependencies(appDir) {
@@ -296,10 +278,11 @@ function resolveLogoPath(baseLogoPath, appDir) {
 }
 
 async function downloadLogo(logoUrl) {
-  // Use cached copy if already downloaded
-  const cachedPath = path.join(ROOT, '.tmp', 'school-logo.png');
+  const cacheKey = sanitizeSegment(logoUrl) || 'default';
+  const cachedPath = path.join(ROOT, '.tmp', `logo-${cacheKey}.png`);
+
   if (fileExists(cachedPath)) {
-    console.log('Using cached logo from previous download...');
+    console.log(`Using cached logo for ${logoUrl}...`);
     return cachedPath;
   }
 
@@ -310,8 +293,8 @@ async function downloadLogo(logoUrl) {
   }
 
   const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-  const ext = contentType.includes('png') ? 'png' : contentType.includes('svg') ? 'svg' : 'png';
-  const filePath = path.join(ROOT, '.tmp', `school-logo.${ext}`);
+  const ext = contentType.includes('png') ? 'png' : contentType.includes('svg') ? 'svg' : 'jpg';
+  const filePath = path.join(ROOT, '.tmp', `logo-${cacheKey}.${ext}`);
   ensureDir(path.dirname(filePath));
 
   const bytes = Buffer.from(await response.arrayBuffer());
@@ -322,12 +305,6 @@ async function downloadLogo(logoUrl) {
 function buildSingleApp(definition, appName, appIdentifier, baseLogoPath, bundleTargets) {
   const appDir = path.join(APPS_ROOT, definition.dir);
   const appOutputLabel = `${sanitizeSegment(appName)}-${definition.appIdSuffix}`;
-
-  // Skip if installers already exist for this app
-  if (installerAlreadyExists(appName, definition.appIdSuffix)) {
-    console.log(`\n=== Skipping ${appName} — installers already exist. Delete installers/${os.platform()}/${appOutputLabel} to rebuild. ===`);
-    return;
-  }
 
   console.log(`\n=== Building ${appName} (${definition.dir}) ===`);
   ensureAppDependencies(appDir);
@@ -356,16 +333,15 @@ Options:
   --logo-url      Optional. URL to download logo from.
 
 Examples:
-  # Build ACADEMICX role apps (Admin, Staff, Super Admin)
+  # Build universal ACADEMICX apps (Admin, Staff, Student Portal)
   node scripts/build-tauri-apps.mjs --school-code ACADEMICX
 
   # Build school-specific student app
-  node scripts/build-tauri-apps.mjs --school-code SHMCE
+  node scripts/build-tauri-apps.mjs --school-code shmce --logo-url https://...
 
 Notes:
-  - ACADEMIX builds Admin, Staff, and Super Admin apps
+  - ACADEMICX builds Admin, Staff, and Student Portal fallback apps
   - Other school codes build only the Student/Parent app
-  - To rebuild an app, delete its folder inside installers/<platform>/<app-name>-<type>/
   - Builds are platform-specific: Windows produces .exe/.msi, Linux produces .deb/.appimage,
     macOS produces .dmg. Cross-platform builds require a CI pipeline (e.g. GitHub Actions).
 `);
@@ -452,7 +428,8 @@ async function main() {
   if (!schoolCode) showUsageAndExit();
 
   let logoArg = args.logo ? path.resolve(ROOT, args.logo) : null;
-  const logoUrl = String(args['logo-url'] || '').trim() || DEFAULT_LOGO_URL;
+  const isAcademicx = schoolCode.toUpperCase() === 'ACADEMICX';
+  const logoUrl = String(args['logo-url'] || '').trim() || (isAcademicx ? ACADEMICX_LOGO_URL : DEFAULT_LOGO_URL);
 
   if (!logoArg) {
     logoArg = await downloadLogo(logoUrl);

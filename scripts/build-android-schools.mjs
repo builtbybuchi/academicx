@@ -18,6 +18,8 @@ const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || '';
 const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY || '';
 const DATABASE_ID = 'academicx_db';
 const SCHOOLS_COLLECTION_ID = 'schools';
+const ACADEMICX_LOGO_URL =
+  'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
 
 const ROLE_DEFINITIONS = [
   { dir: 'admin-app', appName: 'AcademicX - Admin', appIdSuffix: 'admin' },
@@ -127,14 +129,21 @@ function ensureTauriProject(appDir, appName) {
 }
 
 async function downloadLogo(logoUrl) {
+  const cacheKey = sanitizeSegment(logoUrl) || 'default';
+  const cachedPath = path.join(ROOT, '.tmp', `android-logo-${cacheKey}.png`);
+
+  if (fileExists(cachedPath)) {
+    return cachedPath;
+  }
+
   const response = await fetch(logoUrl);
   if (!response.ok) {
     throw new Error(`Failed to download logo: ${logoUrl}`);
   }
 
   const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-  const ext = contentType.includes('svg') ? 'svg' : 'png';
-  const outputPath = path.join(ROOT, '.tmp', `android-logo.${ext}`);
+  const ext = contentType.includes('svg') ? 'svg' : contentType.includes('png') ? 'png' : 'jpg';
+  const outputPath = path.join(ROOT, '.tmp', `android-logo-${cacheKey}.${ext}`);
   ensureDir(path.dirname(outputPath));
   fs.writeFileSync(outputPath, Buffer.from(await response.arrayBuffer()));
   return outputPath;
@@ -290,7 +299,7 @@ async function buildOneApp(definition, schoolCode, logoUrl) {
 
 async function buildRoleApps() {
   for (const definition of ROLE_DEFINITIONS) {
-    await buildOneApp(definition, 'ACADEMICX', '');
+    await buildOneApp(definition, 'ACADEMICX', ACADEMICX_LOGO_URL);
   }
 }
 
@@ -301,7 +310,9 @@ async function main() {
 
   ensureDir(INSTALLERS_ROOT);
 
-  const schools = await fetchSchools();
+  const schools = (await fetchSchools()).filter(
+    (school) => String(school.schoolCode || '').trim().toUpperCase() !== 'ACADEMICX',
+  );
   const schoolsToBuild = selectedSchoolCode
     ? schools.filter((school) => school.schoolCode === selectedSchoolCode)
     : schools;
@@ -313,14 +324,26 @@ async function main() {
   await buildRoleApps();
 
   for (const school of schoolsToBuild) {
-    await buildOneApp({ dir: 'student-parent-app', appName: 'student', appIdSuffix: 'student' }, school.schoolCode, school.logo || '');
+    const logoUrl = String(school.logo || '').trim();
+    await buildOneApp(
+      { dir: 'student-parent-app', appName: school.schoolCode, appIdSuffix: 'student' },
+      school.schoolCode,
+      logoUrl,
+    );
   }
 
   if (uploadR2) {
-    for (const school of schoolsToBuild) {
-      run('node', ['scripts/upload-to-r2.mjs', '--school-code', school.schoolCode, '--installers-path', './installers'], ROOT);
+    const uploadArgs = [
+      'scripts/upload-to-r2.mjs',
+      '--all-schools',
+      '--installers-path',
+      './installers',
+    ];
+    const environment = String(args.environment || process.env.UPLOAD_ENV || process.env.DEPLOY_ENV || '').trim();
+    if (environment) {
+      uploadArgs.push('--environment', environment);
     }
-    run('node', ['scripts/upload-to-r2.mjs', '--school-code', 'ACADEMICX', '--installers-path', './installers'], ROOT);
+    run('node', uploadArgs, ROOT);
   }
 }
 
