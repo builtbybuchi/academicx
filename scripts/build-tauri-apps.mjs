@@ -3,31 +3,45 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import {
+  ACADEMICX_LOGO_URL,
+  getInstallerOutputFolder,
+  sanitizeSegment,
+} from './build-paths.mjs';
 
 const ROOT = process.cwd();
 const APPS_ROOT = path.join(ROOT, 'apps');
 const INSTALLERS_ROOT = path.join(ROOT, 'installers');
 const DEFAULT_LOGO = path.join(ROOT, 'apps', 'landing-page', 'public', 'logo.png');
-const DEFAULT_LOGO_URL =
-  'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
-const ACADEMICX_LOGO_URL = DEFAULT_LOGO_URL;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_LOGO_URL = ACADEMICX_LOGO_URL;
 
-// App definitions based on school code
-// For ACADEMIX: Build all role apps (admin, staff, student) named "academiX - Role"
-// For other schools: Build only student app with school code as app name
-function getAppDefinitions(schoolCode) {
+// ACADEMICX: admin, staff, and student portal (universal fallbacks).
+// Other schools: student app only, output folder = sanitized school code.
+function getAppDefinitions(schoolCode, roleFilter = '') {
+  let definitions;
   if (schoolCode.toUpperCase() === 'ACADEMICX') {
-    return [
+    definitions = [
       { dir: 'admin-app', appName: 'AcademicX - Admin', appIdSuffix: 'admin' },
       { dir: 'staff-app', appName: 'AcademicX - Staff', appIdSuffix: 'staff' },
       { dir: 'student-parent-app', appName: 'AcademicX - Student Portal', appIdSuffix: 'student' },
     ];
+  } else {
+    definitions = [
+      { dir: 'student-parent-app', appName: schoolCode, appIdSuffix: 'student' },
+    ];
   }
-  // For school-specific builds, only build student app
-  return [
-    { dir: 'student-parent-app', appName: schoolCode, appIdSuffix: 'student' },
-  ];
+
+  if (roleFilter) {
+    definitions = definitions.filter((def) => def.appIdSuffix === roleFilter);
+    if (definitions.length === 0) {
+      throw new Error(`Unknown role "${roleFilter}". Use admin, staff, or student.`);
+    }
+  }
+
+  return definitions;
 }
 
 function parseArgs(argv) {
@@ -114,14 +128,6 @@ function buildEnvForRust() {
     env.PATH = sanitizeWindowsPathForRust(env.PATH);
   }
   return env;
-}
-
-function sanitizeSegment(input) {
-  return String(input || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
 }
 
 function ensureDir(dirPath) {
@@ -302,11 +308,11 @@ async function downloadLogo(logoUrl) {
   return filePath;
 }
 
-function buildSingleApp(definition, appName, appIdentifier, baseLogoPath, bundleTargets) {
+function buildSingleApp(definition, schoolCode, appName, appIdentifier, baseLogoPath, bundleTargets) {
   const appDir = path.join(APPS_ROOT, definition.dir);
-  const appOutputLabel = `${sanitizeSegment(appName)}-${definition.appIdSuffix}`;
+  const outputFolder = getInstallerOutputFolder(schoolCode, definition.appIdSuffix);
 
-  console.log(`\n=== Building ${appName} (${definition.dir}) ===`);
+  console.log(`\n=== Building ${appName} (${definition.dir}) → installers/<platform>/${outputFolder}/ ===`);
   ensureAppDependencies(appDir);
   ensureTauriCli(appDir);
   ensureTauriProject(appDir, appName);
@@ -319,7 +325,7 @@ function buildSingleApp(definition, appName, appIdentifier, baseLogoPath, bundle
   // Tauri's CLI handles the Rust/Cargo environment internally.
     run('npx', ['@tauri-apps/cli', 'build', '--bundles', bundleTargets.join(',')], appDir);
 
-  collectInstallers(appDir, INSTALLERS_ROOT, appOutputLabel);
+  collectInstallers(appDir, INSTALLERS_ROOT, outputFolder);
 }
 
 function showUsageAndExit() {
@@ -328,7 +334,8 @@ Usage:
   node scripts/build-tauri-apps.mjs --school-code SHMCE [--logo path/to/logo.png] [--logo-url https://...]
 
 Options:
-  --school-code   Required. School code or 'ACADEMICX' for role apps
+  --school-code   Required. School code or 'ACADEMICX' for universal apps
+  --role          Optional. For ACADEMICX: admin | staff | student (build one role)
   --logo          Optional. Path to logo file.
   --logo-url      Optional. URL to download logo from.
 
@@ -425,6 +432,7 @@ function ensureRustToolchain() {
 async function main() {
   const args = parseArgs(process.argv);
   const schoolCode = String(args['school-code'] || '').trim();
+  const roleFilter = String(args.role || '').trim().toLowerCase();
   if (!schoolCode) showUsageAndExit();
 
   let logoArg = args.logo ? path.resolve(ROOT, args.logo) : null;
@@ -448,14 +456,12 @@ async function main() {
 
   ensureDir(INSTALLERS_ROOT);
 
-  // Get app definitions based on school code
-  const appDefinitions = getAppDefinitions(schoolCode);
+  const appDefinitions = getAppDefinitions(schoolCode, roleFilter);
 
-  // Build each app
   for (const appDef of appDefinitions) {
     const appName = appDef.appName;
     const appIdentifier = `com.academicx.${sanitizeSegment(schoolCode)}.${appDef.appIdSuffix}`;
-    buildSingleApp(appDef, appName, appIdentifier, logoArg, bundleTargets);
+    buildSingleApp(appDef, schoolCode, appName, appIdentifier, logoArg, bundleTargets);
   }
 
   console.log(`\nAll done. Installers are in: ${path.relative(ROOT, INSTALLERS_ROOT)}`);

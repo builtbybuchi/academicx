@@ -3,8 +3,8 @@
 /**
  * Per-School App Build Orchestrator
  *
- * Fetches active schools from Appwrite and builds a student app per school.
- * Builds universal ACADEMICX fallback apps (admin, staff, student portal) once.
+ * 1. Builds universal ACADEMICX admin, staff, and student portal apps (all roles, all OS).
+ * 2. Builds one student app per active school (output folder = school code).
  *
  * Usage:
  *   node scripts/build-all-schools.mjs [--upload-r2] [--environment stg|prd] [--school-code CODE]
@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { Client, Databases, Query } from 'node-appwrite';
+import { ACADEMICX_LOGO_URL, getInstallerOutputFolder } from './build-paths.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -26,8 +27,8 @@ const DATABASE_ID = 'academicx_db';
 const SCHOOLS_COLLECTION_ID = 'schools';
 
 const INSTALLERS_ROOT = path.join(ROOT, 'installers');
-const ACADEMICX_LOGO_URL =
-  'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
+
+const ACADEMICX_ROLES = ['admin', 'staff', 'student'];
 
 function parseArgs(argv) {
   const args = {};
@@ -121,9 +122,10 @@ function selectSchools(allSchools, filterCode) {
   return withoutAcademicx;
 }
 
-function buildAcademicxApps() {
+function buildAcademicxRoleApp(role) {
+  const roleLabel = role === 'student' ? 'Student Portal' : role.charAt(0).toUpperCase() + role.slice(1);
   console.log(`\n${'='.repeat(60)}`);
-  console.log('🏢 Building universal ACADEMICX apps (Admin, Staff, Student Portal)');
+  console.log(`🏢 Building universal ACADEMICX ${roleLabel} app`);
   console.log('='.repeat(60));
 
   run(
@@ -132,12 +134,25 @@ function buildAcademicxApps() {
       'scripts/build-tauri-apps.mjs',
       '--school-code',
       'ACADEMICX',
+      '--role',
+      role,
       '--logo-url',
       ACADEMICX_LOGO_URL,
     ],
     ROOT,
   );
-  console.log('✅ Successfully built universal ACADEMICX apps');
+}
+
+function buildAcademicxApps() {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log('🏢 Building universal ACADEMICX apps (Admin, Staff, Student Portal)');
+  console.log('='.repeat(60));
+
+  for (const role of ACADEMICX_ROLES) {
+    buildAcademicxRoleApp(role);
+  }
+
+  console.log('\n✅ Successfully built all universal ACADEMICX apps');
 }
 
 function buildSchoolStudentApp(school) {
@@ -145,7 +160,7 @@ function buildSchoolStudentApp(school) {
   const logoUrl = String(school.logo || '').trim();
 
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`📱 Building student app for: ${schoolCode}`);
+  console.log(`📱 Building student app for: ${schoolCode} → installers/<platform>/${getInstallerOutputFolder(schoolCode)}/`);
   console.log('='.repeat(60));
 
   const commandArgs = ['scripts/build-tauri-apps.mjs', '--school-code', schoolCode];

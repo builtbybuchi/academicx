@@ -25,6 +25,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { S3Client, PutObjectCommand, HeadBucketCommand, CreateBucketCommand } from '@aws-sdk/client-s3';
 import { Client, Databases, Query, ID, Permission, Role } from 'node-appwrite';
+import {
+  ACADEMICX_INSTALLER_FOLDERS,
+  getInstallerFoldersForUpload,
+  sanitizeSegment,
+} from './build-paths.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -173,25 +178,8 @@ function fileExists(filePath) {
   }
 }
 
-function sanitizeSegment(input) {
-  return String(input || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
 function getTargetAppFolders(schoolCode) {
-  if (String(schoolCode || '').trim().toUpperCase() === 'ACADEMICX') {
-    return [
-      'academicx-admin',
-      'academicx-staff',
-      'academicx-student-portal'
-    ];
-  }
-
-  const base = sanitizeSegment(schoolCode);
-  return [`${base}-student`];
+  return getInstallerFoldersForUpload(schoolCode);
 }
 
 function collectInstallers(installersPath, schoolCode) {
@@ -330,26 +318,21 @@ async function initAppwrite() {
 }
 
 function parseAppFolderName(appFolder) {
-  const folder = String(appFolder || '').toLowerCase();
-  // normalize common misspelling
-  const normalized = folder.replace(/^academix/, 'academicx');
+  const folder = String(appFolder || '').toLowerCase().replace(/^academix/, 'academicx');
 
-  let role = 'student';
-  if (normalized.includes('-admin')) role = 'admin';
-  else if (normalized.includes('-staff')) role = 'staff';
-  else if (normalized.includes('student-portal')) role = 'student';
+  if (folder === 'academicx-admin') {
+    return { role: 'admin', code: 'ACADEMICX', isFallback: true };
+  }
+  if (folder === 'academicx-staff') {
+    return { role: 'staff', code: 'ACADEMICX', isFallback: true };
+  }
+  if (folder === 'academicx-student-portal') {
+    return { role: 'student', code: 'ACADEMICX', isFallback: true };
+  }
 
-  // derive code (prefix before the role suffix)
-  const parts = normalized.split('-');
-  // remove trailing role segments
-  if (parts.length > 1) parts.pop();
-  const prefix = parts.join('-') || normalized;
-  const code = prefix.toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-  const isAcademicx = prefix.startsWith('academicx');
-  const isFallback = isAcademicx; // public universal packages are fallbacks for schools
-
-  return { role, code: isAcademicx ? 'ACADEMICX' : code, isFallback };
+  // Per-school student apps live in a folder named after the school code.
+  const code = folder.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return { role: 'student', code, isFallback: false };
 }
 
 async function upsertAppDocument(databases, app, dryRun = false) {
@@ -564,7 +547,7 @@ async function uploadAcademicxUniversalApps(s3Client, bucketName, installersPath
   const installerCount = Object.keys(installers).length;
 
   if (installerCount === 0) {
-    console.warn('⚠️  No ACADEMICX installer files found (expected academicx-admin, academicx-staff, academicx-student-portal)');
+    console.warn(`⚠️  No ACADEMICX installer files found (expected ${ACADEMICX_INSTALLER_FOLDERS.join(', ')})`);
     return [];
   }
 

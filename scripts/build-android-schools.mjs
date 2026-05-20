@@ -2,10 +2,16 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { Client, Databases, Query } from 'node-appwrite';
+import {
+  ACADEMICX_LOGO_URL,
+  getAndroidApkFilename,
+  getInstallerOutputFolder,
+  isAcademicxCode,
+  sanitizeSegment,
+} from './build-paths.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -18,8 +24,6 @@ const APPWRITE_PROJECT_ID = process.env.APPWRITE_PROJECT_ID || '';
 const APPWRITE_API_KEY = process.env.APPWRITE_API_KEY || '';
 const DATABASE_ID = 'academicx_db';
 const SCHOOLS_COLLECTION_ID = 'schools';
-const ACADEMICX_LOGO_URL =
-  'https://res.cloudinary.com/dlvffw5wt/image/upload/v1773427661/square-image_butlfh.jpg';
 
 const ROLE_DEFINITIONS = [
   { dir: 'admin-app', appName: 'AcademicX - Admin', appIdSuffix: 'admin' },
@@ -51,6 +55,7 @@ function parseArgs(argv) {
 }
 
 function run(command, commandArgs, cwd = ROOT) {
+  console.log(`  $ ${command} ${commandArgs.join(' ')}`);
   const result = spawnSync(command, commandArgs, {
     cwd,
     stdio: 'inherit',
@@ -75,14 +80,6 @@ function fileExists(filePath) {
   }
 }
 
-function sanitizeSegment(input) {
-  return String(input || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
-
 function ensureAppDependencies(appDir) {
   if (!fileExists(path.join(appDir, 'node_modules'))) {
     run('npm', ['install', '--include=dev'], appDir);
@@ -92,7 +89,9 @@ function ensureAppDependencies(appDir) {
 function ensureTauriCli(appDir) {
   const pkgPath = path.join(appDir, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  const hasCli = Boolean(pkg.devDependencies && pkg.devDependencies['@tauri-apps/cli']) || Boolean(pkg.dependencies && pkg.dependencies['@tauri-apps/cli']);
+  const hasCli =
+    Boolean(pkg.devDependencies && pkg.devDependencies['@tauri-apps/cli']) ||
+    Boolean(pkg.dependencies && pkg.dependencies['@tauri-apps/cli']);
 
   if (!hasCli) {
     run('npm', ['install', '--include=dev', '--save-dev', '@tauri-apps/cli'], appDir);
@@ -161,7 +160,7 @@ function writeTauriConfig(appDir, appName, identifier, logoFilePath) {
   const data = JSON.parse(fs.readFileSync(tauriConfigPath, 'utf8'));
 
   data.productName = appName;
-  data.mainBinaryName = sanitizeSegment(`${appName}-desktop`) || 'academicx-desktop';
+  data.mainBinaryName = sanitizeSegment(`${appName}-mobile`) || 'academicx-mobile';
   data.build = data.build || {};
   data.build.beforeDevCommand = 'npx vite';
   data.build.beforeBuildCommand = 'npx vite build';
@@ -210,6 +209,13 @@ function writeAndroidSigningConfig(appDir) {
   ].join('\n'), 'utf8');
 }
 
+function cleanAndroidGen(appDir) {
+  const genRoot = path.join(appDir, 'src-tauri', 'gen', 'android');
+  if (fileExists(genRoot)) {
+    fs.rmSync(genRoot, { recursive: true, force: true });
+  }
+}
+
 function ensureAndroidProject(appDir, identifier) {
   const androidRoot = path.join(appDir, 'src-tauri', 'gen', 'android');
   const packagePath = path.join(androidRoot, 'app', 'src', 'main', 'java', ...String(identifier || '').split('.'));
@@ -225,15 +231,10 @@ function ensureAndroidProject(appDir, identifier) {
   }
 }
 
-function collectAndroidInstallers(appDir, appOutputLabel) {
-  const bundleRoot = path.join(appDir, 'src-tauri', 'gen', 'android');
-  if (!fileExists(bundleRoot)) return;
+function findAndroidApkFiles(androidGenRoot) {
+  const apks = [];
+  const stack = [androidGenRoot];
 
-  const destination = path.join(INSTALLERS_ROOT, 'android', appOutputLabel);
-  ensureDir(destination);
-
-  // Recursively find and copy any .apk files under the android gen directory.
-  const stack = [bundleRoot];
   while (stack.length > 0) {
     const current = stack.pop();
     for (const name of fs.readdirSync(current)) {
@@ -244,14 +245,57 @@ function collectAndroidInstallers(appDir, appOutputLabel) {
         continue;
       }
       if (stat.isFile() && name.endsWith('.apk')) {
-        // preserve relative path under the destination to avoid collisions
-        const rel = path.relative(bundleRoot, abs);
-        const target = path.join(destination, rel);
-        ensureDir(path.dirname(target));
-        fs.copyFileSync(abs, target);
+        apks.push(abs);
       }
     }
   }
+
+  return apks;
+}
+
+function pickPreferredApk(apkPaths) {
+  if (apkPaths.length === 0) return null;
+
+  const scored = apkPaths.map((apkPath) => {
+    const name = path.basename(apkPath).toLowerCase();
+    let score = 0;
+    if (name.includes('release')) score += 10;
+    if (!name.includes('unsigned')) score += 5;
+    if (name.includes('signed')) score += 5;
+    if (name.includes('universal')) score += 2;
+    if (name.includes('debug')) score -= 20;
+    return { apkPath, score, mtime: fs.statSync(apkPath).mtimeMs };
+  });
+
+  scored.sort((a, b) => b.score - a.score || b.mtime - a.mtime);
+  return scored[0].apkPath;
+}
+
+function collectAndroidInstallers(appDir, schoolCode, appIdSuffix) {
+  const bundleRoot = path.join(appDir, 'src-tauri', 'gen', 'android');
+  if (!fileExists(bundleRoot)) {
+    console.warn(`⚠️  No Android build output in ${path.relative(ROOT, bundleRoot)}`);
+    return;
+  }
+
+  const apkPaths = findAndroidApkFiles(bundleRoot);
+  const selectedApk = pickPreferredApk(apkPaths);
+
+  if (!selectedApk) {
+    console.warn(`⚠️  No APK files found under ${path.relative(ROOT, bundleRoot)}`);
+    return;
+  }
+
+  const outputFolder = getInstallerOutputFolder(schoolCode, appIdSuffix);
+  const apkFilename = getAndroidApkFilename(schoolCode, appIdSuffix);
+  const destDir = path.join(INSTALLERS_ROOT, 'android', outputFolder);
+  const destFile = path.join(destDir, apkFilename);
+
+  ensureDir(destDir);
+  fs.copyFileSync(selectedApk, destFile);
+  console.log(
+    `  ✓ ${path.relative(ROOT, destFile)} (from ${path.basename(selectedApk)})`,
+  );
 }
 
 async function fetchSchools() {
@@ -287,17 +331,24 @@ function updateSchoolConfig(appDir, schoolCode, appName, logoPath, appIdSuffix) 
 
 async function buildOneApp(definition, schoolCode, logoUrl) {
   const appDir = path.join(APPS_ROOT, definition.dir);
-  const appName = schoolCode === 'ACADEMICX' ? definition.appName : schoolCode;
-  const appOutputLabel = `${sanitizeSegment(appName)}-${definition.appIdSuffix}`;
+  const appName = isAcademicxCode(schoolCode) ? definition.appName : schoolCode;
+  const outputFolder = getInstallerOutputFolder(schoolCode, definition.appIdSuffix);
   const logoPath = logoUrl ? await downloadLogo(logoUrl) : resolveLogoPath('');
 
+  console.log(`\n=== Building Android: ${appName} (${definition.dir}) → android/${outputFolder}/ ===`);
+
+  cleanAndroidGen(appDir);
   updateSchoolConfig(appDir, schoolCode, appName, logoPath, definition.appIdSuffix);
   run('npx', ['vite', 'build'], appDir);
   run('npx', ['@tauri-apps/cli', 'android', 'build', '--apk'], appDir);
-  collectAndroidInstallers(appDir, appOutputLabel);
+  collectAndroidInstallers(appDir, schoolCode, definition.appIdSuffix);
 }
 
-async function buildRoleApps() {
+async function buildAcademicxApps() {
+  console.log(`\n${'='.repeat(60)}`);
+  console.log('🏢 Building universal ACADEMICX Android apps (Admin, Staff, Student Portal)');
+  console.log('='.repeat(60));
+
   for (const definition of ROLE_DEFINITIONS) {
     await buildOneApp(definition, 'ACADEMICX', ACADEMICX_LOGO_URL);
   }
@@ -321,7 +372,7 @@ async function main() {
     throw new Error(`School not found: ${selectedSchoolCode}`);
   }
 
-  await buildRoleApps();
+  await buildAcademicxApps();
 
   for (const school of schoolsToBuild) {
     const logoUrl = String(school.logo || '').trim();
