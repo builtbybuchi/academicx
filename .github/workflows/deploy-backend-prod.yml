@@ -1,0 +1,77 @@
+name: Deploy Backend Production (Cloudflare Workers + Doppler)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    env:
+      DOPPLER_PROJECT: academicx
+      DOPPLER_CONFIG: prd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
+      - name: Install backend dependencies
+        working-directory: backend/functions
+        run: npm ci
+
+      - name: Deploy backend to Cloudflare Workers (Production)
+        working-directory: backend/functions
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "CLOUDFLARE_API_TOKEN or CF_ACCOUNT_ID is not configured."
+            exit 1
+          fi
+
+          # Extract all secrets from Doppler and set as environment variables for wrangler
+          export APPWRITE_ENDPOINT=$(doppler secrets get APPWRITE_ENDPOINT --plain)
+          export APPWRITE_PROJECT_ID=$(doppler secrets get APPWRITE_PROJECT_ID --plain)
+          export APPWRITE_API_KEY=$(doppler secrets get APPWRITE_API_KEY --plain)
+          export FRONTEND_URL=$(doppler secrets get FRONTEND_URL --plain)
+          export SMTP_FROM=$(doppler secrets get SMTP_FROM --plain)
+          export SMTP_HOST=$(doppler secrets get SMTP_HOST --plain)
+          export SMTP_PORT=$(doppler secrets get SMTP_PORT --plain)
+          export SMTP_USERNAME=$(doppler secrets get SMTP_USERNAME --plain)
+          export SMTP_PASS=$(doppler secrets get SMTP_PASS --plain)
+          export REDIS_URL=$(doppler secrets get REDIS_URL --plain)
+          export REDIS_TLS=$(doppler secrets get REDIS_TLS --plain)
+          export REDIS_PREFIX=$(doppler secrets get REDIS_PREFIX --plain)
+          export REDIS_DISABLE_AFTER_ERROR_MS=$(doppler secrets get REDIS_DISABLE_AFTER_ERROR_MS --plain)
+          export SQUAD_SECRET_KEY=$(doppler secrets get SQUAD_SECRET_KEY --plain)
+          export SQUAD_PUBLIC_KEY=$(doppler secrets get SQUAD_PUBLIC_KEY --plain)
+          export SQUAD_BASE_URL=$(doppler secrets get SQUAD_BASE_URL --plain)
+          export SQUADCO_SECRET_KEY=$(doppler secrets get SQUADCO_SECRET_KEY --plain)
+          export SQUADCO_PUBLIC_KEY=$(doppler secrets get SQUADCO_PUBLIC_KEY --plain)
+          export SQUADCO_BASE_URL=$(doppler secrets get SQUADCO_BASE_URL --plain)
+          export SQUAD_USE_SANDBOX=$(doppler secrets get SQUAD_USE_SANDBOX --plain)
+          export SQUADCO_USE_SANDBOX=$(doppler secrets get SQUADCO_USE_SANDBOX --plain)
+
+          # Deploy to Cloudflare Workers (production environment)
+          wrangler deploy --env production
+
+      - name: Show deploy status
+        run: |
+          echo "✅ Backend deployed to Cloudflare Workers (Production)"
+          echo "URL: https://academicx-backend.ocbuchi.workers.dev"

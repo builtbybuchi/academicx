@@ -1,0 +1,17 @@
+name = "academicx-backend"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+[env.staging]
+name = "academicx-backend-stg"
+routes = [
+  { pattern = "academicx-backend-stg.ocbuchi.workers.dev/*", zone_name = "workers.dev" }
+]
+vars = { ENVIRONMENT = "staging" }
+
+[env.production]
+name = "academicx-backend"
+routes = [
+  { pattern = "academicx-backend.ocbuchi.workers.dev/*", zone_name = "workers.dev" }
+]
+vars = { ENVIRONMENT = "production" }
