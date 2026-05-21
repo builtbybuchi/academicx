@@ -169,41 +169,16 @@ You can login with the logins in the projecttarge.md
 }
 
 
-The links below are for the production buy t you can just refer to the official urls after I update it.  
+The links below are for the production buy t you can just refer to the official urls.  
 
 
-{
-  "deployments": [
-    {
-      "app": "admin-app-prd",
-      "bucket": "academicx-admin-app-prd-929078",
-      "url": "https://academicx-admin-app-prd.ocbuchi.workers.dev"
-    },
-    {
-      "app": "landing-page-prd",
-      "bucket": "academicx-landing-page-prd-494881",
-      "url": "https://academicx-landing-page-prd.ocbuchi.workers.dev"
-    },
-    {
-      "app": "school-website-prd",
-      "bucket": "academicx-school-website-prd-456183",
-      "url": "https://academicx-school-website-prd.ocbuchi.workers.dev"
-    },
-    {
-      "app": "staff-app-prd",
-      "bucket": "academicx-staff-app-prd-080532",
-      "url": "https://academicx-staff-app-prd.ocbuchi.workers.dev"
-    },
-    {
-      "app": "student-parent-app-prd",
-      "bucket": "academicx-student-parent-app-prd-976568",
-      "url": "https://academicx-student-parent-app-prd.ocbuchi.workers.dev"
-    },
-    {
-      "app": "super-admin-web-prd",
-      "bucket": "academicx-super-admin-web-prd-421383",
-      "url": "https://academicx-super-admin-web-prd.ocbuchi.workers.dev"
-    }
-  ],
-  "timestamp": "2026-05-13T20:22:35.894633Z"
-}
+
+"https://academicx-admin-app-prd.ocbuchi.workers.dev"
+"https://academicx-landing-page-prd.ocbuchi.workers.dev"
+"https://academicx-school-website-prd.ocbuchi.workers.dev"
+"https://academicx-staff-app-prd.ocbuchi.workers.dev"
+"https://academicx-student-parent-app-prd.ocbuchi.workers.dev"
+"https://academicx-super-admin-web-prd.ocbuchi.workers.dev"
+
+
+["superadmin","role:superadmin"]
