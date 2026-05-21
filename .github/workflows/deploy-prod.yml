@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
 
@@ -26,7 +31,7 @@ jobs:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
           cd backend
-          npm install --omit=dev
+          pnpm install --prod
           doppler run --project academicx --config prd -- node setup-appwrite.js
 
   discover:
@@ -73,19 +78,24 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
       - name: Install Doppler CLI
         uses: dopplerhq/cli-action@v3
 
       - name: Install dependencies
         working-directory: ${{ matrix.app }}
-        run: npm ci
+        run: pnpm install
 
       - name: Build with Doppler
         working-directory: ${{ matrix.app }}
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
         run: |
-          doppler run --project academicx --config prd -- npm run build
+          doppler run --project academicx --config prd -- pnpm run build
 
       - name: Detect build output directory
         id: build-out
